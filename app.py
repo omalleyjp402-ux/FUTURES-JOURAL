@@ -419,7 +419,8 @@ def load_journal_entry(user_id: str, entry_date: str) -> Optional[str]:
         if res.data:
             return safe_str(res.data[0].get("content"))
         return ""
-    except Exception:
+    except Exception as e:
+        st.session_state["_journal_last_error"] = f"{type(e).__name__}: {e}"
         return None
 
 
@@ -439,7 +440,8 @@ def upsert_journal_entry(user_id: str, entry_date: str, content: str) -> bool:
         else:
             sb.table("journal_entries").insert({"user_id": user_id, "entry_date": entry_date, "content": content}).execute()
         return True
-    except Exception:
+    except Exception as e:
+        st.session_state["_journal_last_error"] = f"{type(e).__name__}: {e}"
         return False
 
 
@@ -462,6 +464,18 @@ def render_journal_page(user_id: str) -> None:
         existing = load_journal_entry(user_id, date_str)
         if existing is None:
             st.warning("Journal storage isn't set up yet. Run the journal SQL in Supabase to enable saving.")
+            # Only show debug details to the app owner to avoid leaking backend info publicly.
+            user_obj = st.session_state.get("user")
+            email = ""
+            if isinstance(user_obj, dict):
+                email = safe_str(user_obj.get("email"))
+            else:
+                email = safe_str(getattr(user_obj, "email", ""))
+            if email.lower() == "omalleyjp402@gmail.com":
+                details = safe_str(st.session_state.get("_journal_last_error"))
+                if details:
+                    with st.expander("Debug details (owner only)", expanded=False):
+                        st.code(details)
             existing = ""
         st.session_state[state_key] = existing
         st.session_state[last_key] = existing
