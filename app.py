@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 
 import altair as alt
+import numpy as np
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
@@ -65,13 +66,19 @@ def get_supabase() -> Client:
 supabase = get_supabase()
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-ACCOUNT_TYPES = ["Evaluation Account Data", "Funded Account Data"]
+ACCOUNT_TYPES = ["Evaluation Account Data", "Funded Account Data", "Live Account Data"]
 
 INSTRUMENTS = {"NQ": 20, "MNQ": 2, "ES": 50, "MES": 5, "GC": 100, "MGC": 10}
 INSTRUMENT_ORDER = list(INSTRUMENTS.keys())
+
+# Forex support (simple USD-account assumptions)
+# - `contracts` is treated as lots (1 lot = 100k base) for forex pairs.
+# - Pip value for USDJPY is computed from entry price (pip = 0.01).
+FOREX_PAIRS = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD"]
+INSTRUMENT_ORDER = INSTRUMENT_ORDER + FOREX_PAIRS
 SESSIONS = ["NY", "London", "Pre-market"]
 MARKET_CONDITIONS = ["Not set", "Trend", "Range", "Volatile", "News", "Mixed/Unsure"]
-TRADE_GRADES = ["Not set", "A", "B", "C", "D"]
+TRADE_GRADES = ["Not set", "A++", "A+", "A", "B+", "B", "C", "D"]
 TRADE_TYPES = ["Not set", "Continuation model", "Reversal", "Turtle soup model"]
 TIME_OPTIONS = [f"{h:02d}:{m:02d}" for h in range(24) for m in (0, 15, 30, 45)]
 CONFLUENCES = [
@@ -333,6 +340,151 @@ def enforce_trade_limit_or_warn(user_id: str) -> bool:
 
     return True
 
+
+# ── User Settings (feature-flagged) ───────────────────────────────────────────
+
+SETTINGS_ENABLED = truthy(get_secret("SETTINGS_ENABLED", "false"))
+
+CURRENCY_CHOICES = {
+    "USD ($)": {"code": "USD", "symbol": "$"},
+    "EUR (€)": {"code": "EUR", "symbol": "€"},
+    "GBP (£)": {"code": "GBP", "symbol": "£"},
+}
+
+
+def load_user_settings(user_id: str) -> Optional[Dict[str, Any]]:
+    try:
+        sb = authed_supabase()
+        res = sb.table("user_settings").select("*").eq("user_id", user_id).limit(1).execute()
+        if res.data:
+            return res.data[0]
+        return None
+    except Exception:
+        return None
+
+
+def upsert_user_settings(user_id: str, settings: Dict[str, Any]) -> None:
+    try:
+        sb = authed_supabase()
+        row = {"user_id": user_id}
+        row.update(settings)
+        # Prefer update; if it doesn't exist, insert.
+        existing = load_user_settings(user_id)
+        if existing:
+            sb.table("user_settings").update(settings).eq("user_id", user_id).execute()
+        else:
+            sb.table("user_settings").insert(row).execute()
+    except Exception:
+        return
+
+
+def apply_settings_to_session(user_id: str) -> None:
+    # Defaults (always available even if DB table not created yet).
+    if "currency_symbol" not in st.session_state:
+        st.session_state["currency_symbol"] = "$"
+    if "currency_code" not in st.session_state:
+        st.session_state["currency_code"] = "USD"
+
+    if not SETTINGS_ENABLED:
+        return
+
+    settings = load_user_settings(user_id)
+    if not settings:
+        return
+
+    sym = safe_str(settings.get("currency_symbol"))
+    if sym:
+        st.session_state["currency_symbol"] = sym
+    code = safe_str(settings.get("currency_code"))
+    if code:
+        st.session_state["currency_code"] = code
+
+
+# ── Journal (feature-flagged) ────────────────────────────────────────────────
+
+JOURNAL_ENABLED = truthy(get_secret("JOURNAL_ENABLED", "false"))
+
+
+def load_journal_entry(user_id: str, entry_date: str) -> Optional[str]:
+    try:
+        sb = authed_supabase()
+        res = (
+            sb.table("journal_entries")
+            .select("content")
+            .eq("user_id", user_id)
+            .eq("entry_date", entry_date)
+            .limit(1)
+            .execute()
+        )
+        if res.data:
+            return safe_str(res.data[0].get("content"))
+        return ""
+    except Exception:
+        return None
+
+
+def upsert_journal_entry(user_id: str, entry_date: str, content: str) -> bool:
+    try:
+        sb = authed_supabase()
+        existing = (
+            sb.table("journal_entries")
+            .select("entry_date")
+            .eq("user_id", user_id)
+            .eq("entry_date", entry_date)
+            .limit(1)
+            .execute()
+        )
+        if existing.data:
+            sb.table("journal_entries").update({"content": content}).eq("user_id", user_id).eq("entry_date", entry_date).execute()
+        else:
+            sb.table("journal_entries").insert({"user_id": user_id, "entry_date": entry_date, "content": content}).execute()
+        return True
+    except Exception:
+        return False
+
+
+def render_journal_page(user_id: str) -> None:
+    st.subheader("Journal")
+    st.caption("Daily notes automatically synced to your selected date.")
+
+    follow_today = st.toggle("Follow today", value=True, key="journal_follow_today")
+    today = datetime.now().date()
+    if follow_today:
+        selected_date = today
+    else:
+        selected_date = st.date_input("Date", today, key="journal_date")
+
+    date_str = selected_date.strftime("%Y-%m-%d")
+    state_key = f"journal_content_{date_str}"
+    last_key = f"journal_last_saved_{date_str}"
+
+    if state_key not in st.session_state:
+        existing = load_journal_entry(user_id, date_str)
+        if existing is None:
+            st.warning("Journal storage isn't set up yet. Run the journal SQL in Supabase to enable saving.")
+            existing = ""
+        st.session_state[state_key] = existing
+        st.session_state[last_key] = existing
+
+    content = st.text_area(
+        f"Entry for {date_str}",
+        key=state_key,
+        height=280,
+        placeholder="Plan, emotions, lessons, what worked, what didn’t…",
+    )
+
+    auto = st.toggle("Auto-save", value=True, key="journal_autosave")
+    save_clicked = st.button("Save now", key="journal_save")
+
+    if (auto and content != st.session_state.get(last_key, "")) or save_clicked:
+        ok = upsert_journal_entry(user_id, date_str, content)
+        if ok:
+            st.session_state[last_key] = content
+            if save_clicked:
+                st.success("Saved.")
+        else:
+            st.error("Could not save journal entry yet (database table/policies may not be set up).")
+
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
 def show_auth():
@@ -412,13 +564,17 @@ def safe_str(value) -> str:
         return ""
     return str(value)
 
+def get_currency_symbol() -> str:
+    return safe_str(st.session_state.get("currency_symbol")) or "$"
+
 
 def format_money(value) -> str:
     v = to_float(value)
     if v is None:
         return ""
     sign = "-" if v < 0 else ""
-    return f"{sign}${abs(v):,.2f}"
+    sym = get_currency_symbol()
+    return f"{sign}{sym}{abs(v):,.2f}"
 
 
 def format_price(value) -> str:
@@ -502,9 +658,8 @@ def compute_metrics(instrument, direction, entry, stop, exit_price, take_profit,
     metrics = {col: None for col in COMPUTED_COLUMNS}
     if not instrument or not direction:
         return metrics
+    instrument = normalize_instrument(instrument)
     per_point = INSTRUMENTS.get(instrument)
-    if per_point is None:
-        return metrics
     if entry is None or stop is None or exit_price is None or contracts is None:
         return metrics
 
@@ -515,6 +670,70 @@ def compute_metrics(instrument, direction, entry, stop, exit_price, take_profit,
 
     commission_val = commission or 0
     slippage_val = slippage or 0
+
+    # Forex support (USD account assumptions)
+    if instrument in FOREX_PAIRS:
+        pip_size = 0.01 if instrument.endswith("JPY") else 0.0001
+        pips = points / pip_size if pip_size else 0.0
+        lots = contracts if contracts else 1
+
+        # Pip value per lot:
+        # - XXXUSD pairs: ~$10 per pip per standard lot
+        # - USDJPY: (0.01 * 100k) / price => 1000/price USD per pip
+        if instrument == "USDJPY":
+            ref_price = entry if entry and entry > 0 else exit_price
+            pip_value = (1000.0 / ref_price) if ref_price else 0.0
+        else:
+            pip_value = 10.0
+
+        pnl_gross = float(pips) * float(pip_value) * float(lots)
+        pnl_net = pnl_gross - float(commission_val) - float(slippage_val)
+        pnl_per_contract = pnl_net / float(lots) if lots else None
+
+        risk_pips = abs(entry - stop) / pip_size if (entry is not None and stop is not None and pip_size) else None
+        risk_dollars = (risk_pips * pip_value * lots) if risk_pips is not None else None
+        r_multiple = (pnl_net / risk_dollars) if (risk_dollars and risk_dollars != 0) else None
+
+        target_r = None
+        if take_profit is not None and risk_pips not in (None, 0):
+            if direction == "Long":
+                target_pips = (take_profit - entry) / pip_size
+            else:
+                target_pips = (entry - take_profit) / pip_size
+            target_r = target_pips / risk_pips
+
+        mfe_points = mae_points = mfe_r = mae_r = missed_pnl = None
+        if max_favorable is not None:
+            mfe_points = ((max_favorable - entry) if direction == "Long" else (entry - max_favorable)) / pip_size
+        if max_adverse is not None:
+            mae_points = ((entry - max_adverse) if direction == "Long" else (max_adverse - entry)) / pip_size
+        if mfe_points is not None and risk_pips not in (None, 0):
+            mfe_r = mfe_points / risk_pips
+        if mae_points is not None and risk_pips not in (None, 0):
+            mae_r = mae_points / risk_pips
+        if mfe_points is not None:
+            missed_pnl = (mfe_points - pips) * pip_value * lots
+
+        risk_percent_actual = None
+        if account_size not in (None, 0) and risk_dollars is not None:
+            risk_percent_actual = (risk_dollars / account_size) * 100
+
+        duration_minutes = compute_duration_minutes(date_str, entry_time_str, exit_time_str)
+
+        metrics.update({
+            # Store pips in `points` for forex rows (keeps charts/stats meaningful).
+            "points": pips, "pnl_gross": pnl_gross, "pnl_net": pnl_net,
+            "pnl_per_contract": pnl_per_contract, "r_multiple": r_multiple,
+            "target_r": target_r, "mfe_points": mfe_points, "mae_points": mae_points,
+            "mfe_r": mfe_r, "mae_r": mae_r, "missed_pnl": missed_pnl,
+            "risk_dollars": risk_dollars, "risk_percent_actual": risk_percent_actual,
+            "duration_minutes": duration_minutes,
+        })
+        return metrics
+
+    if per_point is None:
+        return metrics
+
     pnl_gross = points * per_point * contracts
     pnl_net = pnl_gross - commission_val - slippage_val
     pnl_per_contract = pnl_net / contracts if contracts else None
@@ -600,6 +819,154 @@ def style_altair_chart(chart):
         .configure_axis(gridColor="rgba(148, 163, 184, 0.15)", labelColor="rgba(148, 163, 184, 0.9)",
                         titleColor="rgba(148, 163, 184, 0.9)")
     )
+
+
+def clamp01(x: float) -> float:
+    try:
+        x = float(x)
+    except Exception:
+        return 0.0
+    return max(0.0, min(1.0, x))
+
+
+def scale_linear(value: float, lo: float, hi: float) -> float:
+    if hi == lo:
+        return 0.0
+    return clamp01((value - lo) / (hi - lo)) * 100.0
+
+
+def compute_zylo_score(df_view: pd.DataFrame, daily_df: pd.DataFrame, pnl_col: str) -> Dict[str, Any]:
+    """
+    A Tradezella-inspired score, but with our own transparent math.
+    Returns overall score (0-100) and component scores (0-100).
+    """
+    total_trades = len(df_view)
+    wins = int((df_view[pnl_col] > 0).sum()) if total_trades else 0
+    win_rate = (wins / total_trades * 100.0) if total_trades else 0.0
+
+    wins_df = df_view[df_view[pnl_col] > 0]
+    losses_df = df_view[df_view[pnl_col] < 0]
+    avg_win = float(wins_df[pnl_col].mean()) if not wins_df.empty else 0.0
+    avg_loss = float(losses_df[pnl_col].mean()) if not losses_df.empty else 0.0
+    win_loss_ratio = (avg_win / abs(avg_loss)) if avg_loss != 0 else 0.0
+
+    loss_sum = float(losses_df[pnl_col].sum()) if not losses_df.empty else 0.0
+    profit_factor = (float(wins_df[pnl_col].sum()) / abs(loss_sum)) if loss_sum != 0 else 0.0
+
+    # Equity / drawdown
+    chart_df = df_view.sort_values("date").copy()
+    chart_df["equity"] = chart_df[pnl_col].cumsum()
+    chart_df["peak"] = chart_df["equity"].cummax()
+    chart_df["drawdown"] = chart_df["equity"] - chart_df["peak"]
+    max_drawdown = abs(float(chart_df["drawdown"].min())) if not chart_df.empty else 0.0
+    total_pnl = float(df_view[pnl_col].sum()) if total_trades else 0.0
+    recovery_factor = (total_pnl / max_drawdown) if max_drawdown not in (0.0, None) else 0.0
+
+    # Consistency: percent green days among trading days (not calendar days)
+    consistency = 0.0
+    if daily_df is not None and not daily_df.empty:
+        consistency = float((daily_df["pnl"] > 0).mean() * 100.0)
+
+    avg_r = df_view["r_multiple"].dropna().mean() if "r_multiple" in df_view.columns else None
+    avg_r = float(avg_r) if avg_r is not None and pd.notna(avg_r) else 0.0
+
+    # Component scaling (tunable later)
+    scores = {
+        "Win %": scale_linear(win_rate, 35, 70),
+        "Profit factor": scale_linear(profit_factor, 1.0, 2.5),
+        "Avg win/loss": scale_linear(win_loss_ratio, 0.8, 2.5),
+        "Recovery factor": scale_linear(recovery_factor, 0.5, 3.0),
+        "Consistency": scale_linear(consistency, 40, 75),
+        # Max drawdown: lower is better (scale inverse using ratio to total pnl when possible)
+        "Max drawdown": 0.0,
+        "Avg R": scale_linear(avg_r, 0.0, 1.2),
+    }
+
+    dd_ratio = None
+    if abs(total_pnl) > 0:
+        dd_ratio = max_drawdown / abs(total_pnl)
+    # If dd_ratio is small -> good. Cap at 1.5.
+    if dd_ratio is None:
+        scores["Max drawdown"] = 50.0 if max_drawdown == 0 else 0.0
+    else:
+        scores["Max drawdown"] = (1.0 - clamp01(dd_ratio / 1.5)) * 100.0
+
+    # Weighted overall
+    weights = {
+        "Win %": 0.18,
+        "Profit factor": 0.18,
+        "Avg win/loss": 0.14,
+        "Recovery factor": 0.16,
+        "Consistency": 0.14,
+        "Max drawdown": 0.12,
+        "Avg R": 0.08,
+    }
+    overall = sum(scores[k] * weights.get(k, 0) for k in scores.keys())
+    overall = max(0.0, min(100.0, float(overall)))
+
+    return {
+        "overall": overall,
+        "components": scores,
+        "raw": {
+            "win_rate": win_rate,
+            "profit_factor": profit_factor,
+            "avg_win_loss": win_loss_ratio,
+            "recovery_factor": recovery_factor,
+            "consistency": consistency,
+            "max_drawdown": max_drawdown,
+            "avg_r": avg_r,
+        },
+    }
+
+
+def render_zylo_radar(components: Dict[str, float], height: int = 260) -> None:
+    labels = list(components.keys())
+    n = len(labels)
+    if n == 0:
+        st.info("No score data yet.")
+        return
+
+    # Convert to x/y so we can draw a polygon in Altair.
+    rows = []
+    for i, label in enumerate(labels):
+        angle = 2 * 3.141592653589793 * i / n
+        value = float(components[label])
+        r = value / 100.0
+        rows.append({"label": label, "value": value, "x": r * float(np.sin(angle)), "y": r * float(np.cos(angle)), "order": i})
+    rows.append({**rows[0], "order": n})  # close polygon
+
+    df_poly = pd.DataFrame(rows)
+
+    grid = []
+    for ring in (0.25, 0.5, 0.75, 1.0):
+        ring_rows = []
+        for i in range(n + 1):
+            angle = 2 * 3.141592653589793 * (i % n) / n
+            ring_rows.append({"x": ring * float(np.sin(angle)), "y": ring * float(np.cos(angle)), "ring": ring, "order": i})
+        grid.append(pd.DataFrame(ring_rows))
+    df_grid = pd.concat(grid, ignore_index=True)
+
+    base = alt.Chart(df_grid).mark_line(color="rgba(148,163,184,0.25)").encode(
+        x=alt.X("x:Q", axis=None),
+        y=alt.Y("y:Q", axis=None),
+        detail="ring:N",
+        order="order:Q",
+    )
+
+    poly = alt.Chart(df_poly).mark_line(color="#7C3AED", strokeWidth=2).encode(
+        x="x:Q",
+        y="y:Q",
+        order="order:Q",
+        tooltip=[alt.Tooltip("label:N", title="Metric"), alt.Tooltip("value:Q", title="Score", format=".1f")],
+    )
+
+    fill = alt.Chart(df_poly).mark_area(color="rgba(124,58,237,0.25)").encode(
+        x="x:Q",
+        y="y:Q",
+        order="order:Q",
+    )
+
+    st.altair_chart(style_altair_chart((base + fill + poly).properties(height=height)), use_container_width=True)
 
 def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
     if df.empty:
@@ -1486,6 +1853,41 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     if section == "Dashboard":
         st.subheader("Dashboard")
         render_metric_cards(cards)
+
+        c_score, c_recent = st.columns([1.2, 1])
+        with c_score:
+            st.markdown("**Zylo score**")
+            zylo = compute_zylo_score(df_view, daily_df, pnl_col)
+            score = float(zylo["overall"])
+            st.markdown(f"**{score:.2f}** / 100")
+            try:
+                st.progress(min(1.0, max(0.0, score / 100.0)))
+            except Exception:
+                pass
+            render_zylo_radar(zylo["components"], height=240)
+
+        with c_recent:
+            st.markdown("**Recent trades**")
+            recent = (
+                df_view.sort_values(["date", "entry_time"], ascending=[False, False], na_position="last")
+                .head(10)
+                .copy()
+            )
+            recent["Date"] = recent["date"].dt.strftime("%Y-%m-%d")
+            recent["PnL"] = recent[pnl_col].apply(format_money)
+            show_cols = []
+            for col in ("Date", "instrument", "direction", "contracts", "session", "trade_grade", "PnL"):
+                if col in recent.columns:
+                    show_cols.append(col)
+            if show_cols:
+                st.dataframe(
+                    recent[show_cols].rename(columns={"instrument": "Instrument", "direction": "Dir", "contracts": "Size", "session": "Session", "trade_grade": "Grade"}),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.info("No trades yet.")
+
         c_eq, c_daily = st.columns([2, 1])
         with c_eq:
             st.markdown("**Equity curve**")
@@ -1764,6 +2166,7 @@ if not user:
     show_auth()
 else:
     maybe_record_referral(user.id)
+    apply_settings_to_session(user.id)
     render_brand_header(center=False, hero=True)
     col_title, col_logout = st.columns([8, 1])
     with col_logout:
@@ -1776,12 +2179,37 @@ else:
         st.markdown("### Navigation")
         section = st.radio(
             "Go to",
-            ["Dashboard", "New Trade", "Analytics", "PnL Calendar"],
+            ["Dashboard", "New Trade", "Analytics", "PnL Calendar", "Journal"],
             key="nav_section",
             label_visibility="collapsed",
         )
 
-    tabs = st.tabs(ACCOUNT_TYPES)
-    for tab, account_type in zip(tabs, ACCOUNT_TYPES):
-        with tab:
-            render_section(user.id, account_type, section)
+        with st.expander("Settings", expanded=False):
+            labels = list(CURRENCY_CHOICES.keys())
+            code_to_label = {v["code"]: k for k, v in CURRENCY_CHOICES.items()}
+            default_label = code_to_label.get(safe_str(st.session_state.get("currency_code")), labels[0])
+            if "currency_choice" not in st.session_state:
+                st.session_state["currency_choice"] = default_label
+
+            choice = st.selectbox("Currency", labels, key="currency_choice")
+            sym = CURRENCY_CHOICES[choice]["symbol"]
+            code = CURRENCY_CHOICES[choice]["code"]
+            st.session_state["currency_symbol"] = sym
+            st.session_state["currency_code"] = code
+
+            if SETTINGS_ENABLED:
+                last = st.session_state.get("_settings_last_currency")
+                current = f"{code}:{sym}"
+                if last != current:
+                    upsert_user_settings(user.id, {"currency_code": code, "currency_symbol": sym})
+                    st.session_state["_settings_last_currency"] = current
+            else:
+                st.caption("Tip: enable SETTINGS_ENABLED and run `sql/user_settings.sql` to persist settings.")
+
+    if section == "Journal":
+        render_journal_page(user.id)
+    else:
+        tabs = st.tabs(ACCOUNT_TYPES)
+        for tab, account_type in zip(tabs, ACCOUNT_TYPES):
+            with tab:
+                render_section(user.id, account_type, section)
