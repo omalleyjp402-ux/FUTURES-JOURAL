@@ -117,6 +117,80 @@ def truthy(value) -> bool:
 # When you're ready to launch pricing, set `PAYWALL_ENABLED=true` in Streamlit secrets.
 PAYWALL_ENABLED = truthy(get_secret("PAYWALL_ENABLED", "false"))
 
+AFFILIATES_ENABLED = truthy(get_secret("AFFILIATES_ENABLED", "false"))
+
+
+def get_query_param(name: str) -> str:
+    try:
+        # Streamlit >= 1.30
+        v = st.query_params.get(name)
+        if isinstance(v, list):
+            return safe_str(v[0])
+        return safe_str(v)
+    except Exception:
+        try:
+            v = st.experimental_get_query_params().get(name, [""])
+            return safe_str(v[0] if isinstance(v, list) and v else v)
+        except Exception:
+            return ""
+
+
+def resolve_affiliate(code: str) -> Optional[str]:
+    if not code:
+        return None
+    try:
+        sb = authed_supabase()
+        res = (
+            sb.table("affiliate_codes")
+            .select("affiliate_user_id,is_active")
+            .eq("code", code)
+            .limit(1)
+            .execute()
+        )
+        if not res.data:
+            return None
+        row = res.data[0]
+        if not row.get("is_active", True):
+            return None
+        return safe_str(row.get("affiliate_user_id")) or None
+    except Exception:
+        return None
+
+
+def maybe_record_referral(user_id: str) -> None:
+    """
+    If the user landed with ?ref=CODE, store a one-time referral row.
+    Safe to call on every run; no-ops if already recorded or tables aren't present.
+    """
+    if not AFFILIATES_ENABLED:
+        return
+
+    code = get_query_param("ref").strip()
+    if not code:
+        return
+
+    # Remember for the session so navigation doesn't lose it.
+    st.session_state["ref_code"] = code
+
+    try:
+        sb = authed_supabase()
+        existing = sb.table("referrals").select("referred_user_id").eq("referred_user_id", user_id).limit(1).execute()
+        if existing.data:
+            return
+
+        affiliate_user_id = resolve_affiliate(code)
+        if not affiliate_user_id:
+            return
+        if affiliate_user_id == user_id:
+            return
+
+        sb.table("referrals").insert(
+            {"referred_user_id": user_id, "affiliate_user_id": affiliate_user_id, "code": code}
+        ).execute()
+    except Exception:
+        # Fail open; referrals are optional and should never block the app.
+        return
+
 
 def get_entitlement(user_id: str) -> Optional[Dict[str, Any]]:
     """
@@ -1642,6 +1716,7 @@ user = get_user()
 if not user:
     show_auth()
 else:
+    maybe_record_referral(user.id)
     render_brand_header(center=False, hero=True)
     col_title, col_logout = st.columns([8, 1])
     with col_logout:

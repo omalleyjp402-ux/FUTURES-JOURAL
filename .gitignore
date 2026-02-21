@@ -1,0 +1,16 @@
+.DS_Store
+.venv/
+__pycache__/
+
+# Streamlit secrets should never be committed
+.streamlit/secrets.toml
+
+# Local/one-off scripts and data exports
+migrate.py
+app_private.py
+evaluation_trades.csv
+funded_trades.csv
+evaluation_images/
+funded_images/
+untitled folder/
+claude ai access.app.py
