@@ -1,6 +1,8 @@
 -- Billing + affiliate commission ledger scaffolding (Stripe webhooks will write to these).
 -- Apply this in Supabase SQL editor when you're ready to integrate Stripe.
 
+create extension if not exists pgcrypto;
+
 create table if not exists public.stripe_events (
   id bigserial primary key,
   event_id text unique,
@@ -32,4 +34,3 @@ create policy "affiliate_commissions_select_affiliate"
   for select
   to authenticated
   using (auth.uid() = affiliate_user_id);
-

@@ -118,6 +118,44 @@ def truthy(value) -> bool:
 PAYWALL_ENABLED = truthy(get_secret("PAYWALL_ENABLED", "false"))
 
 AFFILIATES_ENABLED = truthy(get_secret("AFFILIATES_ENABLED", "false"))
+STRIPE_ENABLED = truthy(get_secret("STRIPE_ENABLED", "false"))
+
+
+def create_stripe_checkout_session(user_id: str, user_email: str) -> Optional[str]:
+    """
+    Returns a Stripe Checkout URL, or None if Stripe isn't configured.
+    This is only used when STRIPE_ENABLED=true and Stripe secrets exist.
+    """
+    if not STRIPE_ENABLED:
+        return None
+
+    stripe_secret = get_secret("STRIPE_SECRET_KEY")
+    price_id = get_secret("STRIPE_PRICE_ID")
+    success_url = get_secret("STRIPE_SUCCESS_URL")
+    cancel_url = get_secret("STRIPE_CANCEL_URL")
+    if not (stripe_secret and price_id and success_url and cancel_url):
+        return None
+
+    try:
+        import stripe  # type: ignore
+    except Exception:
+        return None
+
+    try:
+        stripe.api_key = stripe_secret
+        session = stripe.checkout.Session.create(
+            mode="subscription",
+            line_items=[{"price": price_id, "quantity": 1}],
+            success_url=success_url,
+            cancel_url=cancel_url,
+            customer_email=user_email or None,
+            client_reference_id=user_id,
+            metadata={"user_id": user_id},
+            allow_promotion_codes=True,
+        )
+        return getattr(session, "url", None)
+    except Exception:
+        return None
 
 
 def get_query_param(name: str) -> str:
@@ -281,7 +319,16 @@ def enforce_trade_limit_or_warn(user_id: str) -> bool:
 
     if current >= limit:
         st.error(f"Free plan limit reached ({limit} trades). Upgrade to continue adding trades.")
-        st.button("Upgrade to Pro (coming soon)", disabled=True)
+        # Optional Stripe integration (kept behind STRIPE_ENABLED + secrets).
+        user_email = safe_str(st.session_state.get("user", {}).get("email")) if isinstance(st.session_state.get("user"), dict) else safe_str(getattr(st.session_state.get("user"), "email", ""))
+        checkout_url = create_stripe_checkout_session(user_id, user_email)
+        if checkout_url:
+            try:
+                st.link_button("Upgrade to Pro", checkout_url)
+            except Exception:
+                st.markdown(f"[Upgrade to Pro]({checkout_url})")
+        else:
+            st.button("Upgrade to Pro (coming soon)", disabled=True)
         return False
 
     return True
