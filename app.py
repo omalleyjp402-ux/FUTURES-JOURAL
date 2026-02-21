@@ -1,14 +1,58 @@
+import base64
+import calendar
 import html as html_lib
 import io
 import uuid
 from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Optional, Dict, Any
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 from supabase import create_client, Client
 
-st.set_page_config(page_title="Futures Trading Journal", layout="wide")
+BRAND_NAME = "Tradylo"
+BRAND_TAGLINE = "Trading Journal"
+LOGO_PATH = Path("assets/tradylo-logo.png")
+
+st.set_page_config(page_title=BRAND_NAME, layout="wide", page_icon=str(LOGO_PATH))
+st.markdown("""
+<style>
+ .brand-row {display:flex;align-items:center;gap:12px;margin:6px 0 12px;}
+ .brand-row.center {justify-content:center;text-align:center;flex-direction:column;}
+ .brand-row.hero {gap:16px;margin:10px 0 18px;}
+ .brand-logo {width:140px;height:140px;border-radius:26px;object-fit:contain;background:rgba(255,255,255,0.04);
+              border:1px solid rgba(255,255,255,0.08);padding:6px;}
+ .brand-name {font-size:40px;font-weight:700;color:var(--text-color);margin:0;line-height:1.1;}
+ .brand-tagline {font-size:13px;color:rgba(148, 163, 184, 0.9);letter-spacing:.08em;text-transform:uppercase;}
+ .brand-row.center .brand-logo {width:220px;height:220px;border-radius:32px;padding:12px;}
+ .brand-row.center .brand-name {font-size:56px;}
+ .brand-row.hero .brand-logo {width:350px;height:350px;border-radius:40px;padding:14px;}
+ .brand-row.hero .brand-name {font-size:48px;}
+div[data-testid="stMetric"] {
+  background: rgba(255,255,255,0.06);
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.10);
+}
+div[data-testid="stMetric"] * { color: inherit !important; }
+
+div[data-testid="stExpander"] > div {
+  background: rgba(255,255,255,0.04);
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.stTextInput input, 
+.stTextArea textarea, 
+.stNumberInput input,
+.stSelectbox div {
+  color: inherit !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ── Supabase client ──────────────────────────────────────────────────────────
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
@@ -23,7 +67,7 @@ supabase = get_supabase()
 # ── Constants ─────────────────────────────────────────────────────────────────
 ACCOUNT_TYPES = ["Evaluation Account Data", "Funded Account Data"]
 
-INSTRUMENTS = {"NQ": 20, "MNQ": 2, "ES": 50, "MES": 5}
+INSTRUMENTS = {"NQ": 20, "MNQ": 2, "ES": 50, "MES": 5, "GC": 100, "MGC": 10}
 INSTRUMENT_ORDER = list(INSTRUMENTS.keys())
 SESSIONS = ["NY", "London", "Pre-market"]
 MARKET_CONDITIONS = ["Not set", "Trend", "Range", "Volatile", "News", "Mixed/Unsure"]
@@ -53,10 +97,125 @@ COMPUTED_COLUMNS = [
     "risk_dollars", "risk_percent_actual", "duration_minutes",
 ]
 
+# ── Monetization / entitlements (feature-flagged) ─────────────────────────────
+
+FREE_TRADE_LIMIT = 15
+
+
+def get_secret(key: str, default=None):
+    try:
+        return st.secrets[key]
+    except Exception:
+        return default
+
+
+def truthy(value) -> bool:
+    return str(value or "").strip().lower() in ("1", "true", "yes", "y", "on")
+
+
+# Keep this OFF while we're building so signups/users aren't impacted.
+# When you're ready to launch pricing, set `PAYWALL_ENABLED=true` in Streamlit secrets.
+PAYWALL_ENABLED = truthy(get_secret("PAYWALL_ENABLED", "false"))
+
+
+def get_entitlement(user_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Returns entitlement row for the user, or None if the table isn't set up yet.
+    We deliberately fail open (no paywall) until the DB table + RLS policies exist.
+    """
+    try:
+        sb = authed_supabase()
+        res = sb.table("entitlements").select("*").eq("user_id", user_id).limit(1).execute()
+        if res.data:
+            return res.data[0]
+        return None
+    except Exception:
+        return None
+
+
+def ensure_entitlement(user_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Creates a default free entitlement if missing.
+    If the entitlements table isn't ready, returns None (paywall disabled).
+    """
+    existing = get_entitlement(user_id)
+    if existing is not None:
+        return existing
+
+    try:
+        sb = authed_supabase()
+        row = {
+            "user_id": user_id,
+            "plan": "free",
+            "trade_limit": FREE_TRADE_LIMIT,
+        }
+        # Insert only; avoid requiring UPDATE permissions under RLS.
+        sb.table("entitlements").insert(row).execute()
+        return get_entitlement(user_id)
+    except Exception:
+        return None
+
+
+def is_unlimited(entitlement: Optional[Dict[str, Any]]) -> bool:
+    if not entitlement:
+        # If we can't read entitlements, fail open so we don't break the app.
+        return True
+    plan = safe_str(entitlement.get("plan")).lower()
+    if plan in ("pro", "grandfathered", "lifetime"):
+        return True
+    limit = entitlement.get("trade_limit")
+    return limit is None
+
+
+def count_total_trades(user_id: str) -> Optional[int]:
+    """
+    Count trades across ALL account types. Returns None if count isn't available.
+    """
+    try:
+        sb = authed_supabase()
+        # Supabase returns `count` when count="exact" is provided.
+        res = sb.table("trades").select("id", count="exact").eq("user_id", user_id).execute()
+        if hasattr(res, "count") and res.count is not None:
+            return int(res.count)
+        # Fallback: count returned rows (may be capped by API limits, but better than crashing).
+        return len(res.data or [])
+    except Exception:
+        return None
+
+
+def enforce_trade_limit_or_warn(user_id: str) -> bool:
+    """
+    Returns True if saving a trade is allowed; otherwise shows UI and returns False.
+    """
+    if not PAYWALL_ENABLED:
+        return True
+
+    ent = ensure_entitlement(user_id)
+    if is_unlimited(ent):
+        return True
+
+    limit = ent.get("trade_limit") if ent else FREE_TRADE_LIMIT
+    try:
+        limit = int(limit)
+    except Exception:
+        limit = FREE_TRADE_LIMIT
+
+    current = count_total_trades(user_id)
+    if current is None:
+        # Fail open if count can't be determined (keeps app usable).
+        return True
+
+    if current >= limit:
+        st.error(f"Free plan limit reached ({limit} trades). Upgrade to continue adding trades.")
+        st.button("Upgrade to Pro (coming soon)", disabled=True)
+        return False
+
+    return True
+
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
 def show_auth():
-    st.title("Futures Trading Journal")
+    render_brand_header(center=True)
     tab_login, tab_signup = st.tabs(["Log in", "Sign up"])
 
     with tab_login:
@@ -77,9 +236,10 @@ def show_auth():
         if st.button("Sign up"):
             try:
                 res = supabase.auth.sign_up({"email": email, "password": password})
-                st.success("Account created! Check your email to confirm, then log in.")
+                st.success("Account created! You can log in now.")
             except Exception as e:
                 st.error(f"Sign up failed: {e}")
+        st.caption("No confirmation email? Check spam/junk. If it still doesn't arrive, your email provider may be blocking it—reach out and we can resend or adjust SMTP settings.")
 
 
 def get_user():
@@ -275,6 +435,224 @@ def compute_metrics(instrument, direction, entry, stop, exit_price, take_profit,
     })
     return metrics
 
+
+def parse_custom_confluences(raw: str) -> list:
+    if not raw:
+        return []
+    cleaned = raw.replace(";", ",").replace("\n", ",")
+    tags = []
+    for token in cleaned.split(","):
+        name = token.strip()
+        if name:
+            tags.append(name)
+    seen = set()
+    unique = []
+    for tag in tags:
+        key = tag.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(tag)
+    return unique
+
+
+def render_metric_cards(cards: list) -> None:
+    blocks = []
+    for label, value, sub in cards:
+        label_html = html_lib.escape(str(label))
+        value_html = html_lib.escape(str(value))
+        sub_html = html_lib.escape(str(sub)) if sub else ""
+        sub_block = f"<div class='metric-sub'>{sub_html}</div>" if sub_html else ""
+        blocks.append(
+            "<div class='metric-card'>"
+            f"<div class='metric-label'>{label_html}</div>"
+            f"<div class='metric-value'>{value_html}</div>"
+            f"{sub_block}"
+            "</div>"
+        )
+    st.markdown(f"<div class='metric-grid'>{''.join(blocks)}</div>", unsafe_allow_html=True)
+
+
+def style_altair_chart(chart):
+    return (
+        chart.configure_view(strokeOpacity=0)
+        .configure_axis(gridColor="rgba(148, 163, 184, 0.15)", labelColor="rgba(148, 163, 184, 0.9)",
+                        titleColor="rgba(148, 163, 184, 0.9)")
+    )
+
+def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
+    if df.empty:
+        st.info("No daily PnL yet.")
+        return
+    daily = (
+        df.groupby("date", as_index=False)[pnl_col]
+        .agg(pnl="sum", trades="count")
+        .rename(columns={pnl_col: "pnl"})
+    )
+    daily["date"] = pd.to_datetime(daily["date"]).dt.date
+    daily["month"] = pd.to_datetime(daily["date"]).dt.to_period("M")
+    months = sorted(daily["month"].unique())
+    if not months:
+        st.info("No calendar data yet.")
+        return
+
+    month_labels = [m.to_timestamp().strftime("%B %Y") for m in months]
+    month_choice = st.selectbox("Month", month_labels, index=len(month_labels) - 1)
+    selected_period = months[month_labels.index(month_choice)]
+    year, month = selected_period.year, selected_period.month
+    month_df = daily[daily["month"] == selected_period]
+    month_daily = {row["date"]: (row["pnl"], row["trades"]) for _, row in month_df.iterrows()}
+    max_abs = max((abs(v[0]) for v in month_daily.values()), default=0) or 1
+
+    month_total = month_df["pnl"].sum() if not month_df.empty else 0
+    green_days = (month_df["pnl"] > 0).sum() if not month_df.empty else 0
+    red_days = (month_df["pnl"] < 0).sum() if not month_df.empty else 0
+    flat_days = (month_df["pnl"] == 0).sum() if not month_df.empty else 0
+
+    stats_cols = st.columns([2, 3])
+    with stats_cols[0]:
+        st.markdown(f"**{month_choice}**")
+    with stats_cols[1]:
+        st.markdown(
+            f"**Monthly stats:** {format_money(month_total)} · "
+            f"{green_days} green · {red_days} red · {flat_days} flat"
+        )
+
+    def pnl_color(value):
+        if value == 0:
+            return "rgba(148, 163, 184, 0.08)"
+        ratio = min(abs(value) / max_abs, 1)
+        alpha = 0.18 + (0.6 * ratio)
+        if value > 0:
+            return f"rgba(34, 197, 94, {alpha:.3f})"
+        return f"rgba(239, 68, 68, {alpha:.3f})"
+
+    cal = calendar.Calendar(firstweekday=6)
+    weeks = cal.monthdatescalendar(year, month)
+    day_names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    header_html = "".join([f"<div class='cal-head'>{d}</div>" for d in day_names])
+    cell_html = []
+    week_html = []
+    week_idx = 1
+    for week in weeks:
+        week_total = 0
+        week_trades = 0
+        for day in week:
+            in_month = day.month == month
+            value, trades = month_daily.get(day, (0, 0)) if in_month else (0, 0)
+            if in_month:
+                week_total += value
+                week_trades += trades
+            bg = pnl_color(value) if in_month else "rgba(148, 163, 184, 0.04)"
+            pnl_text = format_money(value) if in_month and value != 0 else ""
+            trades_text = f"{trades} trades" if in_month and trades else ""
+            day_class = "cal-cell" + ("" if in_month else " cal-off")
+            cell_html.append(
+                "<div class='{cls}' style='background:{bg};'>"
+                "<div class='cal-day'>{day}</div>"
+                "<div class='cal-pnl'>{pnl}</div>"
+                "<div class='cal-trades'>{trades}</div>"
+                "</div>".format(
+                    cls=day_class,
+                    bg=bg,
+                    day=day.day,
+                    pnl=pnl_text,
+                    trades=trades_text,
+                )
+            )
+        week_label = f"Week {week_idx}"
+        week_total_text = format_money(week_total) if week_total != 0 else "$0"
+        week_html.append(
+            "<div class='cal-week'>"
+            f"<div class='cal-week-label'>{week_label}</div>"
+            f"<div class='cal-week-total'>{week_total_text}</div>"
+            f"<div class='cal-week-trades'>{week_trades} trades</div>"
+            "</div>"
+        )
+        week_idx += 1
+
+    st.markdown(
+        "<div class='calendar-card'>"
+        "<div class='calendar-wrap'>"
+        "<div class='calendar-grid'>{header}{cells}</div>"
+        "<div class='calendar-weeks'>{weeks}</div>"
+        "</div>"
+        "</div>".format(
+            header=header_html,
+            cells="".join(cell_html),
+            weeks="".join(week_html),
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+def load_logo_data():
+    if LOGO_PATH.exists():
+        data = base64.b64encode(LOGO_PATH.read_bytes()).decode("utf-8")
+        return f"data:image/png;base64,{data}"
+    return None
+
+
+def apply_brand_watermark(logo_uri: str) -> None:
+    if not logo_uri:
+        return
+    st.markdown(
+        f"""
+        <style>
+        :root {{ --brand-logo: url('{logo_uri}'); }}
+        .metric-card,
+        .calendar-card,
+        div[data-testid="stVegaLiteChart"],
+        div[data-testid="stChart"],
+        div[data-testid="stPlotlyChart"],
+        div[data-testid="stDataFrame"] {{
+            background-image: var(--brand-logo);
+            background-repeat: no-repeat;
+            background-position: right 12px bottom 12px;
+            background-size: 110px;
+            background-blend-mode: soft-light;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_brand_header(center: bool = False, hero: bool = False) -> None:
+    logo_uri = load_logo_data()
+    apply_brand_watermark(logo_uri)
+    if center:
+        row_class = "brand-row center"
+    elif hero:
+        row_class = "brand-row hero"
+    else:
+        row_class = "brand-row"
+    if logo_uri:
+        st.markdown(
+            f"""
+            <div class="{row_class}">
+                <img src="{logo_uri}" class="brand-logo" alt="{BRAND_NAME} logo"/>
+                <div>
+                    <div class="brand-name">{BRAND_NAME}</div>
+                    <div class="brand-tagline">{BRAND_TAGLINE}</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f"""
+            <div class="{row_class}">
+                <div>
+                    <div class="brand-name">{BRAND_NAME}</div>
+                    <div class="brand-tagline">{BRAND_TAGLINE}</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
 # ── Supabase data helpers ─────────────────────────────────────────────────────
 
 def load_trades(user_id: str, account_type: str) -> pd.DataFrame:
@@ -363,14 +741,15 @@ def explode_tags(df: pd.DataFrame, column: str) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def build_confluence_combo_stats(df: pd.DataFrame, pnl_col: str) -> pd.DataFrame:
+def build_confluence_combo_stats(df: pd.DataFrame, pnl_col: str, min_confluences: int = 1) -> pd.DataFrame:
     rows = []
     for _, row in df.iterrows():
         raw = str(row.get("confluences", "") or "")
         tags = [tag.strip() for tag in raw.split(",") if tag.strip()]
-        if not tags:
+        tags = sorted(set(tags))
+        if len(tags) < min_confluences:
             continue
-        combo = " + ".join(sorted(tags))
+        combo = " + ".join(tags)
         rows.append({"combo": combo, "pnl": row.get(pnl_col)})
     if not rows:
         return pd.DataFrame()
@@ -445,6 +824,14 @@ def build_a4_trade_sheet_html(row: pd.Series) -> str:
         confluence_items.append(
             f"<div class='conf-item'><span class='cb'>{checked}</span><span class='conf-name'>{html_lib.escape(name)}</span></div>"
         )
+    extra_confluences = sorted(c for c in selected_confluences if c not in set(CONFLUENCES))
+    for name in extra_confluences:
+        confluence_items.append(
+            "<div class='conf-item'>"
+            "<span class='cb'>x</span>"
+            f"<span class='conf-name'>{html_lib.escape(f'Other: {name}')}</span>"
+            "</div>"
+        )
     confluence_html = "\n".join(confluence_items)
     reason = html_lib.escape(safe_str(row.get("setup_tag")))
 
@@ -454,7 +841,7 @@ def build_a4_trade_sheet_html(row: pd.Series) -> str:
 @page{{size:A4;margin:12mm}}
 body{{font-family:Arial,Helvetica,sans-serif;margin:0;padding:0;color:#000}}
 .toolbar{{display:flex;gap:10px;align-items:center;padding:8px 0}}
-.toolbar button{{padding:6px 10px;border:1px solid #000;background:#fff;cursor:pointer}}
+.toolbar button{{padding:6px 10px;border:1px solid #000;background:transparent;cursor:pointer}}
 @media print{{.toolbar{{display:none}}}}
 .sheet{{width:210mm;min-height:297mm;box-sizing:border-box;padding:0}}
 .grid{{display:grid;gap:6mm}}
@@ -526,215 +913,307 @@ body{{font-family:Arial,Helvetica,sans-serif;margin:0;padding:0;color:#000}}
 
 # ── Main section renderer ─────────────────────────────────────────────────────
 
-def render_section(user_id: str, account_type: str) -> None:
+def render_section(user_id: str, account_type: str, section: str) -> None:
     form_key = account_type.replace(" ", "_").lower()
 
     df_raw = load_trades(user_id, account_type)
 
-    # ── Add new trade form ────────────────────────────────────────────────────
-    with st.expander("Add new trade", expanded=True):
-        with st.form(f"{form_key}_form", clear_on_submit=True):
-            st.markdown("**Core trade info**")
-            row1 = st.columns(4)
-            date_val = row1[0].date_input("Date", key=f"{form_key}_date")
-            use_times = row1[1].checkbox("Use entry/exit times", value=False, key=f"{form_key}_use_times")
-            with row1[2]:
-                ec = st.columns(2)
-                entry_time = ec[0].selectbox("Entry time (15m)", TIME_OPTIONS, index=TIME_OPTIONS.index("09:30"), key=f"{form_key}_entry_time")
-                entry_time_custom = ec[1].text_input("Entry time (HH:MM)", placeholder="15:44", key=f"{form_key}_entry_time_custom")
-            with row1[3]:
-                xc = st.columns(2)
-                exit_time = xc[0].selectbox("Exit time (15m)", TIME_OPTIONS, index=TIME_OPTIONS.index("10:00"), key=f"{form_key}_exit_time")
-                exit_time_custom = xc[1].text_input("Exit time (HH:MM)", placeholder="16:02", key=f"{form_key}_exit_time_custom")
-
-            row2 = st.columns(4)
-            instrument = row2[0].selectbox("Instrument", INSTRUMENT_ORDER, key=f"{form_key}_instrument")
-            direction = row2[1].radio("Direction", ["Long", "Short"], key=f"{form_key}_direction")
-            contracts = row2[2].number_input("Contracts", min_value=1, step=1, value=1, key=f"{form_key}_contracts")
-            session = row2[3].selectbox("Session", SESSIONS, key=f"{form_key}_session")
-
-            row2b = st.columns(4)
-            trade_type = row2b[0].selectbox("Trade type", TRADE_TYPES, key=f"{form_key}_trade_type")
-
-            st.markdown("**Confluences (check all that apply)**")
-            conf_cols = st.columns(4)
-            selected_confluences = []
-            for idx, name in enumerate(CONFLUENCES):
-                if conf_cols[idx % 4].checkbox(name, key=f"{form_key}_conf_{idx}"):
-                    selected_confluences.append(name)
-
-            row3 = st.columns(4)
-            entry = row3[0].number_input("Entry price", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_entry")
-            stop = row3[1].number_input("Stop loss", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_stop")
-            take_profit = row3[2].number_input("Take profit", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_take_profit")
-            exit_price = row3[3].number_input("Exit price", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_exit")
-
-            row4 = st.columns(4)
-            emotion = row4[0].slider("Emotion score (1–10)", 1, 10, 5, key=f"{form_key}_emotion")
-            followed_plan = row4[1].selectbox("Followed plan?", ["Yes", "No"], key=f"{form_key}_followed_plan")
-            revenge_trade = row4[2].selectbox("Revenge trade?", ["No", "Yes"], key=f"{form_key}_revenge_trade")
-            trade_grade = row4[3].selectbox("Trade grade", TRADE_GRADES, key=f"{form_key}_grade")
-
-            notes = st.text_area("Notes", key=f"{form_key}_notes")
-
-            with st.expander("Advanced (optional)", expanded=False):
-                adv1 = st.columns(4)
-                setup_tag = adv1[0].text_input("Setup / tag (comma-separated)", key=f"{form_key}_setup")
-                strategy = adv1[1].text_input("Strategy name", key=f"{form_key}_strategy")
-                market_condition = adv1[2].selectbox("Market condition", MARKET_CONDITIONS, key=f"{form_key}_market")
-                account_size = adv1[3].number_input("Account size ($)", min_value=0.0, step=100.0, format="%.2f", key=f"{form_key}_account_size")
-
-                adv2 = st.columns(4)
-                risk_percent_planned = adv2[0].number_input("Planned risk %", min_value=0.0, step=0.1, format="%.2f", key=f"{form_key}_risk_planned")
-                commission = adv2[1].number_input("Commission/fees ($)", min_value=0.0, step=1.0, format="%.2f", key=f"{form_key}_commission")
-                slippage = adv2[2].number_input("Slippage ($)", min_value=0.0, step=1.0, format="%.2f", key=f"{form_key}_slippage")
-                max_favorable_price = adv2[3].number_input("Max favorable price (MFE)", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_mfe")
-
-                adv3 = st.columns(4)
-                max_adverse_price = adv3[0].number_input("Max adverse price (MAE)", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_mae")
-                use_pnl_override = adv3[1].checkbox("Use P&L override", value=False, key=f"{form_key}_use_pnl_override")
-                pnl_override = adv3[2].number_input("P&L override ($)", min_value=-1_000_000.0, max_value=1_000_000.0, step=1.0, format="%.2f", key=f"{form_key}_pnl_override")
-
-            uploaded_files = st.file_uploader(
-                "Upload trade images (optional)",
-                type=["png", "jpg", "jpeg", "gif"],
-                accept_multiple_files=True,
-                key=f"{form_key}_images",
-            )
-
-            submitted = st.form_submit_button("Save trade")
-
-    if submitted:
-        if entry <= 0 or stop <= 0 or exit_price <= 0:
-            st.error("Entry, stop loss, and exit price must be greater than 0.")
-        else:
-            entry_time_str = entry_time if use_times else None
-            exit_time_str = exit_time if use_times else None
-            if use_times:
-                custom_entry = normalize_time_input(entry_time_custom)
-                custom_exit = normalize_time_input(exit_time_custom)
-                if entry_time_custom and custom_entry is None:
-                    st.error("Entry time must be HH:MM.")
-                    return
-                if exit_time_custom and custom_exit is None:
-                    st.error("Exit time must be HH:MM.")
-                    return
-                if custom_entry:
-                    entry_time_str = custom_entry
-                if custom_exit:
-                    exit_time_str = custom_exit
-
-            tp_value = to_float(take_profit) if take_profit > 0 else None
-            max_fav = to_float(max_favorable_price) if max_favorable_price > 0 else None
-            max_adv = to_float(max_adverse_price) if max_adverse_price > 0 else None
-            account_size_val = to_float(account_size) if account_size > 0 else None
-
-            # Upload images to Supabase storage
-            saved_image_paths = []
-            if uploaded_files:
-                for f in uploaded_files:
-                    try:
-                        path = upload_image(user_id, f)
-                        saved_image_paths.append(path)
-                    except Exception as e:
-                        st.warning(f"Image upload failed: {e}")
-
-            metrics = compute_metrics(
-                instrument=instrument, direction=direction,
-                entry=float(entry), stop=float(stop), exit_price=float(exit_price),
-                take_profit=tp_value, contracts=int(contracts),
-                commission=float(commission), slippage=float(slippage),
-                max_favorable=max_fav, max_adverse=max_adv,
-                account_size=account_size_val,
-                date_str=date_val.strftime("%Y-%m-%d"),
-                entry_time_str=entry_time_str, exit_time_str=exit_time_str,
-            )
-
-            row = {
-                "id": uuid.uuid4().hex,
-                "date": date_val.strftime("%Y-%m-%d"),
-                "entry_time": entry_time_str,
-                "exit_time": exit_time_str,
-                "instrument": instrument,
-                "direction": direction,
-                "entry_price": round(float(entry), 2),
-                "stop_loss": round(float(stop), 2),
-                "take_profit": round(float(tp_value), 2) if tp_value is not None else None,
-                "exit_price": round(float(exit_price), 2),
-                "contracts": int(contracts),
-                "session": session,
-                "emotion_score": int(emotion),
-                "followed_plan": followed_plan,
-                "revenge_trade": revenge_trade,
-                "setup_tag": setup_tag,
-                "strategy": strategy,
-                "trade_type": trade_type if trade_type != "Not set" else None,
-                "confluences": ",".join(selected_confluences),
-                "market_condition": market_condition if market_condition != "Not set" else None,
-                "trade_grade": trade_grade if trade_grade != "Not set" else None,
-                "account_size": account_size_val,
-                "risk_percent_planned": to_float(risk_percent_planned) if risk_percent_planned > 0 else None,
-                "commission": float(commission),
-                "slippage": float(slippage),
-                "pnl_override": float(pnl_override) if use_pnl_override else None,
-                "max_favorable_price": round(float(max_fav), 2) if max_fav is not None else None,
-                "max_adverse_price": round(float(max_adv), 2) if max_adv is not None else None,
-                "notes": notes,
-                "images": ";".join(saved_image_paths),
-            }
-            row.update(metrics)
-
-            try:
-                save_trade(user_id, account_type, row)
-                st.success("Trade saved!")
-                st.session_state[f"{form_key}_last_saved_id"] = row["id"]
-                df_raw = load_trades(user_id, account_type)
-            except Exception as e:
-                st.error(f"Failed to save trade: {e}")
-
+    if section == "New Trade":
+        # ── Add new trade form ────────────────────────────────────────────────────
+        with st.expander("Add new trade", expanded=True):
+            with st.form(f"{form_key}_form", clear_on_submit=True):
+                st.markdown("**Core trade info**")
+                row1 = st.columns(4)
+                date_val = row1[0].date_input("Date", key=f"{form_key}_date")
+                use_times = row1[1].checkbox("Use entry/exit times", value=False, key=f"{form_key}_use_times")
+                with row1[2]:
+                    ec = st.columns(2)
+                    entry_time = ec[0].selectbox("Entry time (15m)", TIME_OPTIONS, index=TIME_OPTIONS.index("09:30"), key=f"{form_key}_entry_time")
+                    entry_time_custom = ec[1].text_input("Entry time (HH:MM)", placeholder="15:44", key=f"{form_key}_entry_time_custom")
+                with row1[3]:
+                    xc = st.columns(2)
+                    exit_time = xc[0].selectbox("Exit time (15m)", TIME_OPTIONS, index=TIME_OPTIONS.index("10:00"), key=f"{form_key}_exit_time")
+                    exit_time_custom = xc[1].text_input("Exit time (HH:MM)", placeholder="16:02", key=f"{form_key}_exit_time_custom")
+    
+                row2 = st.columns(4)
+                instrument = row2[0].selectbox("Instrument", INSTRUMENT_ORDER, key=f"{form_key}_instrument")
+                direction = row2[1].radio("Direction", ["Long", "Short"], key=f"{form_key}_direction")
+                contracts = row2[2].number_input("Contracts", min_value=1, step=1, value=1, key=f"{form_key}_contracts")
+                session = row2[3].selectbox("Session", SESSIONS, key=f"{form_key}_session")
+    
+                row2b = st.columns(4)
+                trade_type = row2b[0].selectbox("Trade type", TRADE_TYPES, key=f"{form_key}_trade_type")
+    
+                st.markdown("**Confluences (check all that apply)**")
+                conf_cols = st.columns(4)
+                selected_confluences = []
+                for idx, name in enumerate(CONFLUENCES):
+                    if conf_cols[idx % 4].checkbox(name, key=f"{form_key}_conf_{idx}"):
+                        selected_confluences.append(name)
+                other_cols = st.columns([1, 3])
+                with other_cols[0]:
+                    other_conf = st.checkbox("Other (custom)", key=f"{form_key}_conf_other")
+                with other_cols[1]:
+                    other_conf_text = st.text_input(
+                        "Custom confluences (comma-separated)",
+                        placeholder="Liquidity sweep, VWAP reclaim",
+                        key=f"{form_key}_conf_other_text",
+                        help="Type one or more, separated by commas.",
+                    )
+                if other_conf or other_conf_text.strip():
+                    for name in parse_custom_confluences(other_conf_text):
+                        if name not in selected_confluences:
+                            selected_confluences.append(name)
+    
+                row3 = st.columns(4)
+                entry = row3[0].number_input("Entry price", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_entry")
+                stop = row3[1].number_input("Stop loss", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_stop")
+                take_profit = row3[2].number_input("Take profit", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_take_profit")
+                exit_price = row3[3].number_input("Exit price", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_exit")
+    
+                row4 = st.columns(4)
+                emotion = row4[0].slider("Emotion score (1–10)", 1, 10, 5, key=f"{form_key}_emotion")
+                followed_plan = row4[1].selectbox("Followed plan?", ["Yes", "No"], key=f"{form_key}_followed_plan")
+                revenge_trade = row4[2].selectbox("Revenge trade?", ["No", "Yes"], key=f"{form_key}_revenge_trade")
+                trade_grade = row4[3].selectbox("Trade grade", TRADE_GRADES, key=f"{form_key}_grade")
+    
+                notes = st.text_area("Notes", key=f"{form_key}_notes")
+    
+                with st.expander("Advanced (optional)", expanded=False):
+                    adv1 = st.columns(4)
+                    setup_tag = adv1[0].text_input("Setup / tag (comma-separated)", key=f"{form_key}_setup")
+                    strategy = adv1[1].text_input("Strategy name", key=f"{form_key}_strategy")
+                    market_condition = adv1[2].selectbox("Market condition", MARKET_CONDITIONS, key=f"{form_key}_market")
+                    account_size = adv1[3].number_input("Account size ($)", min_value=0.0, step=100.0, format="%.2f", key=f"{form_key}_account_size")
+    
+                    adv2 = st.columns(4)
+                    risk_percent_planned = adv2[0].number_input("Planned risk %", min_value=0.0, step=0.1, format="%.2f", key=f"{form_key}_risk_planned")
+                    commission = adv2[1].number_input("Commission/fees ($)", min_value=0.0, step=1.0, format="%.2f", key=f"{form_key}_commission")
+                    slippage = adv2[2].number_input("Slippage ($)", min_value=0.0, step=1.0, format="%.2f", key=f"{form_key}_slippage")
+                    max_favorable_price = adv2[3].number_input("Max favorable price (MFE)", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_mfe")
+    
+                    adv3 = st.columns(4)
+                    max_adverse_price = adv3[0].number_input("Max adverse price (MAE)", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_mae")
+                    use_pnl_override = adv3[1].checkbox("Use P&L override", value=False, key=f"{form_key}_use_pnl_override")
+                    pnl_override = adv3[2].number_input("P&L override ($)", min_value=-1_000_000.0, max_value=1_000_000.0, step=1.0, format="%.2f", key=f"{form_key}_pnl_override")
+    
+                uploaded_files = st.file_uploader(
+                    "Upload trade images (optional)",
+                    type=["png", "jpg", "jpeg", "gif"],
+                    accept_multiple_files=True,
+                    key=f"{form_key}_images",
+                )
+    
+                submitted = st.form_submit_button("Save trade")
+    
+        if submitted:
+            if not enforce_trade_limit_or_warn(user_id):
+                # Paywall message already shown; keep rendering the rest of the page.
+                submitted = False
+            elif entry <= 0 or stop <= 0 or exit_price <= 0:
+                st.error("Entry, stop loss, and exit price must be greater than 0.")
+            else:
+                entry_time_str = entry_time if use_times else None
+                exit_time_str = exit_time if use_times else None
+                if use_times:
+                    custom_entry = normalize_time_input(entry_time_custom)
+                    custom_exit = normalize_time_input(exit_time_custom)
+                    if entry_time_custom and custom_entry is None:
+                        st.error("Entry time must be HH:MM.")
+                        return
+                    if exit_time_custom and custom_exit is None:
+                        st.error("Exit time must be HH:MM.")
+                        return
+                    if custom_entry:
+                        entry_time_str = custom_entry
+                    if custom_exit:
+                        exit_time_str = custom_exit
+    
+                tp_value = to_float(take_profit) if take_profit > 0 else None
+                max_fav = to_float(max_favorable_price) if max_favorable_price > 0 else None
+                max_adv = to_float(max_adverse_price) if max_adverse_price > 0 else None
+                account_size_val = to_float(account_size) if account_size > 0 else None
+    
+                # Upload images to Supabase storage
+                saved_image_paths = []
+                if uploaded_files:
+                    for f in uploaded_files:
+                        try:
+                            path = upload_image(user_id, f)
+                            saved_image_paths.append(path)
+                        except Exception as e:
+                            st.warning(f"Image upload failed: {e}")
+    
+                metrics = compute_metrics(
+                    instrument=instrument, direction=direction,
+                    entry=float(entry), stop=float(stop), exit_price=float(exit_price),
+                    take_profit=tp_value, contracts=int(contracts),
+                    commission=float(commission), slippage=float(slippage),
+                    max_favorable=max_fav, max_adverse=max_adv,
+                    account_size=account_size_val,
+                    date_str=date_val.strftime("%Y-%m-%d"),
+                    entry_time_str=entry_time_str, exit_time_str=exit_time_str,
+                )
+    
+                row = {
+                    "id": uuid.uuid4().hex,
+                    "date": date_val.strftime("%Y-%m-%d"),
+                    "entry_time": entry_time_str,
+                    "exit_time": exit_time_str,
+                    "instrument": instrument,
+                    "direction": direction,
+                    "entry_price": round(float(entry), 2),
+                    "stop_loss": round(float(stop), 2),
+                    "take_profit": round(float(tp_value), 2) if tp_value is not None else None,
+                    "exit_price": round(float(exit_price), 2),
+                    "contracts": int(contracts),
+                    "session": session,
+                    "emotion_score": int(emotion),
+                    "followed_plan": followed_plan,
+                    "revenge_trade": revenge_trade,
+                    "setup_tag": setup_tag,
+                    "strategy": strategy,
+                    "trade_type": trade_type if trade_type != "Not set" else None,
+                    "confluences": ",".join(selected_confluences),
+                    "market_condition": market_condition if market_condition != "Not set" else None,
+                    "trade_grade": trade_grade if trade_grade != "Not set" else None,
+                    "account_size": account_size_val,
+                    "risk_percent_planned": to_float(risk_percent_planned) if risk_percent_planned > 0 else None,
+                    "commission": float(commission),
+                    "slippage": float(slippage),
+                    "pnl_override": float(pnl_override) if use_pnl_override else None,
+                    "max_favorable_price": round(float(max_fav), 2) if max_fav is not None else None,
+                    "max_adverse_price": round(float(max_adv), 2) if max_adv is not None else None,
+                    "notes": notes,
+                    "images": ";".join(saved_image_paths),
+                }
+                row.update(metrics)
+    
+                try:
+                    save_trade(user_id, account_type, row)
+                    st.success("Trade saved!")
+                    st.session_state[f"{form_key}_last_saved_id"] = row["id"]
+                    df_raw = load_trades(user_id, account_type)
+                except Exception as e:
+                    st.error(f"Failed to save trade: {e}")
+    
     if df_raw.empty:
-        st.info("No trades yet. Add your first trade above.")
+        if section in ("Dashboard", "Analytics", "PnL Calendar"):
+            st.info("No trades yet. Add your first trade above.")
         return
 
     df = prepare_df(df_raw)
 
-    # ── A4 sheet ──────────────────────────────────────────────────────────────
-    st.markdown("---")
-    st.subheader("A4 trade sheet (printable)")
-    sheet_df = df.sort_values(["date", "entry_time"], ascending=[False, False], na_position="last")
-    trade_ids = sheet_df["id"].tolist()
-    label_map = {}
-    for _, r in sheet_df.iterrows():
-        d = r["date"].strftime("%Y-%m-%d") if hasattr(r["date"], "strftime") else safe_str(r["date"])
-        t = safe_str(r.get("entry_time"))
-        label_map[r["id"]] = f"{d} {t} | {safe_str(r.get('instrument'))} | {safe_str(r.get('direction'))} | {safe_str(r.get('contracts'))}"
+    if section == "New Trade":
+        # ── A4 sheet ──────────────────────────────────────────────────────────────
+        st.markdown("---")
+        st.subheader("A4 trade sheet (printable)")
+        sheet_df = df.sort_values(["date", "entry_time"], ascending=[False, False], na_position="last")
+        trade_ids = sheet_df["id"].tolist()
+        label_map = {}
+        for _, r in sheet_df.iterrows():
+            d = r["date"].strftime("%Y-%m-%d") if hasattr(r["date"], "strftime") else safe_str(r["date"])
+            t = safe_str(r.get("entry_time"))
+            label_map[r["id"]] = f"{d} {t} | {safe_str(r.get('instrument'))} | {safe_str(r.get('direction'))} | {safe_str(r.get('contracts'))}"
+    
+        last_saved = st.session_state.get(f"{form_key}_last_saved_id")
+        default_idx = trade_ids.index(last_saved) if last_saved in trade_ids else 0
+        selected_id = st.selectbox("Select trade to print", trade_ids, index=default_idx,
+                                    format_func=lambda x: label_map.get(x, x), key=f"{form_key}_a4_id")
+        selected_row = sheet_df[sheet_df["id"] == selected_id].iloc[0]
+        sheet_html = build_a4_trade_sheet_html(selected_row)
+        st.download_button("Download trade sheet HTML (A4)", sheet_html.encode("utf-8"),
+                            file_name="trade_sheet.html", mime="text/html", key=f"{form_key}_a4_dl")
+        components.html(sheet_html, height=1250, scrolling=True)
+    
+    # ── Dashboard + Analytics + Calendar ─────────────────────────────────────
+    if section in ("Dashboard", "Analytics", "PnL Calendar"):
+        st.markdown(
+            """
+            <style>
+            :root {
+                --tz-bg: var(--background-color);
+                --tz-card: var(--secondary-background-color);
+                --tz-border: rgba(148, 163, 184, 0.25);
+                --tz-muted: rgba(148, 163, 184, 0.95);
+                --tz-title: var(--text-color);
+                --tz-accent: #7C3AED;
+                --tz-accent-2: #3B82F6;
+            }
+            [data-testid="stAppViewContainer"] {background: var(--tz-bg);}
+            [data-testid="stHeader"] {background: rgba(14, 17, 23, 0.9);}
+            .main .block-container {padding-top: 1.5rem;}
+            h1, h2, h3, h4 {color: var(--tz-title);}
+            .metric-grid {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:8px}
+            .metric-card {background:var(--tz-card);border:1px solid var(--tz-border);
+                border-top:2px solid rgba(124,58,237,0.55);
+                border-radius:14px;padding:14px 16px;box-shadow:0 6px 18px rgba(15,23,42,0.06)}
+            .metric-label {color:var(--tz-muted);font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+            .metric-value {color:var(--tz-title);font-size:24px;font-weight:600;margin-top:6px}
+            .metric-sub {color:var(--tz-muted);font-size:12px;margin-top:4px}
+            .calendar-card {background:var(--tz-card);border:1px solid var(--tz-border);border-radius:14px;
+                padding:12px;box-shadow:0 6px 18px rgba(15,23,42,0.06)}
+            .calendar-wrap {display:grid;grid-template-columns:1fr 180px;gap:12px;margin-top:8px}
+            .calendar-grid {display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+            .calendar-weeks {display:flex;flex-direction:column;gap:8px}
+            .cal-head {text-align:center;font-size:11px;color:var(--tz-muted);text-transform:uppercase;letter-spacing:.08em}
+            .cal-cell {background:rgba(148,163,184,0.08);border-radius:10px;padding:8px;min-height:78px;
+                border:1px solid rgba(148,163,184,0.18);display:flex;flex-direction:column;gap:6px}
+            .cal-off {opacity:0.35}
+            .cal-day {font-size:12px;color:var(--tz-muted)}
+            .cal-pnl {font-size:13px;font-weight:600;color:var(--tz-title)}
+            .cal-trades {font-size:11px;color:var(--tz-muted)}
+            .cal-week {background:var(--tz-card);border:1px solid var(--tz-border);border-radius:12px;
+                padding:10px;display:flex;flex-direction:column;gap:4px}
+            .cal-week-label {font-size:11px;color:var(--tz-muted);text-transform:uppercase;letter-spacing:.08em}
+            .cal-week-total {font-size:14px;font-weight:600;color:var(--tz-title)}
+            .cal-week-trades {font-size:11px;color:var(--tz-muted)}
+            @media (max-width: 900px) {.calendar-wrap {grid-template-columns:1fr;}}
+            div[data-testid="stVegaLiteChart"], div[data-testid="stChart"], div[data-testid="stPlotlyChart"] {
+                background: var(--tz-card);
+                border: 1px solid var(--tz-border);
+                border-radius: 14px;
+                padding: 12px;
+                box-shadow: 0 6px 18px rgba(15,23,42,0.06);
+            }
+            div[data-testid="stDataFrame"] {
+                background: var(--tz-card);
+                border: 1px solid var(--tz-border);
+                border-radius: 14px;
+                padding: 8px;
+                box-shadow: 0 6px 18px rgba(15,23,42,0.06);
+            }
+            @media (max-width: 1200px) {.metric-grid {grid-template-columns:repeat(2,minmax(0,1fr));}}
+            @media (max-width: 768px) {.metric-grid {grid-template-columns:1fr;}}
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
 
-    last_saved = st.session_state.get(f"{form_key}_last_saved_id")
-    default_idx = trade_ids.index(last_saved) if last_saved in trade_ids else 0
-    selected_id = st.selectbox("Select trade to print", trade_ids, index=default_idx,
-                                format_func=lambda x: label_map.get(x, x), key=f"{form_key}_a4_id")
-    selected_row = sheet_df[sheet_df["id"] == selected_id].iloc[0]
-    sheet_html = build_a4_trade_sheet_html(selected_row)
-    st.download_button("Download trade sheet HTML (A4)", sheet_html.encode("utf-8"),
-                        file_name="trade_sheet.html", mime="text/html", key=f"{form_key}_a4_dl")
-    components.html(sheet_html, height=1250, scrolling=True)
-
-    # ── Dashboard ─────────────────────────────────────────────────────────────
-    st.markdown("---")
-    st.subheader("Dashboard")
     df_view = df.copy()
     df_view.columns = [str(c).strip() for c in df_view.columns]
+    show_filters = section in ("Dashboard", "Analytics", "PnL Calendar")
+    if show_filters:
+        with st.expander("Filters", expanded=False):
+            fp = f"{form_key}_filter_"
+            min_date = df_view["date"].min().date()
+            max_date = df_view["date"].max().date()
+            date_range = st.date_input("Date range", (min_date, max_date), key=f"{fp}date")
+            start_date, end_date = (date_range if isinstance(date_range, (tuple, list)) and len(date_range) == 2
+                                    else (date_range, date_range))
+            instrument_filter = st.multiselect("Instrument", INSTRUMENT_ORDER, default=INSTRUMENT_ORDER, key=f"{fp}instrument")
+            session_filter = st.multiselect("Session", SESSIONS, default=SESSIONS, key=f"{fp}session")
+            direction_filter = st.multiselect("Direction", ["Long", "Short"], default=["Long", "Short"], key=f"{fp}direction")
 
-    with st.expander("Filters", expanded=False):
-        fp = f"{form_key}_filter_"
+        pnl_view = st.radio("PnL view", ["Net (after fees)", "Gross"], horizontal=True, key=f"{form_key}_pnl_view")
+    else:
         min_date = df_view["date"].min().date()
         max_date = df_view["date"].max().date()
-        date_range = st.date_input("Date range", (min_date, max_date), key=f"{fp}date")
-        start_date, end_date = (date_range if isinstance(date_range, (tuple, list)) and len(date_range) == 2
-                                else (date_range, date_range))
-        instrument_filter = st.multiselect("Instrument", INSTRUMENT_ORDER, default=INSTRUMENT_ORDER, key=f"{fp}instrument")
-        session_filter = st.multiselect("Session", SESSIONS, default=SESSIONS, key=f"{fp}session")
-        direction_filter = st.multiselect("Direction", ["Long", "Short"], default=["Long", "Short"], key=f"{fp}direction")
+        start_date, end_date = min_date, max_date
+        instrument_filter = INSTRUMENT_ORDER
+        session_filter = SESSIONS
+        direction_filter = ["Long", "Short"]
+        pnl_view = "Net (after fees)"
 
     df_view = df_view[
         (df_view["date"] >= pd.to_datetime(start_date))
@@ -744,7 +1223,6 @@ def render_section(user_id: str, account_type: str) -> None:
         & (df_view["direction"].isin(direction_filter))
     ]
 
-    pnl_view = st.radio("PnL view", ["Net (after fees)", "Gross"], horizontal=True, key=f"{form_key}_pnl_view")
     pnl_col = "pnl_net" if pnl_view.startswith("Net") else "pnl_gross"
     if pnl_col not in df_view.columns:
         df_view[pnl_col] = 0
@@ -759,14 +1237,15 @@ def render_section(user_id: str, account_type: str) -> None:
 
     total_trades = len(df_view)
     if total_trades == 0:
-        st.info("No trades match your filters.")
+        if section in ("Dashboard", "Analytics", "PnL Calendar"):
+            st.info("No trades match your filters.")
         return
 
     wins_df = df_view[df_view[pnl_col] > 0]
     losses_df = df_view[df_view[pnl_col] < 0]
     wins = len(wins_df)
     win_rate = (wins / total_trades * 100) if total_trades > 0 else 0
-    avg_r = df_view["r_multiple"].dropna().mean() if "r_multiple" in df_view.columns else 0
+    avg_r = df_view["r_multiple"].dropna().mean() if "r_multiple" in df_view.columns else None
     total_pnl = df_view[pnl_col].sum()
     avg_win = wins_df[pnl_col].mean() if wins > 0 else 0
     avg_loss = losses_df[pnl_col].mean() if len(losses_df) > 0 else 0
@@ -775,182 +1254,386 @@ def render_section(user_id: str, account_type: str) -> None:
     expectancy = (win_rate / 100 * avg_win) + ((1 - win_rate / 100) * avg_loss) if total_trades > 0 else 0
     largest_win = df_view[pnl_col].max()
     largest_loss = df_view[pnl_col].min()
-    avg_duration = df_view["duration_minutes"].dropna().mean() if "duration_minutes" in df_view.columns else 0
+    avg_duration = df_view["duration_minutes"].dropna().mean() if "duration_minutes" in df_view.columns else None
     plan_rate = (df_view["followed_plan"] == "Yes").mean() * 100 if "followed_plan" in df_view.columns else 0
     revenge_rate = (df_view["revenge_trade"] == "Yes").mean() * 100 if "revenge_trade" in df_view.columns else 0
 
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Total trades", total_trades)
-    m2.metric("Win rate", f"{win_rate:.1f}%")
-    m3.metric("Average R", f"{avg_r:.2f}" if avg_r else "n/a")
-    m4.metric("Total PnL", f"${total_pnl:,.2f}")
-
-    m5, m6, m7, m8 = st.columns(4)
-    m5.metric("Avg win", f"${avg_win:,.2f}")
-    m6.metric("Avg loss", f"${avg_loss:,.2f}")
-    m7.metric("Profit factor", f"{profit_factor:.2f}" if profit_factor is not None else "n/a")
-    m8.metric("Expectancy", f"${expectancy:,.2f}")
-
-    m9, m10, m11, m12 = st.columns(4)
-    m9.metric("Largest win", f"${largest_win:,.2f}")
-    m10.metric("Largest loss", f"${largest_loss:,.2f}")
-    m11.metric("Avg duration", f"{avg_duration:.1f} min" if avg_duration else "n/a")
-    m12.metric("Plan adherence", f"{plan_rate:.1f}%")
+    cards = [
+        ("Total trades", total_trades, None),
+        ("Win rate", f"{win_rate:.1f}%", f"Wins: {wins}"),
+        ("Average R", f"{avg_r:.2f}" if avg_r is not None else "n/a", None),
+        ("Total PnL", format_money(total_pnl), pnl_view),
+        ("Avg win", format_money(avg_win), None),
+        ("Avg loss", format_money(avg_loss), None),
+        ("Profit factor", f"{profit_factor:.2f}" if profit_factor is not None else "n/a", None),
+        ("Expectancy", format_money(expectancy), None),
+        ("Largest win", format_money(largest_win), None),
+        ("Largest loss", format_money(largest_loss), None),
+        ("Avg duration", f"{avg_duration:.1f} min" if avg_duration is not None else "n/a", None),
+        ("Plan adherence", f"{plan_rate:.1f}%", f"Revenge: {revenge_rate:.1f}%"),
+    ]
 
     chart_df = df_view.sort_values("date").copy()
     chart_df["equity"] = chart_df[pnl_col].cumsum()
     chart_df["peak"] = chart_df["equity"].cummax()
     chart_df["drawdown"] = chart_df["equity"] - chart_df["peak"]
+    chart_df["day"] = chart_df["date"].dt.day_name()
+    chart_df["month"] = chart_df["date"].dt.to_period("M").astype(str)
 
-    st.subheader("Equity curve")
-    st.line_chart(chart_df.set_index("date")["equity"], height=260, use_container_width=True)
-    st.subheader("Drawdown")
-    st.line_chart(chart_df.set_index("date")["drawdown"], height=200, use_container_width=True)
+    daily_df = chart_df.groupby("date", as_index=False)[pnl_col].sum().rename(columns={pnl_col: "pnl"})
+    instrument_df = chart_df.groupby("instrument", as_index=False)[pnl_col].sum().rename(columns={pnl_col: "pnl"})
+    instrument_df["instrument"] = pd.Categorical(instrument_df["instrument"], categories=INSTRUMENT_ORDER, ordered=True)
+    instrument_df = instrument_df.sort_values("instrument")
+    session_df = chart_df.groupby("session", as_index=False)[pnl_col].sum().rename(columns={pnl_col: "pnl"})
+    session_df["session"] = pd.Categorical(session_df["session"], categories=SESSIONS, ordered=True)
+    session_df = session_df.sort_values("session")
 
-    st.markdown("---")
-    st.subheader("Daily PnL")
-    st.bar_chart(chart_df.groupby("date")[pnl_col].sum(), use_container_width=True)
+    equity_chart = (
+        alt.Chart(chart_df)
+        .mark_area(
+            line={"color": "#7C3AED", "strokeWidth": 2},
+            color=alt.Gradient(
+                gradient="linear",
+                stops=[
+                    alt.GradientStop(color="rgba(124, 58, 237, 0.35)", offset=0),
+                    alt.GradientStop(color="rgba(59, 130, 246, 0.02)", offset=1),
+                ],
+                x1=1,
+                x2=1,
+                y1=1,
+                y2=0,
+            ),
+        )
+        .encode(
+            x=alt.X("date:T", axis=alt.Axis(title=None, format="%b %d")),
+            y=alt.Y("equity:Q", axis=alt.Axis(title=None), scale=alt.Scale(zero=False)),
+            tooltip=[alt.Tooltip("date:T", title="Date"), alt.Tooltip("equity:Q", title="Equity", format=",.2f")],
+        )
+        .properties(height=280)
+    )
 
-    st.subheader("Calendar heatmap")
-    render_calendar_heatmap(chart_df, pnl_col)
+    daily_chart = (
+        alt.Chart(daily_df)
+        .mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3)
+        .encode(
+            x=alt.X("date:T", axis=alt.Axis(title=None, format="%b %d")),
+            y=alt.Y("pnl:Q", axis=alt.Axis(title=None), scale=alt.Scale(zero=False)),
+            color=alt.condition(alt.datum.pnl >= 0, alt.value("#22c55e"), alt.value("#ef4444")),
+            tooltip=[alt.Tooltip("date:T", title="Date"), alt.Tooltip("pnl:Q", title="PnL", format=",.2f")],
+        )
+        .properties(height=280)
+    )
 
-    st.markdown("---")
-    st.subheader("Breakdowns")
-    c1, c2 = st.columns(2)
-    with c1:
-        st.subheader("PnL by instrument")
-        st.bar_chart(chart_df.groupby("instrument")[pnl_col].sum().reindex(INSTRUMENT_ORDER), use_container_width=True)
-    with c2:
-        st.subheader("PnL by session")
-        st.bar_chart(chart_df.groupby("session")[pnl_col].sum().reindex(SESSIONS), use_container_width=True)
+    instr_chart = (
+        alt.Chart(instrument_df)
+        .mark_bar()
+        .encode(
+            y=alt.Y("instrument:N", sort=INSTRUMENT_ORDER, axis=alt.Axis(title=None)),
+            x=alt.X("pnl:Q", axis=alt.Axis(title=None)),
+            color=alt.value("#8FC9FF"),
+            tooltip=[alt.Tooltip("instrument:N", title="Instrument"), alt.Tooltip("pnl:Q", title="PnL", format=",.2f")],
+        )
+        .properties(height=220)
+    )
 
-    c3, c4 = st.columns(2)
-    with c3:
-        st.subheader("PnL by direction")
-        st.bar_chart(chart_df.groupby("direction")[pnl_col].sum(), use_container_width=True)
-    with c4:
-        st.subheader("PnL by trade grade")
-        if "trade_grade" in chart_df.columns:
-            st.bar_chart(chart_df.groupby("trade_grade")[pnl_col].sum(), use_container_width=True)
+    session_chart = (
+        alt.Chart(session_df)
+        .mark_bar()
+        .encode(
+            y=alt.Y("session:N", sort=SESSIONS, axis=alt.Axis(title=None)),
+            x=alt.X("pnl:Q", axis=alt.Axis(title=None)),
+            color=alt.value("#8FC9FF"),
+            tooltip=[alt.Tooltip("session:N", title="Session"), alt.Tooltip("pnl:Q", title="PnL", format=",.2f")],
+        )
+        .properties(height=220)
+    )
 
-    c5, c6 = st.columns(2)
-    with c5:
-        chart_df["day"] = chart_df["date"].dt.day_name()
-        day_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-        st.subheader("PnL by day of week")
-        st.bar_chart(chart_df.groupby("day")[pnl_col].sum().reindex(day_order).dropna(), use_container_width=True)
-    with c6:
-        chart_df["month"] = chart_df["date"].dt.to_period("M").astype(str)
-        st.subheader("PnL by month")
-        st.bar_chart(chart_df.groupby("month")[pnl_col].sum(), use_container_width=True)
+    drawdown_chart = (
+        alt.Chart(chart_df)
+        .mark_area(
+            line={"color": "#ef4444", "strokeWidth": 1.5},
+            color="rgba(239, 68, 68, 0.18)",
+        )
+        .encode(
+            x=alt.X("date:T", axis=alt.Axis(title=None, format="%b %d")),
+            y=alt.Y("drawdown:Q", axis=alt.Axis(title=None), scale=alt.Scale(zero=False)),
+            tooltip=[alt.Tooltip("date:T", title="Date"), alt.Tooltip("drawdown:Q", title="Drawdown", format=",.2f")],
+        )
+        .properties(height=200)
+    )
 
-    if "entry_hour" in chart_df.columns:
-        hour_df = chart_df.dropna(subset=["entry_hour"])
-        if len(hour_df) > 0:
-            st.subheader("Time of day breakdown")
-            st.bar_chart(hour_df.groupby("entry_hour")[pnl_col].sum(), use_container_width=True)
+    if section == "Dashboard":
+        st.subheader("Dashboard")
+        render_metric_cards(cards)
+        c_eq, c_daily = st.columns([2, 1])
+        with c_eq:
+            st.markdown("**Equity curve**")
+            st.altair_chart(style_altair_chart(equity_chart), use_container_width=True)
+        with c_daily:
+            st.markdown("**Daily P&L**")
+            st.altair_chart(style_altair_chart(daily_chart), use_container_width=True)
 
-    st.markdown("---")
-    st.subheader("Setup & confluence performance")
-    tag_df = explode_tags(chart_df, "setup_tag")
-    if len(tag_df) > 0:
-        st.dataframe(
-            tag_df.groupby("setup_tag")[pnl_col].agg(["sum", "mean", "count"])
-            .rename(columns={"sum": "Total PnL", "mean": "Avg PnL", "count": "Trades"})
-            .sort_values("Total PnL", ascending=False),
-            use_container_width=True
+        st.markdown("**Performance by instrument & session**")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.altair_chart(style_altair_chart(instr_chart), use_container_width=True)
+        with c2:
+            st.altair_chart(style_altair_chart(session_chart), use_container_width=True)
+
+        st.markdown("---")
+        st.subheader("Drawdown")
+        st.altair_chart(style_altair_chart(drawdown_chart), use_container_width=True)
+
+    if section == "PnL Calendar":
+        st.subheader("PnL calendar")
+        if not daily_df.empty:
+            best_row = daily_df.loc[daily_df["pnl"].idxmax()]
+            worst_row = daily_df.loc[daily_df["pnl"].idxmin()]
+            best_date = best_row["date"].strftime("%Y-%m-%d")
+            worst_date = worst_row["date"].strftime("%Y-%m-%d")
+            st.markdown(f"**Biggest winning day:** {best_date} — {format_money(best_row['pnl'])}")
+            st.markdown(f"**Biggest losing day:** {worst_date} — {format_money(worst_row['pnl'])}")
+        render_pnl_calendar(chart_df, pnl_col)
+
+    if section == "Analytics":
+        st.subheader("Analytics")
+        a_day, a_conf, a_overall = st.tabs(
+            ["Day & Time Analysis", "Confluence Analytics", "Overall Performance"]
         )
 
-    conf_df = explode_tags(chart_df, "confluences")
-    if len(conf_df) > 0:
-        conf_stats = (
-            conf_df.groupby("confluences")[pnl_col]
-            .agg(["sum", "mean", "count"])
-            .rename(columns={"sum": "Total PnL", "mean": "Avg PnL", "count": "Trades"})
-            .sort_values("Total PnL", ascending=False)
-        )
-        conf_stats["Win rate %"] = conf_df.groupby("confluences")[pnl_col].apply(lambda s: (s > 0).mean() * 100)
-        st.dataframe(conf_stats, use_container_width=True)
-
-    st.markdown("---")
-    st.subheader("Top & bottom trades")
-    display_cols = ["date", "instrument", "direction", "session", "entry_price", "exit_price", pnl_col, "r_multiple", "setup_tag"]
-    display_cols = [c for c in display_cols if c in chart_df.columns]
-    c_top, c_bot = st.columns(2)
-    with c_top:
-        st.subheader("Top 10")
-        st.dataframe(chart_df.sort_values(pnl_col, ascending=False).head(10)[display_cols], use_container_width=True, hide_index=True)
-    with c_bot:
-        st.subheader("Bottom 10")
-        st.dataframe(chart_df.sort_values(pnl_col, ascending=True).head(10)[display_cols], use_container_width=True, hide_index=True)
-
-    # ── Trade images ──────────────────────────────────────────────────────────
-    st.markdown("---")
-    st.subheader("Trade images")
-    image_paths = []
-    for _, row in df_view.iterrows():
-        imgs = safe_str(row.get("images", ""))
-        for p in imgs.split(";"):
-            if p.strip():
-                image_paths.append((p.strip(), f"{safe_str(row.get('date'))} | {safe_str(row.get('instrument'))} | {safe_str(row.get('direction'))}"))
-
-    if not image_paths:
-        st.info("No images uploaded yet.")
-    else:
-        st.caption(f"Showing latest 12 of {len(image_paths)} images")
-        cols = st.columns(4)
-        for i, (path, caption) in enumerate(image_paths[-12:]):
-            try:
-                url = get_image_url(path)
-                cols[i % 4].image(url, caption=caption, use_column_width=True)
-            except Exception:
-                cols[i % 4].warning(f"Could not load image")
-
-    # ── All trades table ──────────────────────────────────────────────────────
-    st.markdown("---")
-    st.subheader("All trades")
-    st.dataframe(df_view, use_container_width=True, hide_index=True)
-    st.download_button("Download CSV", df_view.to_csv(index=False).encode("utf-8"),
-                        file_name=f"{form_key}_trades.csv", mime="text/csv", key=f"{form_key}_dl")
-
-    # ── Edit / delete ─────────────────────────────────────────────────────────
-    st.markdown("---")
-    st.subheader("Edit or delete trades")
-    editable = df_raw.copy()
-    editable["delete"] = False
-    edited = st.data_editor(editable, disabled=COMPUTED_COLUMNS + ["id", "images"],
-                             use_container_width=True, hide_index=True, key=f"{form_key}_editor")
-    if st.button("Apply edits and deletions", key=f"{form_key}_apply"):
-        to_delete = edited[edited["delete"] == True]["id"].tolist()
-        for tid in to_delete:
-            delete_trade(tid)
-        to_update = edited[edited["delete"] != True].drop(columns=["delete"])
-        for _, r in to_update.iterrows():
-            row_dict = r.to_dict()
-            if "entry_time" in row_dict:
-                row_dict["entry_time"] = normalize_time_input(row_dict["entry_time"])
-            if "exit_time" in row_dict:
-                row_dict["exit_time"] = normalize_time_input(row_dict["exit_time"])
-            metrics = compute_metrics(
-                instrument=normalize_instrument(row_dict.get("instrument")),
-                direction=normalize_direction(row_dict.get("direction")),
-                entry=to_float(row_dict.get("entry_price")),
-                stop=to_float(row_dict.get("stop_loss")),
-                exit_price=to_float(row_dict.get("exit_price")),
-                take_profit=to_float(row_dict.get("take_profit")),
-                contracts=to_int(row_dict.get("contracts")),
-                commission=to_float(row_dict.get("commission")),
-                slippage=to_float(row_dict.get("slippage")),
-                max_favorable=to_float(row_dict.get("max_favorable_price")),
-                max_adverse=to_float(row_dict.get("max_adverse_price")),
-                account_size=to_float(row_dict.get("account_size")),
-                date_str=row_dict.get("date"),
-                entry_time_str=row_dict.get("entry_time"),
-                exit_time_str=row_dict.get("exit_time"),
+        with a_day:
+            day_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+            day_perf = (
+                chart_df.groupby("day")[pnl_col]
+                .agg(["sum", "mean", "count"])
+                .rename(columns={"sum": "Total PnL", "mean": "Avg PnL", "count": "Trades"})
             )
-            row_dict.update(metrics)
-            update_trade(row_dict)
-        st.success("Changes saved. Refresh to see updated data.")
+            day_perf["Win rate %"] = chart_df.groupby("day")[pnl_col].apply(lambda s: (s > 0).mean() * 100)
+            day_perf = day_perf.reindex(day_order)
+
+            hour_df = chart_df.dropna(subset=["entry_hour"])
+            hour_perf = (
+                hour_df.groupby("entry_hour")[pnl_col]
+                .agg(["sum", "mean", "count"])
+                .rename(columns={"sum": "Total PnL", "mean": "Avg PnL", "count": "Trades"})
+            )
+            hour_perf["Win rate %"] = hour_df.groupby("entry_hour")[pnl_col].apply(lambda s: (s > 0).mean() * 100)
+
+            time_cards = []
+            if not day_perf.empty and day_perf["Trades"].sum() > 0:
+                best_day = day_perf["Total PnL"].idxmax()
+                worst_day = day_perf["Total PnL"].idxmin()
+                time_cards.extend([
+                    ("Best day", str(best_day), f"{format_money(day_perf.loc[best_day, 'Total PnL'])} | {day_perf.loc[best_day, 'Win rate %']:.1f}% win"),
+                    ("Worst day", str(worst_day), f"{format_money(day_perf.loc[worst_day, 'Total PnL'])} | {day_perf.loc[worst_day, 'Win rate %']:.1f}% win"),
+                ])
+            if not hour_perf.empty:
+                best_hour = hour_perf["Total PnL"].idxmax()
+                worst_hour = hour_perf["Total PnL"].idxmin()
+                time_cards.extend([
+                    ("Best hour", f"{int(best_hour):02d}:00", f"{format_money(hour_perf.loc[best_hour, 'Total PnL'])} | {hour_perf.loc[best_hour, 'Win rate %']:.1f}% win"),
+                    ("Worst hour", f"{int(worst_hour):02d}:00", f"{format_money(hour_perf.loc[worst_hour, 'Total PnL'])} | {hour_perf.loc[worst_hour, 'Win rate %']:.1f}% win"),
+                ])
+
+            if time_cards:
+                render_metric_cards(time_cards)
+            else:
+                st.info("No time/day data yet.")
+
+            day_display = day_perf.reset_index().rename(columns={"day": "Day"})
+            hour_display = hour_perf.reset_index().rename(columns={"entry_hour": "Hour"})
+            if not hour_display.empty:
+                hour_display["Hour"] = hour_display["Hour"].apply(lambda h: f"{int(h):02d}:00")
+            for df_perf in (day_display, hour_display):
+                if not df_perf.empty:
+                    df_perf["Total PnL"] = df_perf["Total PnL"].round(2)
+                    df_perf["Avg PnL"] = df_perf["Avg PnL"].round(2)
+                    df_perf["Win rate %"] = df_perf["Win rate %"].round(1)
+                    df_perf["Trades"] = df_perf["Trades"].fillna(0).astype(int)
+
+            c_day, c_hour = st.columns(2)
+            with c_day:
+                st.markdown("**Day of week breakdown**")
+                st.dataframe(day_display, use_container_width=True, hide_index=True)
+            with c_hour:
+                st.markdown("**Hour breakdown**")
+                st.dataframe(hour_display, use_container_width=True, hide_index=True)
+
+        with a_conf:
+            conf_df = explode_tags(chart_df, "confluences")
+            if conf_df.empty:
+                st.info("No confluence data yet.")
+            else:
+                conf_stats = (
+                    conf_df.groupby("confluences")[pnl_col]
+                    .agg(["sum", "mean", "count"])
+                    .rename(columns={"sum": "Total PnL", "mean": "Avg PnL", "count": "Trades"})
+                )
+                conf_stats["Win rate %"] = conf_df.groupby("confluences")[pnl_col].apply(lambda s: (s > 0).mean() * 100)
+                conf_stats = conf_stats.sort_values("Win rate %", ascending=False)
+                conf_stats = conf_stats[conf_stats["Trades"] >= 2]
+                if conf_stats.empty:
+                    st.info("Not enough confluence data yet.")
+                else:
+                    top_win = conf_stats.head(3).copy()
+                    top_loss = conf_stats.sort_values("Win rate %", ascending=True).head(3).copy()
+                    for df_stats in (top_win, top_loss):
+                        df_stats["Total PnL"] = df_stats["Total PnL"].round(2)
+                        df_stats["Avg PnL"] = df_stats["Avg PnL"].round(2)
+                        df_stats["Win rate %"] = df_stats["Win rate %"].round(1)
+                        df_stats["Trades"] = df_stats["Trades"].astype(int)
+
+                    c_top, c_bot = st.columns(2)
+                    with c_top:
+                        st.markdown("**Top 3 win rate confluences**")
+                        st.dataframe(top_win, use_container_width=True)
+                    with c_bot:
+                        st.markdown("**Top 3 lose rate confluences**")
+                        st.dataframe(top_loss, use_container_width=True)
+
+        with a_overall:
+            context_df = chart_df.copy()
+            context_df["time_label"] = context_df["entry_time"].fillna(
+                context_df["entry_hour"].apply(lambda h: f"{int(h):02d}:00" if pd.notna(h) else "n/a")
+            )
+            context_df["confluence_combo"] = context_df["confluences"].apply(
+                lambda raw: " + ".join(sorted({t.strip() for t in str(raw or "").split(",") if t.strip()})) or "No confluence"
+            )
+            context_stats = (
+                context_df.groupby(["day", "time_label", "direction", "confluence_combo"])[pnl_col]
+                .agg(["sum", "mean", "count"])
+                .rename(columns={"sum": "Total PnL", "mean": "Avg PnL", "count": "Trades"})
+            )
+            context_stats["Win rate %"] = context_df.groupby(
+                ["day", "time_label", "direction", "confluence_combo"]
+            )[pnl_col].apply(lambda s: (s > 0).mean() * 100)
+            context_stats = context_stats[context_stats["Trades"] >= 2]
+
+            if not context_stats.empty:
+                best_win = context_stats.sort_values(["Win rate %", "Total PnL"], ascending=[False, False]).iloc[0]
+                best_pnl = context_stats.sort_values("Total PnL", ascending=False).iloc[0]
+                best_win_label = f"{best_win.name[0]} at {best_win.name[1]} going {best_win.name[2]} with {best_win.name[3]}"
+                best_pnl_label = f"{best_pnl.name[0]} at {best_pnl.name[1]} going {best_pnl.name[2]} with {best_pnl.name[3]}"
+                st.markdown(
+                    f"**Best win rate context:** {best_win_label} "
+                    f"({best_win['Win rate %']:.1f}% win, {int(best_win['Trades'])} trades, {format_money(best_win['Total PnL'])})"
+                )
+                st.markdown(
+                    f"**Best total PnL context:** {best_pnl_label} "
+                    f"({int(best_pnl['Trades'])} trades, {format_money(best_pnl['Total PnL'])})"
+                )
+            else:
+                st.info("Not enough combined data yet for context analysis.")
+
+            st.markdown("---")
+            st.markdown("**Top setup tags**")
+            tag_df = explode_tags(chart_df, "setup_tag")
+            if not tag_df.empty:
+                tag_stats = (
+                    tag_df.groupby("setup_tag")[pnl_col]
+                    .agg(["sum", "mean", "count"])
+                    .rename(columns={"sum": "Total PnL", "mean": "Avg PnL", "count": "Trades"})
+                    .sort_values("Total PnL", ascending=False)
+                )
+                st.dataframe(tag_stats.head(5), use_container_width=True)
+            else:
+                st.info("No setup tag data yet.")
+
+            st.markdown("**Top confluence combos**")
+            combo_stats = build_confluence_combo_stats(chart_df, pnl_col, min_confluences=2)
+            if not combo_stats.empty:
+                combo_stats = combo_stats[combo_stats["Trades"] >= 2]
+            if combo_stats.empty:
+                st.info("No confluence combo data yet.")
+            else:
+                combo_stats["Total PnL"] = combo_stats["Total PnL"].round(2)
+                combo_stats["Avg PnL"] = combo_stats["Avg PnL"].round(2)
+                combo_stats["Win rate %"] = combo_stats["Win rate %"].round(1)
+                combo_stats["Trades"] = combo_stats["Trades"].astype(int)
+
+                best_win = combo_stats.sort_values(["Win rate %", "Total PnL"], ascending=[False, False]).head(3)
+                worst_win = combo_stats.sort_values(["Win rate %", "Total PnL"], ascending=[True, True]).head(3)
+                top_pnl = combo_stats.sort_values("Total PnL", ascending=False).head(3)
+
+                c_best, c_worst = st.columns(2)
+                with c_best:
+                    st.markdown("**Best win rate combos**")
+                    st.dataframe(best_win, use_container_width=True)
+                with c_worst:
+                    st.markdown("**Worst win rate combos**")
+                    st.dataframe(worst_win, use_container_width=True)
+
+                st.markdown("**Top PnL combos**")
+                st.dataframe(top_pnl, use_container_width=True)
+
+    if section == "New Trade":
+        # ── Trade images ──────────────────────────────────────────────────────────
+        st.markdown("---")
+        st.subheader("Trade images")
+        image_paths = []
+        for _, row in df_view.iterrows():
+            imgs = safe_str(row.get("images", ""))
+            for p in imgs.split(";"):
+                if p.strip():
+                    image_paths.append((p.strip(), f"{safe_str(row.get('date'))} | {safe_str(row.get('instrument'))} | {safe_str(row.get('direction'))}"))
+
+        if not image_paths:
+            st.info("No images uploaded yet.")
+        else:
+            st.caption(f"Showing latest 12 of {len(image_paths)} images")
+            cols = st.columns(4)
+            for i, (path, caption) in enumerate(image_paths[-12:]):
+                try:
+                    url = get_image_url(path)
+                    cols[i % 4].image(url, caption=caption, use_column_width=True)
+                except Exception:
+                    cols[i % 4].warning(f"Could not load image")
+
+        # ── All trades table ──────────────────────────────────────────────────────
+        st.markdown("---")
+        st.subheader("All trades")
+        st.dataframe(df_view, use_container_width=True, hide_index=True)
+        st.download_button("Download CSV", df_view.to_csv(index=False).encode("utf-8"),
+                            file_name=f"{form_key}_trades.csv", mime="text/csv", key=f"{form_key}_dl")
+
+        # ── Edit / delete ─────────────────────────────────────────────────────────
+        st.markdown("---")
+        st.subheader("Edit or delete trades")
+        editable = df_raw.copy()
+        editable["delete"] = False
+        edited = st.data_editor(editable, disabled=COMPUTED_COLUMNS + ["id", "images"],
+                                 use_container_width=True, hide_index=True, key=f"{form_key}_editor")
+        if st.button("Apply edits and deletions", key=f"{form_key}_apply"):
+            to_delete = edited[edited["delete"] == True]["id"].tolist()
+            for tid in to_delete:
+                delete_trade(tid)
+            to_update = edited[edited["delete"] != True].drop(columns=["delete"])
+            for _, r in to_update.iterrows():
+                row_dict = r.to_dict()
+                if "entry_time" in row_dict:
+                    row_dict["entry_time"] = normalize_time_input(row_dict["entry_time"])
+                if "exit_time" in row_dict:
+                    row_dict["exit_time"] = normalize_time_input(row_dict["exit_time"])
+                metrics = compute_metrics(
+                    instrument=normalize_instrument(row_dict.get("instrument")),
+                    direction=normalize_direction(row_dict.get("direction")),
+                    entry=to_float(row_dict.get("entry_price")),
+                    stop=to_float(row_dict.get("stop_loss")),
+                    exit_price=to_float(row_dict.get("exit_price")),
+                    take_profit=to_float(row_dict.get("take_profit")),
+                    contracts=to_int(row_dict.get("contracts")),
+                    commission=to_float(row_dict.get("commission")),
+                    slippage=to_float(row_dict.get("slippage")),
+                    max_favorable=to_float(row_dict.get("max_favorable_price")),
+                    max_adverse=to_float(row_dict.get("max_adverse_price")),
+                    account_size=to_float(row_dict.get("account_size")),
+                    date_str=row_dict.get("date"),
+                    entry_time_str=row_dict.get("entry_time"),
+                    exit_time_str=row_dict.get("exit_time"),
+                )
+                row_dict.update(metrics)
+                update_trade(row_dict)
+            st.success("Changes saved. Refresh to see updated data.")
 
 # ── App entry point ───────────────────────────────────────────────────────────
 
@@ -959,7 +1642,7 @@ user = get_user()
 if not user:
     show_auth()
 else:
-    st.title("Futures Trading Journal")
+    render_brand_header(center=False, hero=True)
     col_title, col_logout = st.columns([8, 1])
     with col_logout:
         if st.button("Log out"):
@@ -967,7 +1650,16 @@ else:
             st.session_state.clear()
             st.rerun()
 
+    with st.sidebar:
+        st.markdown("### Navigation")
+        section = st.radio(
+            "Go to",
+            ["Dashboard", "New Trade", "Analytics", "PnL Calendar"],
+            key="nav_section",
+            label_visibility="collapsed",
+        )
+
     tabs = st.tabs(ACCOUNT_TYPES)
     for tab, account_type in zip(tabs, ACCOUNT_TYPES):
         with tab:
-            render_section(user.id, account_type)
+            render_section(user.id, account_type, section)
