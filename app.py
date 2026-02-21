@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 
 import altair as alt
-import numpy as np
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
@@ -343,8 +342,6 @@ def enforce_trade_limit_or_warn(user_id: str) -> bool:
 
 # ── User Settings (feature-flagged) ───────────────────────────────────────────
 
-SETTINGS_ENABLED = truthy(get_secret("SETTINGS_ENABLED", "false"))
-
 CURRENCY_CHOICES = {
     "USD ($)": {"code": "USD", "symbol": "$"},
     "EUR (€)": {"code": "EUR", "symbol": "€"},
@@ -363,7 +360,7 @@ def load_user_settings(user_id: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def upsert_user_settings(user_id: str, settings: Dict[str, Any]) -> None:
+def upsert_user_settings(user_id: str, settings: Dict[str, Any]) -> bool:
     try:
         sb = authed_supabase()
         row = {"user_id": user_id}
@@ -374,8 +371,9 @@ def upsert_user_settings(user_id: str, settings: Dict[str, Any]) -> None:
             sb.table("user_settings").update(settings).eq("user_id", user_id).execute()
         else:
             sb.table("user_settings").insert(row).execute()
+        return True
     except Exception:
-        return
+        return False
 
 
 def apply_settings_to_session(user_id: str) -> None:
@@ -384,9 +382,6 @@ def apply_settings_to_session(user_id: str) -> None:
         st.session_state["currency_symbol"] = "$"
     if "currency_code" not in st.session_state:
         st.session_state["currency_code"] = "USD"
-
-    if not SETTINGS_ENABLED:
-        return
 
     settings = load_user_settings(user_id)
     if not settings:
@@ -463,7 +458,7 @@ def render_journal_page(user_id: str) -> None:
     if state_key not in st.session_state:
         existing = load_journal_entry(user_id, date_str)
         if existing is None:
-            st.warning("Journal storage isn't set up yet. Run the journal SQL in Supabase to enable saving.")
+            st.warning("Journal storage isn't set up yet. Run `sql/journal.sql` in the SAME Supabase project as your app's `SUPABASE_URL` secret.")
             # Only show debug details to the app owner to avoid leaking backend info publicly.
             user_obj = st.session_state.get("user")
             email = ""
@@ -476,6 +471,7 @@ def render_journal_page(user_id: str) -> None:
                 if details:
                     with st.expander("Debug details (owner only)", expanded=False):
                         st.code(details)
+                        st.caption(f"Supabase URL in app: {SUPABASE_URL}")
             existing = ""
         st.session_state[state_key] = existing
         st.session_state[last_key] = existing
@@ -881,19 +877,15 @@ def compute_zylo_score(df_view: pd.DataFrame, daily_df: pd.DataFrame, pnl_col: s
     if daily_df is not None and not daily_df.empty:
         consistency = float((daily_df["pnl"] > 0).mean() * 100.0)
 
-    avg_r = df_view["r_multiple"].dropna().mean() if "r_multiple" in df_view.columns else None
-    avg_r = float(avg_r) if avg_r is not None and pd.notna(avg_r) else 0.0
-
     # Component scaling (tunable later)
+    # We keep the radar to 5 axes (pentagon) as requested.
     scores = {
         "Win %": scale_linear(win_rate, 35, 70),
-        "Profit factor": scale_linear(profit_factor, 1.0, 2.5),
-        "Avg win/loss": scale_linear(win_loss_ratio, 0.8, 2.5),
-        "Recovery factor": scale_linear(recovery_factor, 0.5, 3.0),
+        "Profit Factor": scale_linear(profit_factor, 1.0, 2.5),
+        "Avg Win/Loss": scale_linear(win_loss_ratio, 0.8, 2.5),
         "Consistency": scale_linear(consistency, 40, 75),
-        # Max drawdown: lower is better (scale inverse using ratio to total pnl when possible)
-        "Max drawdown": 0.0,
-        "Avg R": scale_linear(avg_r, 0.0, 1.2),
+        # Max Drawdown: lower is better (scale inverse using ratio to total pnl when possible)
+        "Max Drawdown": 0.0,
     }
 
     dd_ratio = None
@@ -901,19 +893,17 @@ def compute_zylo_score(df_view: pd.DataFrame, daily_df: pd.DataFrame, pnl_col: s
         dd_ratio = max_drawdown / abs(total_pnl)
     # If dd_ratio is small -> good. Cap at 1.5.
     if dd_ratio is None:
-        scores["Max drawdown"] = 50.0 if max_drawdown == 0 else 0.0
+        scores["Max Drawdown"] = 100.0 if max_drawdown == 0 else 0.0
     else:
-        scores["Max drawdown"] = (1.0 - clamp01(dd_ratio / 1.5)) * 100.0
+        scores["Max Drawdown"] = (1.0 - clamp01(dd_ratio / 1.5)) * 100.0
 
     # Weighted overall
     weights = {
-        "Win %": 0.18,
-        "Profit factor": 0.18,
-        "Avg win/loss": 0.14,
-        "Recovery factor": 0.16,
-        "Consistency": 0.14,
-        "Max drawdown": 0.12,
-        "Avg R": 0.08,
+        "Win %": 0.24,
+        "Profit Factor": 0.22,
+        "Avg Win/Loss": 0.18,
+        "Consistency": 0.18,
+        "Max Drawdown": 0.18,
     }
     overall = sum(scores[k] * weights.get(k, 0) for k in scores.keys())
     overall = max(0.0, min(100.0, float(overall)))
@@ -925,62 +915,63 @@ def compute_zylo_score(df_view: pd.DataFrame, daily_df: pd.DataFrame, pnl_col: s
             "win_rate": win_rate,
             "profit_factor": profit_factor,
             "avg_win_loss": win_loss_ratio,
-            "recovery_factor": recovery_factor,
             "consistency": consistency,
             "max_drawdown": max_drawdown,
-            "avg_r": avg_r,
         },
     }
 
 
-def render_zylo_radar(components: Dict[str, float], height: int = 260) -> None:
-    labels = list(components.keys())
-    n = len(labels)
-    if n == 0:
-        st.info("No score data yet.")
+def render_zylo_radar(components: Dict[str, float]) -> None:
+    """
+    Pentagon radar chart (0-100) on a dark background with purple fill.
+    """
+    try:
+        import plotly.graph_objects as go  # type: ignore
+    except Exception:
+        st.info("Radar chart requires Plotly. Add `plotly` to requirements to enable it.")
         return
 
-    # Convert to x/y so we can draw a polygon in Altair.
-    rows = []
-    for i, label in enumerate(labels):
-        angle = 2 * 3.141592653589793 * i / n
-        value = float(components[label])
-        r = value / 100.0
-        rows.append({"label": label, "value": value, "x": r * float(np.sin(angle)), "y": r * float(np.cos(angle)), "order": i})
-    rows.append({**rows[0], "order": n})  # close polygon
+    labels = ["Win %", "Profit Factor", "Avg Win/Loss", "Consistency", "Max Drawdown"]
+    r = [float(components.get(k, 0.0)) for k in labels]
+    # Close the polygon
+    labels_closed = labels + [labels[0]]
+    r_closed = r + [r[0]]
 
-    df_poly = pd.DataFrame(rows)
-
-    grid = []
-    for ring in (0.25, 0.5, 0.75, 1.0):
-        ring_rows = []
-        for i in range(n + 1):
-            angle = 2 * 3.141592653589793 * (i % n) / n
-            ring_rows.append({"x": ring * float(np.sin(angle)), "y": ring * float(np.cos(angle)), "ring": ring, "order": i})
-        grid.append(pd.DataFrame(ring_rows))
-    df_grid = pd.concat(grid, ignore_index=True)
-
-    base = alt.Chart(df_grid).mark_line(color="rgba(148,163,184,0.25)").encode(
-        x=alt.X("x:Q", axis=None),
-        y=alt.Y("y:Q", axis=None),
-        detail="ring:N",
-        order="order:Q",
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatterpolar(
+            r=r_closed,
+            theta=labels_closed,
+            fill="toself",
+            fillcolor="rgba(124,58,237,0.35)",
+            line=dict(color="#A78BFA", width=2),
+            marker=dict(color="#C4B5FD", size=4),
+            hovertemplate="%{theta}: %{r:.1f}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        showlegend=False,
+        margin=dict(l=10, r=10, t=10, b=10),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        polar=dict(
+            bgcolor="rgba(0,0,0,0)",
+            radialaxis=dict(
+                visible=True,
+                range=[0, 100],
+                tickfont=dict(color="rgba(148,163,184,0.9)", size=10),
+                gridcolor="rgba(148,163,184,0.18)",
+                linecolor="rgba(148,163,184,0.25)",
+            ),
+            angularaxis=dict(
+                tickfont=dict(color="rgba(230,237,243,0.95)", size=11),
+                gridcolor="rgba(148,163,184,0.18)",
+                linecolor="rgba(148,163,184,0.25)",
+            ),
+        ),
     )
 
-    poly = alt.Chart(df_poly).mark_line(color="#7C3AED", strokeWidth=2).encode(
-        x="x:Q",
-        y="y:Q",
-        order="order:Q",
-        tooltip=[alt.Tooltip("label:N", title="Metric"), alt.Tooltip("value:Q", title="Score", format=".1f")],
-    )
-
-    fill = alt.Chart(df_poly).mark_area(color="rgba(124,58,237,0.25)").encode(
-        x="x:Q",
-        y="y:Q",
-        order="order:Q",
-    )
-
-    st.altair_chart(style_altair_chart((base + fill + poly).properties(height=height)), use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
     if df.empty:
@@ -1878,7 +1869,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                 st.progress(min(1.0, max(0.0, score / 100.0)))
             except Exception:
                 pass
-            render_zylo_radar(zylo["components"], height=240)
+            render_zylo_radar(zylo["components"])
 
         with c_recent:
             st.markdown("**Recent trades**")
@@ -2029,6 +2020,40 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                         st.dataframe(top_loss, use_container_width=True)
 
         with a_overall:
+            st.markdown("**Highlights**")
+
+            # Most profitable month
+            month_perf = chart_df.groupby("month")[pnl_col].sum().sort_values(ascending=False)
+            best_month = safe_str(month_perf.index[0]) if not month_perf.empty else ""
+            best_month_pnl = float(month_perf.iloc[0]) if not month_perf.empty else 0.0
+
+            # Most profitable R-multiple band
+            rr_best_label = ""
+            rr_best_pnl = 0.0
+            rr_df = chart_df.dropna(subset=["r_multiple"]).copy()
+            if not rr_df.empty:
+                rr_df["r_bucket"] = pd.cut(
+                    rr_df["r_multiple"],
+                    bins=[-1e9, -2, -1, 0, 1, 2, 3, 1e9],
+                    labels=["<= -2R", "-2R to -1R", "-1R to 0R", "0R to 1R", "1R to 2R", "2R to 3R", ">= 3R"],
+                )
+                rr_perf = rr_df.groupby("r_bucket")[pnl_col].sum().sort_values(ascending=False)
+                if not rr_perf.empty:
+                    rr_best_label = safe_str(rr_perf.index[0])
+                    rr_best_pnl = float(rr_perf.iloc[0])
+
+            hi_cards = []
+            if best_month:
+                hi_cards.append(("Best month", best_month, format_money(best_month_pnl)))
+            if rr_best_label:
+                hi_cards.append(("Best RR band", rr_best_label, format_money(rr_best_pnl)))
+            if hi_cards:
+                render_metric_cards(hi_cards)
+            else:
+                st.info("Not enough data yet for monthly/RR highlights.")
+
+            st.markdown("---")
+
             context_df = chart_df.copy()
             context_df["time_label"] = context_df["entry_time"].fillna(
                 context_df["entry_hour"].apply(lambda h: f"{int(h):02d}:00" if pd.notna(h) else "n/a")
@@ -2211,14 +2236,13 @@ else:
             st.session_state["currency_symbol"] = sym
             st.session_state["currency_code"] = code
 
-            if SETTINGS_ENABLED:
-                last = st.session_state.get("_settings_last_currency")
-                current = f"{code}:{sym}"
-                if last != current:
-                    upsert_user_settings(user.id, {"currency_code": code, "currency_symbol": sym})
-                    st.session_state["_settings_last_currency"] = current
-            else:
-                st.caption("Tip: enable SETTINGS_ENABLED and run `sql/user_settings.sql` to persist settings.")
+            last = st.session_state.get("_settings_last_currency")
+            current = f"{code}:{sym}"
+            if last != current:
+                ok = upsert_user_settings(user.id, {"currency_code": code, "currency_symbol": sym})
+                st.session_state["_settings_last_currency"] = current
+                if not ok:
+                    st.caption("Settings storage isn't set up yet. Run `sql/user_settings.sql` in Supabase to persist.")
 
     if section == "Journal":
         render_journal_page(user.id)
