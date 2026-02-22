@@ -36,6 +36,8 @@ st.markdown("""
   --accent-grad: linear-gradient(135deg, rgba(124,58,237,0.24) 0%, rgba(56,189,248,0.18) 52%, rgba(14,17,23,0.0) 100%);
   --panel-bg: rgba(255,255,255,0.045);
   --panel-brd: rgba(255,255,255,0.08);
+  --tz-muted: rgba(148,163,184,0.92);
+  --tz-title: rgba(230,237,243,0.98);
 }
 
 /* Main background glow (subtle, doesn't fight dark theme) */
@@ -59,6 +61,36 @@ div[data-testid="stDataFrame"]{
   background-image: var(--accent-grad);
   background-blend-mode: soft-light;
 }
+
+/* Metric cards (used in demo + logged-in) */
+.metric-grid {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:10px 0 12px;}
+.metric-card {background: rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:14px;
+  padding:12px 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.18); }
+.metric-label {font-size:12px;color:var(--tz-muted);letter-spacing:.06em;text-transform:uppercase}
+.metric-value {font-size:22px;font-weight:700;color:var(--tz-title);margin-top:2px}
+.metric-sub {font-size:12px;color:rgba(148,163,184,0.9);margin-top:6px}
+@media (max-width: 1200px) {.metric-grid {grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media (max-width: 768px) {.metric-grid {grid-template-columns:1fr;}}
+
+/* PnL calendar (used in demo + logged-in) */
+.calendar-card {border-radius:16px;border:1px solid rgba(255,255,255,0.08); padding:14px; box-shadow: 0 12px 36px rgba(0,0,0,0.22);}
+.calendar-wrap {display:grid;grid-template-columns:1fr 150px;gap:12px;align-items:start}
+.calendar-grid {display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+.calendar-weeks {display:flex;flex-direction:column;gap:8px}
+.cal-head {text-align:center;font-size:11px;color:rgba(148,163,184,0.9);text-transform:uppercase;letter-spacing:.10em}
+.cal-cell {border-radius:12px;padding:10px 10px 12px;min-height:92px;border:1px solid rgba(255,255,255,0.10);
+  display:flex;flex-direction:column;gap:6px; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);}
+.cal-cell:hover {transform: translateY(-1px); transition: transform 120ms ease;}
+.cal-off {opacity:0.32}
+.cal-day {font-size:12px;color:rgba(148,163,184,0.95)}
+.cal-pnl {font-size:15px;font-weight:700;color:rgba(230,237,243,0.98);margin-top:auto}
+.cal-trades {font-size:11px;color:rgba(148,163,184,0.92)}
+.cal-week {background: rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.10);border-radius:14px;
+  padding:10px 10px 12px;display:flex;flex-direction:column;gap:4px}
+.cal-week-label {font-size:11px;color:rgba(148,163,184,0.9);text-transform:uppercase;letter-spacing:.10em}
+.cal-week-total {font-size:14px;font-weight:700;color:rgba(230,237,243,0.98)}
+.cal-week-trades {font-size:11px;color:rgba(148,163,184,0.92)}
+@media (max-width: 900px) {.calendar-wrap {grid-template-columns:1fr;}}
 
 /* Buttons: give a bit more "product" feel */
 .stButton > button{
@@ -453,12 +485,13 @@ def build_demo_trades(seed: int = 42) -> pd.DataFrame:
         instrument = random.choice(instruments)
         contracts = random.choice([1, 1, 2, 2, 3, 5])
 
-        # Slight positive expectancy with occasional larger losses (feels realistic).
-        pnl_gross = random.gauss(28, 140)
-        if random.random() < 0.08:
-            pnl_gross -= random.uniform(250, 700)
+        # Stronger positive expectancy for a clean-looking demo curve.
+        pnl_gross = random.gauss(85, 95)
+        # Occasional pullbacks, but avoid huge cliffs in the demo preview.
+        if random.random() < 0.06:
+            pnl_gross -= random.uniform(120, 320)
         if random.random() < 0.10:
-            pnl_gross += random.uniform(180, 520)
+            pnl_gross += random.uniform(120, 420)
 
         commission = round(random.uniform(2.0, 8.0), 2)
         slippage = round(random.uniform(0.0, 3.0), 2)
@@ -534,11 +567,12 @@ def render_demo_dashboard() -> None:
     avg_rr = float(df["r_multiple"].dropna().mean()) if "r_multiple" in df.columns else 0.0
     profit_factor = (float(wins_df[pnl_col].sum()) / abs(float(losses_df[pnl_col].sum()))) if not losses_df.empty else None
 
-    chart_df = df.sort_values("date").copy()
-    chart_df["equity"] = chart_df[pnl_col].cumsum()
-    chart_df["peak"] = chart_df["equity"].cummax()
-    chart_df["drawdown"] = chart_df["equity"] - chart_df["peak"]
-    max_dd = abs(float(chart_df["drawdown"].min())) if not chart_df.empty else 0.0
+    daily_equity = daily_df.sort_values("date").copy()
+    daily_equity["equity"] = daily_equity["pnl"].cumsum()
+    daily_equity["equity_smooth"] = daily_equity["equity"].rolling(5, min_periods=1).mean()
+    daily_equity["peak"] = daily_equity["equity"].cummax()
+    daily_equity["drawdown"] = daily_equity["equity"] - daily_equity["peak"]
+    max_dd = abs(float(daily_equity["drawdown"].min())) if not daily_equity.empty else 0.0
 
     cards = [
         ("Net PnL", format_money(total_pnl), f"{total_trades} trades"),
@@ -554,20 +588,26 @@ def render_demo_dashboard() -> None:
     with c1:
         st.subheader("Equity curve")
         curve = (
-            alt.Chart(chart_df)
+            alt.Chart(daily_equity)
             .mark_area(
-                line={"color": "#A78BFA", "width": 2},
+                interpolate="monotone",
+                line={"color": "#A78BFA", "width": 2.6},
                 color=alt.Gradient(
                     gradient="linear",
-                    stops=[alt.GradientStop(color="rgba(124,58,237,0.55)", offset=0),
-                           alt.GradientStop(color="rgba(56,189,248,0.18)", offset=1)],
+                    stops=[
+                        alt.GradientStop(color="rgba(124,58,237,0.45)", offset=0),
+                        alt.GradientStop(color="rgba(56,189,248,0.12)", offset=1),
+                    ],
                     x1=0, x2=1, y1=0, y2=0,
                 ),
             )
             .encode(
                 x=alt.X("date:T", title=None),
-                y=alt.Y("equity:Q", title=None),
-                tooltip=["date:T", alt.Tooltip("equity:Q", format=",.2f")],
+                y=alt.Y("equity_smooth:Q", title=None),
+                tooltip=[
+                    alt.Tooltip("date:T", title="Date"),
+                    alt.Tooltip("equity:Q", title="Equity", format=",.2f"),
+                ],
             )
             .properties(height=280)
         )
@@ -2702,51 +2742,8 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                 --tz-accent: #7C3AED;
                 --tz-accent-2: #3B82F6;
             }
-            [data-testid="stAppViewContainer"] {background: var(--tz-bg);}
-            [data-testid="stHeader"] {background: rgba(14, 17, 23, 0.9);}
-            .main .block-container {padding-top: 1.5rem;}
-            h1, h2, h3, h4 {color: var(--tz-title);}
-            .metric-grid {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:8px}
-            .metric-card {background:var(--tz-card);border:1px solid var(--tz-border);
-                border-top:2px solid rgba(124,58,237,0.55);
-                border-radius:14px;padding:14px 16px;box-shadow:0 6px 18px rgba(15,23,42,0.06)}
-            .metric-label {color:var(--tz-muted);font-size:11px;letter-spacing:.08em;text-transform:uppercase}
-            .metric-value {color:var(--tz-title);font-size:24px;font-weight:600;margin-top:6px}
-            .metric-sub {color:var(--tz-muted);font-size:12px;margin-top:4px}
-            .calendar-card {background:var(--tz-card);border:1px solid var(--tz-border);border-radius:14px;
-                padding:12px;box-shadow:0 6px 18px rgba(15,23,42,0.06)}
-            .calendar-wrap {display:grid;grid-template-columns:1fr 180px;gap:12px;margin-top:8px}
-            .calendar-grid {display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
-            .calendar-weeks {display:flex;flex-direction:column;gap:8px}
-            .cal-head {text-align:center;font-size:11px;color:var(--tz-muted);text-transform:uppercase;letter-spacing:.08em}
-            .cal-cell {background:rgba(148,163,184,0.08);border-radius:10px;padding:8px;min-height:78px;
-                border:1px solid rgba(148,163,184,0.18);display:flex;flex-direction:column;gap:6px}
-            .cal-off {opacity:0.35}
-            .cal-day {font-size:12px;color:var(--tz-muted)}
-            .cal-pnl {font-size:13px;font-weight:600;color:var(--tz-title)}
-            .cal-trades {font-size:11px;color:var(--tz-muted)}
-            .cal-week {background:var(--tz-card);border:1px solid var(--tz-border);border-radius:12px;
-                padding:10px;display:flex;flex-direction:column;gap:4px}
-            .cal-week-label {font-size:11px;color:var(--tz-muted);text-transform:uppercase;letter-spacing:.08em}
-            .cal-week-total {font-size:14px;font-weight:600;color:var(--tz-title)}
-            .cal-week-trades {font-size:11px;color:var(--tz-muted)}
-            @media (max-width: 900px) {.calendar-wrap {grid-template-columns:1fr;}}
-            div[data-testid="stVegaLiteChart"], div[data-testid="stChart"], div[data-testid="stPlotlyChart"] {
-                background: var(--tz-card);
-                border: 1px solid var(--tz-border);
-                border-radius: 14px;
-                padding: 12px;
-                box-shadow: 0 6px 18px rgba(15,23,42,0.06);
-            }
-            div[data-testid="stDataFrame"] {
-                background: var(--tz-card);
-                border: 1px solid var(--tz-border);
-                border-radius: 14px;
-                padding: 8px;
-                box-shadow: 0 6px 18px rgba(15,23,42,0.06);
-            }
-            @media (max-width: 1200px) {.metric-grid {grid-template-columns:repeat(2,minmax(0,1fr));}}
-            @media (max-width: 768px) {.metric-grid {grid-template-columns:1fr;}}
+            /* Keep this light: global CSS handles the actual visuals.
+               We only keep the variables here for any downstream styling. */
             </style>
             """,
             unsafe_allow_html=True,
@@ -2836,6 +2833,8 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     ]
 
     chart_df = df_view.sort_values("date").copy()
+    # Normalize to day granularity for smoother curves and correct daily aggregation.
+    chart_df["date"] = pd.to_datetime(chart_df["date"]).dt.normalize()
     chart_df["equity"] = chart_df[pnl_col].cumsum()
     chart_df["peak"] = chart_df["equity"].cummax()
     chart_df["drawdown"] = chart_df["equity"] - chart_df["peak"]
@@ -2843,6 +2842,11 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     chart_df["month"] = chart_df["date"].dt.to_period("M").astype(str)
 
     daily_df = chart_df.groupby("date", as_index=False)[pnl_col].sum().rename(columns={pnl_col: "pnl"})
+    daily_df = daily_df.sort_values("date").copy()
+    daily_df["equity"] = daily_df["pnl"].cumsum()
+    daily_df["equity_smooth"] = daily_df["equity"].rolling(5, min_periods=1).mean()
+    daily_df["peak"] = daily_df["equity"].cummax()
+    daily_df["drawdown"] = daily_df["equity"] - daily_df["peak"]
     instrument_df = chart_df.groupby("instrument", as_index=False)[pnl_col].sum().rename(columns={pnl_col: "pnl"})
     instrument_df["instrument"] = pd.Categorical(instrument_df["instrument"], categories=INSTRUMENT_ORDER, ordered=True)
     instrument_df = instrument_df.sort_values("instrument")
@@ -2851,8 +2855,9 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     session_df = session_df.sort_values("session")
 
     equity_chart = (
-        alt.Chart(chart_df)
+        alt.Chart(daily_df)
         .mark_area(
+            interpolate="monotone",
             line={"color": "#7C3AED", "strokeWidth": 2},
             color=alt.Gradient(
                 gradient="linear",
@@ -2868,8 +2873,12 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         )
         .encode(
             x=alt.X("date:T", axis=alt.Axis(title=None, format="%b %d")),
-            y=alt.Y("equity:Q", axis=alt.Axis(title=None), scale=alt.Scale(zero=False)),
-            tooltip=[alt.Tooltip("date:T", title="Date"), alt.Tooltip("equity:Q", title="Equity", format=",.2f")],
+            y=alt.Y("equity_smooth:Q", axis=alt.Axis(title=None), scale=alt.Scale(zero=False)),
+            tooltip=[
+                alt.Tooltip("date:T", title="Date"),
+                alt.Tooltip("equity:Q", title="Equity", format=",.2f"),
+                alt.Tooltip("pnl:Q", title="Daily PnL", format=",.2f"),
+            ],
         )
         .properties(height=280)
     )
@@ -2911,7 +2920,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     )
 
     drawdown_chart = (
-        alt.Chart(chart_df)
+        alt.Chart(daily_df)
         .mark_area(
             line={"color": "#ef4444", "strokeWidth": 1.5},
             color="rgba(239, 68, 68, 0.18)",
