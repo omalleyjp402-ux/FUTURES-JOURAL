@@ -8,6 +8,7 @@ import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Dict, Any
+from urllib.parse import quote_plus
 
 import altair as alt
 import pandas as pd
@@ -271,8 +272,22 @@ def render_public_footer() -> None:
 
 def render_landing_page() -> None:
     render_brand_header(center=True)
-    st.title("Tradylo Journal")
-    st.write("A trading journal and performance analytics app for futures traders.")
+    ref = safe_str(st.session_state.get("ref_code")).strip()
+    auth_url = "?view=auth" + (f"&ref={quote_plus(ref)}" if ref else "")
+
+    top = st.container()
+    with top:
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            st.title("Tradylo Journal")
+            st.write("A trading journal and performance analytics app for futures traders.")
+        with c2:
+            st.markdown(" ")
+            st.markdown(" ")
+            try:
+                st.link_button("Log in / Sign up", auth_url, use_container_width=True)
+            except Exception:
+                st.markdown(f"[Log in / Sign up]({auth_url})")
 
     st.markdown("**Features**")
     st.markdown(
@@ -299,8 +314,7 @@ def render_landing_page() -> None:
             st.error("Please enter a valid email address.")
 
     st.markdown("---")
-    st.markdown("Already have an account?")
-    st.markdown("[Log in / Sign up](?view=auth)")
+    st.caption("Already have an account? Use the button at the top to log in or sign up.")
 
     render_public_footer()
 
@@ -396,6 +410,9 @@ def render_contact_page() -> None:
 def render_public_router() -> None:
     page = get_query_param("page").strip().lower()
     view = get_query_param("view").strip().lower()
+    ref = get_query_param("ref").strip()
+    if ref:
+        st.session_state["ref_code"] = ref
 
     if view == "auth":
         show_auth()
@@ -550,7 +567,88 @@ def render_strategy_creation_page(user_id: str) -> None:
     else:
         st.info("No strategies saved yet.")
 
-    code = get_query_param("ref").strip()
+
+# ── Affiliates (feature-tolerant) ─────────────────────────────────────────────
+
+PUBLIC_APP_URL = str(get_secret("PUBLIC_APP_URL", "https://TradyloTradingJournal.streamlit.app") or "").strip()
+
+
+def generate_affiliate_code() -> str:
+    # Short, human shareable. Collisions are unlikely; we retry on insert.
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    raw = uuid.uuid4().hex.upper()
+    # Use parts of uuid mapped into alphabet for a consistent length.
+    code = "".join(alphabet[int(raw[i], 16) % len(alphabet)] for i in range(10))
+    return f"TRADYLO-{code}"
+
+
+def load_my_affiliate_codes(user_id: str) -> list:
+    try:
+        sb = authed_supabase()
+        res = sb.table("affiliate_codes").select("code,commission_percent,is_active,created_at").eq("affiliate_user_id", user_id).order("created_at", desc=True).execute()
+        return res.data or []
+    except Exception:
+        return []
+
+
+def create_affiliate_code(user_id: str, commission_percent: float = 20.0) -> Optional[str]:
+    try:
+        sb = authed_supabase()
+        for _ in range(5):
+            code = generate_affiliate_code()
+            try:
+                sb.table("affiliate_codes").insert(
+                    {"code": code, "affiliate_user_id": user_id, "commission_percent": commission_percent, "is_active": True}
+                ).execute()
+                return code
+            except Exception:
+                continue
+        return None
+    except Exception:
+        return None
+
+
+def load_referrals_for_affiliate(user_id: str) -> pd.DataFrame:
+    try:
+        sb = authed_supabase()
+        res = sb.table("referrals").select("referred_user_id,code,created_at").eq("affiliate_user_id", user_id).order("created_at", desc=True).execute()
+        return pd.DataFrame(res.data or [])
+    except Exception:
+        return pd.DataFrame()
+
+
+def render_affiliates_page(user_id: str) -> None:
+    st.subheader("Affiliates")
+    st.caption("Share your affiliate link. When subscriptions launch, referrals can be attributed automatically.")
+
+    codes = load_my_affiliate_codes(user_id)
+    if not codes:
+        st.info("You don't have an affiliate code yet.")
+        if st.button("Create my affiliate link"):
+            code = create_affiliate_code(user_id)
+            if code:
+                st.success("Affiliate link created.")
+                st.rerun()
+            else:
+                st.error("Could not create an affiliate code yet. Make sure `sql/affiliates.sql` has been run in Supabase.")
+        return
+
+    active = next((c for c in codes if c.get("is_active", True)), codes[0])
+    code = safe_str(active.get("code"))
+    link = f"{PUBLIC_APP_URL}/?ref={quote_plus(code)}"
+
+    st.markdown("**Your affiliate link**")
+    st.code(link)
+
+    st.markdown("---")
+    st.markdown("**Your referrals**")
+    df_ref = load_referrals_for_affiliate(user_id)
+    if df_ref.empty:
+        st.info("No referrals yet.")
+    else:
+        st.dataframe(df_ref, use_container_width=True, hide_index=True)
+
+    code = get_query_param("ref").strip() or safe_str(st.session_state.get("ref_code")).strip()
     if not code:
         return
 
@@ -2688,7 +2786,7 @@ else:
 
     with st.sidebar:
         st.markdown("### Navigation")
-        section_options = ["Dashboard", "New Trade", "Analytics", "PnL Calendar", "Journal", "Strategy/Model Creation"]
+        section_options = ["Dashboard", "New Trade", "Analytics", "PnL Calendar", "Journal", "Strategy/Model Creation", "Affiliates"]
         section_param = get_query_param("section").strip()
         if section_param and section_param in section_options:
             st.session_state["nav_section"] = section_param
@@ -2761,6 +2859,8 @@ else:
         render_journal_page(user.id)
     elif section == "Strategy/Model Creation":
         render_strategy_creation_page(user.id)
+    elif section == "Affiliates":
+        render_affiliates_page(user.id)
     else:
         tabs = st.tabs(ACCOUNT_TYPES)
         for tab, account_type in zip(tabs, ACCOUNT_TYPES):
