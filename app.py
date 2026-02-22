@@ -105,8 +105,24 @@ div[data-testid="stExpander"] > div {
 """, unsafe_allow_html=True)
 
 # ── Supabase client ──────────────────────────────────────────────────────────
-SUPABASE_URL = st.secrets["SUPABASE_URL"]
-SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+def get_secret_required(name: str, fallback_names: Optional[list] = None) -> str:
+    names = [name] + (fallback_names or [])
+    for n in names:
+        try:
+            v = st.secrets[n]
+            if v is None:
+                continue
+            s = str(v).strip()
+            if s:
+                return s
+        except Exception:
+            continue
+    raise KeyError(f"Missing required secret: {name}")
+
+
+SUPABASE_URL = get_secret_required("SUPABASE_URL", ["SUPABASE_PROJECT_URL"])
+# Accept legacy names to reduce “invalid api key” confusion when users follow older guides.
+SUPABASE_KEY = get_secret_required("SUPABASE_KEY", ["SUPABASE_ANON_KEY", "SUPABASE_PUBLIC_ANON_KEY"])
 
 @st.cache_resource
 def get_supabase() -> Client:
@@ -1079,7 +1095,12 @@ def show_auth():
                 st.session_state["access_token"] = res.session.access_token
                 st.rerun()
             except Exception as e:
-                st.error(f"Login failed: {e}")
+                msg = safe_str(e)
+                if "Invalid API key" in msg or "invalid api key" in msg:
+                    st.error("Login failed: Invalid Supabase API key.")
+                    st.caption("Fix: In Streamlit Community Cloud → App → Settings → Secrets, set `SUPABASE_URL` (Project URL) and `SUPABASE_KEY` (Anon public key) from Supabase → Settings → API.")
+                else:
+                    st.error(f"Login failed: {e}")
 
     with tab_signup:
         email = st.text_input("Email", key="signup_email")
