@@ -238,7 +238,7 @@ def upsert_strategy(user_id: str, name: str, description: str) -> bool:
 
 
 def render_strategy_creation_page(user_id: str) -> None:
-    st.subheader("Strategy creation")
+    st.subheader("Strategy/model creation")
     st.caption("Create reusable strategy templates you can pick from when logging trades.")
 
     with st.form("strategy_create_form", clear_on_submit=False):
@@ -1077,23 +1077,26 @@ def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
     header_html = "".join([f"<div class='cal-head'>{d}</div>" for d in day_names])
     cell_html = []
     week_html = []
+    week_date_map = {}
     week_idx = 1
     for week in weeks:
         week_total = 0
         week_trades = 0
+        week_dates = []
         for day in week:
             in_month = day.month == month
             value, trades = month_daily.get(day, (0, 0)) if in_month else (0, 0)
             if in_month:
                 week_total += value
                 week_trades += trades
+                week_dates.append(day)
             bg = pnl_color(value) if in_month else "rgba(148, 163, 184, 0.04)"
             pnl_text = format_money(value) if in_month and value != 0 else ""
             trades_text = f"{trades} trades" if in_month and trades else ""
             day_class = "cal-cell" + ("" if in_month else " cal-off")
             link_date = day.strftime("%Y-%m-%d")
             cell_html.append(
-                "<a class='cal-link' href='?day={link}'>"
+                "<a class='cal-link' href='?section=PnL%20Calendar&day={link}'>"
                 "<div class='{cls}' style='background:{bg};'>"
                 "<div class='cal-day'>{day}</div>"
                 "<div class='cal-pnl'>{pnl}</div>"
@@ -1110,12 +1113,16 @@ def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
             )
         week_label = f"Week {week_idx}"
         week_total_text = format_money(week_total) if week_total != 0 else "$0"
+        week_date_map[str(week_idx)] = [d.strftime("%Y-%m-%d") for d in week_dates]
+        week_href = f"?section=PnL%20Calendar&week={week_idx}"
         week_html.append(
+            "<a class='cal-week-link' href='{href}'>"
             "<div class='cal-week'>"
             f"<div class='cal-week-label'>{week_label}</div>"
             f"<div class='cal-week-total'>{week_total_text}</div>"
             f"<div class='cal-week-trades'>{week_trades} trades</div>"
             "</div>"
+            "</a>".format(href=week_href)
         )
         week_idx += 1
 
@@ -1132,6 +1139,7 @@ def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
         ),
         unsafe_allow_html=True,
     )
+    st.session_state["calendar_week_date_map"] = week_date_map
 
 
 def load_logo_data():
@@ -1498,6 +1506,28 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                         placeholder="Type your trade type…",
                         key=f"{form_key}_trade_type_other",
                     )
+                else:
+                    row2b[1].markdown("")
+
+                strategies = load_strategies(user_id)
+                strategy_names = [r.get("name") for r in strategies if r.get("name")]
+                strategy_choice = row2b[2].selectbox(
+                    "Model / strategy",
+                    ["Not set", "Custom…"] + strategy_names,
+                    key=f"{form_key}_strategy_choice",
+                )
+                if strategy_choice == "Custom…":
+                    strategy = row2b[3].text_input(
+                        "Custom model/strategy",
+                        placeholder="Type your model/strategy…",
+                        key=f"{form_key}_strategy",
+                    )
+                elif strategy_choice == "Not set":
+                    strategy = ""
+                    row2b[3].markdown("")
+                else:
+                    strategy = strategy_choice
+                    row2b[3].markdown("")
     
                 st.markdown("**Confluences (check all that apply)**")
                 conf_cols = st.columns(4)
@@ -1537,17 +1567,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                 with st.expander("Advanced (optional)", expanded=False):
                     adv1 = st.columns(4)
                     setup_tag = adv1[0].text_input("Setup / tag (comma-separated)", key=f"{form_key}_setup")
-                    strategies = load_strategies(user_id)
-                    strategy_names = [r.get("name") for r in strategies if r.get("name")]
-                    strategy_choice = adv1[1].selectbox(
-                        "Strategy",
-                        ["Custom…"] + strategy_names,
-                        key=f"{form_key}_strategy_choice",
-                    )
-                    if strategy_choice == "Custom…":
-                        strategy = adv1[1].text_input("Strategy name", key=f"{form_key}_strategy")
-                    else:
-                        strategy = strategy_choice
+                    adv1[1].markdown("Model/strategy is set above.")
                     market_condition = adv1[2].selectbox("Market condition", MARKET_CONDITIONS, key=f"{form_key}_market")
                     account_size = adv1[3].number_input("Account size ($)", min_value=0.0, step=100.0, format="%.2f", key=f"{form_key}_account_size")
     
@@ -1738,6 +1758,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
             .cal-week-total {font-size:14px;font-weight:600;color:var(--tz-title)}
             .cal-week-trades {font-size:11px;color:var(--tz-muted)}
             .cal-link {text-decoration:none;color:inherit;display:block}
+            .cal-week-link {text-decoration:none;color:inherit;display:block}
             @media (max-width: 900px) {.calendar-wrap {grid-template-columns:1fr;}}
             div[data-testid="stVegaLiteChart"], div[data-testid="stChart"], div[data-testid="stPlotlyChart"] {
                 background: var(--tz-card);
@@ -1999,6 +2020,29 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
             st.markdown(f"**Biggest winning day:** {best_date} — {format_money(best_row['pnl'])}")
             st.markdown(f"**Biggest losing day:** {worst_date} — {format_money(worst_row['pnl'])}")
         render_pnl_calendar(chart_df, pnl_col)
+
+        # Weekly details (click a week on the right)
+        week_map = st.session_state.get("calendar_week_date_map") or {}
+        week_clicked = get_query_param("week").strip()
+        week_keys = list(week_map.keys())
+        if week_keys:
+            default_week = week_clicked if week_clicked in week_keys else week_keys[0]
+            selected_week = st.selectbox("Select week", week_keys, index=week_keys.index(default_week), key=f"{form_key}_week_select")
+            week_dates = week_map.get(selected_week, [])
+            week_trades_df = chart_df[chart_df["date"].dt.strftime("%Y-%m-%d").isin(week_dates)].copy()
+            if week_trades_df.empty:
+                st.info("No trades in this week.")
+            else:
+                avg_rr = week_trades_df["r_multiple"].dropna().mean() if "r_multiple" in week_trades_df.columns else None
+                wins_w = week_trades_df[week_trades_df[pnl_col] > 0][pnl_col].sum()
+                losses_w = week_trades_df[week_trades_df[pnl_col] < 0][pnl_col].sum()
+                pf_w = (wins_w / abs(losses_w)) if losses_w != 0 else None
+                cards_w = [
+                    ("Week PnL", format_money(float(week_trades_df[pnl_col].sum())), None),
+                    ("Avg RR", f"{float(avg_rr):.2f}" if avg_rr is not None and pd.notna(avg_rr) else "n/a", None),
+                    ("Profit factor", f"{float(pf_w):.2f}" if pf_w is not None else "n/a", None),
+                ]
+                render_metric_cards(cards_w)
 
         # Day details (click a day on the calendar or pick below)
         st.markdown("---")
@@ -2354,9 +2398,14 @@ else:
 
     with st.sidebar:
         st.markdown("### Navigation")
+        section_options = ["Dashboard", "New Trade", "Analytics", "PnL Calendar", "Journal", "Strategy/Model Creation"]
+        section_param = get_query_param("section").strip()
+        if section_param and section_param in section_options:
+            st.session_state["nav_section"] = section_param
+
         section = st.radio(
             "Go to",
-            ["Dashboard", "New Trade", "Analytics", "PnL Calendar", "Journal", "Strategy Creation"],
+            section_options,
             key="nav_section",
             label_visibility="collapsed",
         )
@@ -2390,7 +2439,7 @@ else:
 
     if section == "Journal":
         render_journal_page(user.id)
-    elif section == "Strategy Creation":
+    elif section == "Strategy/Model Creation":
         render_strategy_creation_page(user.id)
     else:
         tabs = st.tabs(ACCOUNT_TYPES)
