@@ -119,10 +119,14 @@ def get_secret_required(name: str, fallback_names: Optional[list] = None) -> str
             continue
     raise KeyError(f"Missing required secret: {name}")
 
-
-SUPABASE_URL = get_secret_required("SUPABASE_URL", ["SUPABASE_PROJECT_URL"])
-# Accept legacy names to reduce “invalid api key” confusion when users follow older guides.
-SUPABASE_KEY = get_secret_required("SUPABASE_KEY", ["SUPABASE_ANON_KEY", "SUPABASE_PUBLIC_ANON_KEY"])
+try:
+    SUPABASE_URL = get_secret_required("SUPABASE_URL", ["SUPABASE_PROJECT_URL"])
+    # Accept legacy names to reduce “invalid api key” confusion when users follow older guides.
+    SUPABASE_KEY = get_secret_required("SUPABASE_KEY", ["SUPABASE_ANON_KEY", "SUPABASE_PUBLIC_ANON_KEY"])
+except KeyError:
+    st.error("App misconfigured: missing Supabase secrets.")
+    st.caption("Set `SUPABASE_URL` and `SUPABASE_KEY` in Streamlit Community Cloud → App → Settings → Secrets, then restart the app.")
+    st.stop()
 
 @st.cache_resource
 def get_supabase() -> Client:
