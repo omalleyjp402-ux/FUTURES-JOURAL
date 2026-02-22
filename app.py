@@ -624,6 +624,38 @@ def render_affiliates_page(user_id: str) -> None:
     if not AFFILIATES_ENABLED:
         st.warning("Affiliates are currently disabled. Turn on `AFFILIATES_ENABLED = true` in Streamlit secrets to record referrals.")
 
+    user_obj = st.session_state.get("user")
+    current_email = ""
+    if isinstance(user_obj, dict):
+        current_email = safe_str(user_obj.get("email"))
+    else:
+        current_email = safe_str(getattr(user_obj, "email", ""))
+
+    is_admin = current_email.lower() in {SUPPORT_CONTACT_EMAIL.lower(), PUBLIC_CONTACT_EMAIL.lower(), "omalleyjp402@gmail.com"}
+
+    if is_admin:
+        with st.expander("Admin: assign affiliate code", expanded=False):
+            st.caption("Create a single affiliate code for a specific user UUID (from Supabase Auth → Users).")
+            with st.form("admin_affiliate_form", clear_on_submit=True):
+                code = st.text_input("Affiliate code", placeholder="HARVEY20")
+                affiliate_user_id = st.text_input("Affiliate user UUID", placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
+                percent = st.number_input("Commission %", min_value=0.0, max_value=100.0, value=20.0, step=1.0)
+                submitted = st.form_submit_button("Create/enable code")
+            if submitted:
+                try:
+                    sb = authed_supabase()
+                    sb.table("affiliate_codes").upsert(
+                        {
+                            "code": code.strip(),
+                            "affiliate_user_id": affiliate_user_id.strip(),
+                            "commission_percent": float(percent),
+                            "is_active": True,
+                        }
+                    ).execute()
+                    st.success("Affiliate code saved.")
+                except Exception as e:
+                    st.error(f"Could not save affiliate code. Did you run the affiliates SQL in Supabase? ({type(e).__name__})")
+
     codes = load_my_affiliate_codes(user_id)
     if not codes:
         st.info("No affiliate code is assigned to your account yet. Contact support to be added as an affiliate.")
@@ -1479,15 +1511,15 @@ def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
             trades_text = f"{trades} trades" if in_month and trades else ""
             day_class = "cal-cell" + ("" if in_month else " cal-off")
             link_date = day.strftime("%Y-%m-%d")
+            # NOTE: We intentionally avoid clickable <a href> links here.
+            # Streamlit treats this as a full navigation and can create a new session,
+            # which would log users out (because auth is stored in session_state).
             cell_html.append(
-                "<a class='cal-link' target='_self' href='?section=PnL%20Calendar&day={link}' onclick='window.location.href=this.href;return false;'>"
                 "<div class='{cls}' style='background:{bg};'>"
                 "<div class='cal-day'>{day}</div>"
                 "<div class='cal-pnl'>{pnl}</div>"
                 "<div class='cal-trades'>{trades}</div>"
-                "</div>"
-                "</a>".format(
-                    link=link_date,
+                "</div>".format(
                     cls=day_class,
                     bg=bg,
                     day=day.day,
@@ -1498,15 +1530,12 @@ def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
         week_label = f"Week {week_idx}"
         week_total_text = format_money(week_total) if week_total != 0 else "$0"
         week_date_map[str(week_idx)] = [d.strftime("%Y-%m-%d") for d in week_dates]
-        week_href = f"?section=PnL%20Calendar&week={week_idx}"
         week_html.append(
-            "<a class='cal-week-link' target='_self' href='{href}' onclick='window.location.href=this.href;return false;'>"
             "<div class='cal-week'>"
             f"<div class='cal-week-label'>{week_label}</div>"
             f"<div class='cal-week-total'>{week_total_text}</div>"
             f"<div class='cal-week-trades'>{week_trades} trades</div>"
             "</div>"
-            "</a>".format(href=week_href)
         )
         week_idx += 1
 
@@ -2141,8 +2170,6 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
             .cal-week-label {font-size:11px;color:var(--tz-muted);text-transform:uppercase;letter-spacing:.08em}
             .cal-week-total {font-size:14px;font-weight:600;color:var(--tz-title)}
             .cal-week-trades {font-size:11px;color:var(--tz-muted)}
-            .cal-link {text-decoration:none;color:inherit;display:block}
-            .cal-week-link {text-decoration:none;color:inherit;display:block}
             @media (max-width: 900px) {.calendar-wrap {grid-template-columns:1fr;}}
             div[data-testid="stVegaLiteChart"], div[data-testid="stChart"], div[data-testid="stPlotlyChart"] {
                 background: var(--tz-card);
