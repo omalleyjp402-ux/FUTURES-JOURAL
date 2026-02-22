@@ -125,7 +125,7 @@ PAYWALL_ENABLED = truthy(get_secret("PAYWALL_ENABLED", "false"))
 
 AFFILIATES_ENABLED = truthy(get_secret("AFFILIATES_ENABLED", "false"))
 STRIPE_ENABLED = truthy(get_secret("STRIPE_ENABLED", "false"))
-SUPPORT_CONTACT_EMAIL = safe_str(get_secret("SUPPORT_CONTACT_EMAIL", "")).strip()
+SUPPORT_CONTACT_EMAIL = str(get_secret("SUPPORT_CONTACT_EMAIL", "") or "").strip()
 
 
 def insert_support_request(user_id: str, email: str, subject: str, message: str, page: str) -> bool:
