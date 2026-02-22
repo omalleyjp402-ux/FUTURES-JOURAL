@@ -132,12 +132,13 @@ except KeyError:
 
 def _extract_supabase_ref_from_url(url: str) -> str:
     # https://<ref>.supabase.co
-    m = re.search(r"https?://([a-z0-9-]+)\\.supabase\\.co", safe_str(url).strip(), flags=re.I)
+    s = ("" if url is None else str(url)).strip()
+    m = re.search(r"https?://([a-z0-9-]+)\\.supabase\\.co", s, flags=re.I)
     return (m.group(1) if m else "").strip()
 
 
 def _extract_ref_from_jwt(jwt_token: str) -> str:
-    tok = safe_str(jwt_token).strip()
+    tok = ("" if jwt_token is None else str(jwt_token)).strip()
     parts = tok.split(".")
     if len(parts) < 2:
         return ""
@@ -146,7 +147,7 @@ def _extract_ref_from_jwt(jwt_token: str) -> str:
     payload_b64 += "=" * (-len(payload_b64) % 4)
     try:
         payload = json.loads(base64.urlsafe_b64decode(payload_b64.encode("utf-8")).decode("utf-8"))
-        return safe_str(payload.get("ref")).strip()
+        return ("" if payload.get("ref") is None else str(payload.get("ref"))).strip()
     except Exception:
         return ""
 
