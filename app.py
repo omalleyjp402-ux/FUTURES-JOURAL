@@ -2966,6 +2966,30 @@ else:
     apply_settings_to_session(user.id)
     render_brand_header(center=False, hero=True)
 
+    section_options = ["Dashboard", "New Trade", "Analytics", "PnL Calendar", "Journal", "Strategy/Model Creation", "Affiliates"]
+
+    # Keep a single source of truth for navigation to avoid "jumping" between widgets.
+    def _sync_nav_from_top() -> None:
+        st.session_state["nav_section"] = st.session_state.get("top_nav_section", section_options[0])
+        st.session_state["sidebar_nav_section"] = st.session_state["nav_section"]
+
+    def _sync_nav_from_sidebar() -> None:
+        st.session_state["nav_section"] = st.session_state.get("sidebar_nav_section", section_options[0])
+        st.session_state["top_nav_section"] = st.session_state["nav_section"]
+
+    # Query param can deep-link to a section (used by some Stripe URLs).
+    section_param = get_query_param("section").strip()
+    if "nav_section" not in st.session_state:
+        st.session_state["nav_section"] = section_param if section_param in section_options else section_options[0]
+    if section_param and section_param in section_options:
+        st.session_state["nav_section"] = section_param
+
+    # Initialize widget keys to the canonical nav value.
+    if "top_nav_section" not in st.session_state:
+        st.session_state["top_nav_section"] = st.session_state["nav_section"]
+    if "sidebar_nav_section" not in st.session_state:
+        st.session_state["sidebar_nav_section"] = st.session_state["nav_section"]
+
     # Mobile-friendly navigation fallback (sidebar can be hidden/collapsed on small screens).
     nav_cols = st.columns([3, 2, 2])
     with nav_cols[0]:
@@ -2973,22 +2997,17 @@ else:
     with nav_cols[1]:
         top_add = st.button("+ Add Trade", type="primary", use_container_width=True, key="top_add_trade")
     with nav_cols[2]:
-        section_options = ["Dashboard", "New Trade", "Analytics", "PnL Calendar", "Journal", "Strategy/Model Creation", "Affiliates"]
-        section_param = get_query_param("section").strip()
-        if section_param and section_param in section_options:
-            st.session_state["nav_section"] = section_param
-        if "nav_section" not in st.session_state:
-            st.session_state["nav_section"] = section_options[0]
-        section = st.selectbox(
+        st.selectbox(
             "Go to",
             section_options,
-            index=section_options.index(st.session_state["nav_section"]) if st.session_state["nav_section"] in section_options else 0,
             label_visibility="collapsed",
             key="top_nav_section",
+            on_change=_sync_nav_from_top,
         )
-        st.session_state["nav_section"] = section
     if top_add:
         st.session_state["nav_section"] = "New Trade"
+        st.session_state["top_nav_section"] = "New Trade"
+        st.session_state["sidebar_nav_section"] = "New Trade"
         st.rerun()
 
     with st.sidebar:
@@ -2996,13 +3015,16 @@ else:
         add_trade = st.button("+ Add Trade", type="primary", use_container_width=True, key="sidebar_add_trade")
         if add_trade:
             st.session_state["nav_section"] = "New Trade"
+            st.session_state["top_nav_section"] = "New Trade"
+            st.session_state["sidebar_nav_section"] = "New Trade"
             st.rerun()
 
-        section = st.radio(
+        st.radio(
             "Go to",
             section_options,
-            key="nav_section",
+            key="sidebar_nav_section",
             label_visibility="collapsed",
+            on_change=_sync_nav_from_sidebar,
         )
 
         with st.expander("Settings", expanded=False):
@@ -3079,6 +3101,8 @@ else:
                 """,
                 unsafe_allow_html=True,
             )
+
+    section = st.session_state.get("nav_section", section_options[0])
 
     if section == "Journal":
         render_journal_page(user.id)
