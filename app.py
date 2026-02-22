@@ -619,18 +619,14 @@ def load_referrals_for_affiliate(user_id: str) -> pd.DataFrame:
 
 def render_affiliates_page(user_id: str) -> None:
     st.subheader("Affiliates")
-    st.caption("Share your affiliate link. When subscriptions launch, referrals can be attributed automatically.")
+    st.caption("Affiliate tracking is only active when enabled, and commissions are applied only once payments are enabled.")
+
+    if not AFFILIATES_ENABLED:
+        st.warning("Affiliates are currently disabled. Turn on `AFFILIATES_ENABLED = true` in Streamlit secrets to record referrals.")
 
     codes = load_my_affiliate_codes(user_id)
     if not codes:
-        st.info("You don't have an affiliate code yet.")
-        if st.button("Create my affiliate link"):
-            code = create_affiliate_code(user_id)
-            if code:
-                st.success("Affiliate link created.")
-                st.rerun()
-            else:
-                st.error("Could not create an affiliate code yet. Make sure `sql/affiliates.sql` has been run in Supabase.")
+        st.info("No affiliate code is assigned to your account yet. Contact support to be added as an affiliate.")
         return
 
     active = next((c for c in codes if c.get("is_active", True)), codes[0])
@@ -1484,7 +1480,7 @@ def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
             day_class = "cal-cell" + ("" if in_month else " cal-off")
             link_date = day.strftime("%Y-%m-%d")
             cell_html.append(
-                "<a class='cal-link' href='?section=PnL%20Calendar&day={link}'>"
+                "<a class='cal-link' target='_self' href='?section=PnL%20Calendar&day={link}' onclick='window.location.href=this.href;return false;'>"
                 "<div class='{cls}' style='background:{bg};'>"
                 "<div class='cal-day'>{day}</div>"
                 "<div class='cal-pnl'>{pnl}</div>"
@@ -1504,7 +1500,7 @@ def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
         week_date_map[str(week_idx)] = [d.strftime("%Y-%m-%d") for d in week_dates]
         week_href = f"?section=PnL%20Calendar&week={week_idx}"
         week_html.append(
-            "<a class='cal-week-link' href='{href}'>"
+            "<a class='cal-week-link' target='_self' href='{href}' onclick='window.location.href=this.href;return false;'>"
             "<div class='cal-week'>"
             f"<div class='cal-week-label'>{week_label}</div>"
             f"<div class='cal-week-total'>{week_total_text}</div>"
