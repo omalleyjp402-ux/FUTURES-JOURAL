@@ -23,6 +23,48 @@ LOGO_PATH = Path("assets/tradylo-logo.png")
 st.set_page_config(page_title=BRAND_NAME, layout="wide", page_icon=str(LOGO_PATH))
 st.markdown("""
 <style>
+/* Sidebar (Tradezella-ish) */
+section[data-testid="stSidebar"] > div {
+  background: radial-gradient(1200px 420px at 20% 0%, rgba(124,58,237,0.28) 0%, rgba(14,17,23,0.0) 55%),
+              radial-gradient(900px 380px at 60% 40%, rgba(56,189,248,0.12) 0%, rgba(14,17,23,0.0) 65%),
+              #0B0F14;
+  border-right: 1px solid rgba(255,255,255,0.06);
+}
+section[data-testid="stSidebar"] .stButton > button {
+  border-radius: 12px !important;
+}
+section[data-testid="stSidebar"] div[role="radiogroup"] label[data-baseweb="radio"] {
+  border-radius: 12px;
+  padding: 6px 8px;
+  margin: 2px 0;
+}
+section[data-testid="stSidebar"] div[role="radiogroup"] label[data-baseweb="radio"]:hover {
+  background: rgba(255,255,255,0.06);
+}
+section[data-testid="stSidebar"] div[role="radiogroup"] label[data-baseweb="radio"] input:checked + div {
+  background: rgba(124,58,237,0.18);
+  border-radius: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(124,58,237,0.30);
+}
+section[data-testid="stSidebar"] .sidebar-usercard {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+section[data-testid="stSidebar"] .sidebar-usercard .small {
+  color: rgba(148,163,184,0.95);
+  font-size: 12px;
+}
+section[data-testid="stSidebar"] .sidebar-usercard .value {
+  color: rgba(230,237,243,0.96);
+  font-size: 13px;
+  font-weight: 600;
+  word-break: break-word;
+}
+
  .brand-row {display:flex;align-items:center;gap:12px;margin:6px 0 12px;}
  .brand-row.center {justify-content:center;text-align:center;flex-direction:column;}
  .brand-row.hero {gap:16px;margin:10px 0 18px;}
@@ -515,6 +557,37 @@ def maybe_record_referral(user_id: str) -> None:
     """
     if not AFFILIATES_ENABLED:
         return
+    code = get_query_param("ref").strip() or safe_str(st.session_state.get("ref_code")).strip()
+    if not code:
+        return
+
+    # Remember for the session so navigation doesn't lose it.
+    st.session_state["ref_code"] = code
+
+    try:
+        sb = authed_supabase()
+        existing = (
+            sb.table("referrals")
+            .select("referred_user_id")
+            .eq("referred_user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        if existing.data:
+            return
+
+        affiliate_user_id = resolve_affiliate(code)
+        if not affiliate_user_id:
+            return
+        if affiliate_user_id == user_id:
+            return
+
+        sb.table("referrals").insert(
+            {"referred_user_id": user_id, "affiliate_user_id": affiliate_user_id, "code": code}
+        ).execute()
+    except Exception:
+        # Fail open; referrals should never block the app.
+        return
 
 
 # ── Strategies (feature-tolerant) ─────────────────────────────────────────────
@@ -623,38 +696,87 @@ def render_affiliates_page(user_id: str) -> None:
 
     if not AFFILIATES_ENABLED:
         st.warning("Affiliates are currently disabled. Turn on `AFFILIATES_ENABLED = true` in Streamlit secrets to record referrals.")
+    with st.expander("Admin setup (paste in Supabase SQL Editor)", expanded=False):
+        st.caption("Step 1: Create the affiliate tables (run once).")
+        st.code(
+            "\n".join(
+                [
+                    "-- Affiliate / referral tracking (Stripe commission is handled via webhook later)",
+                    "create table if not exists public.affiliate_codes (",
+                    "  code text primary key,",
+                    "  affiliate_user_id uuid not null references auth.users(id) on delete cascade,",
+                    "  commission_percent numeric not null default 20,",
+                    "  is_active boolean not null default true,",
+                    "  created_at timestamptz not null default now()",
+                    ");",
+                    "",
+                    "create table if not exists public.referrals (",
+                    "  referred_user_id uuid primary key references auth.users(id) on delete cascade,",
+                    "  affiliate_user_id uuid not null references auth.users(id) on delete cascade,",
+                    "  code text not null references public.affiliate_codes(code) on delete restrict,",
+                    "  created_at timestamptz not null default now()",
+                    ");",
+                    "",
+                    "alter table public.affiliate_codes enable row level security;",
+                    "alter table public.referrals enable row level security;",
+                    "",
+                    "drop policy if exists \"affiliate_codes_select_authed\" on public.affiliate_codes;",
+                    "create policy \"affiliate_codes_select_authed\"",
+                    "  on public.affiliate_codes",
+                    "  for select",
+                    "  to authenticated",
+                    "  using (is_active = true);",
+                    "",
+                    "drop policy if exists \"affiliate_codes_manage_own\" on public.affiliate_codes;",
+                    "create policy \"affiliate_codes_manage_own\"",
+                    "  on public.affiliate_codes",
+                    "  for all",
+                    "  to authenticated",
+                    "  using (auth.uid() = affiliate_user_id)",
+                    "  with check (auth.uid() = affiliate_user_id);",
+                    "",
+                    "drop policy if exists \"referrals_select_own\" on public.referrals;",
+                    "create policy \"referrals_select_own\"",
+                    "  on public.referrals",
+                    "  for select",
+                    "  to authenticated",
+                    "  using (auth.uid() = referred_user_id);",
+                    "",
+                    "drop policy if exists \"referrals_select_affiliate\" on public.referrals;",
+                    "create policy \"referrals_select_affiliate\"",
+                    "  on public.referrals",
+                    "  for select",
+                    "  to authenticated",
+                    "  using (auth.uid() = affiliate_user_id);",
+                    "",
+                    "drop policy if exists \"referrals_insert_self\" on public.referrals;",
+                    "create policy \"referrals_insert_self\"",
+                    "  on public.referrals",
+                    "  for insert",
+                    "  to authenticated",
+                    "  with check (",
+                    "    auth.uid() = referred_user_id",
+                    "    and affiliate_user_id <> referred_user_id",
+                    "  );",
+                ]
+            ),
+            language="sql",
+        )
 
-    user_obj = st.session_state.get("user")
-    current_email = ""
-    if isinstance(user_obj, dict):
-        current_email = safe_str(user_obj.get("email"))
-    else:
-        current_email = safe_str(getattr(user_obj, "email", ""))
-
-    is_admin = current_email.lower() in {SUPPORT_CONTACT_EMAIL.lower(), PUBLIC_CONTACT_EMAIL.lower(), "omalleyjp402@gmail.com"}
-
-    if is_admin:
-        with st.expander("Admin: assign affiliate code", expanded=False):
-            st.caption("Create a single affiliate code for a specific user UUID (from Supabase Auth → Users).")
-            with st.form("admin_affiliate_form", clear_on_submit=True):
-                code = st.text_input("Affiliate code", placeholder="HARVEY20")
-                affiliate_user_id = st.text_input("Affiliate user UUID", placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
-                percent = st.number_input("Commission %", min_value=0.0, max_value=100.0, value=20.0, step=1.0)
-                submitted = st.form_submit_button("Create/enable code")
-            if submitted:
-                try:
-                    sb = authed_supabase()
-                    sb.table("affiliate_codes").upsert(
-                        {
-                            "code": code.strip(),
-                            "affiliate_user_id": affiliate_user_id.strip(),
-                            "commission_percent": float(percent),
-                            "is_active": True,
-                        }
-                    ).execute()
-                    st.success("Affiliate code saved.")
-                except Exception as e:
-                    st.error(f"Could not save affiliate code. Did you run the affiliates SQL in Supabase? ({type(e).__name__})")
+        st.caption("Step 2: Assign ONE affiliate code (admin insert). Replace the UUID with the affiliate's Supabase Auth user id.")
+        st.code(
+            "\n".join(
+                [
+                    "insert into public.affiliate_codes (code, affiliate_user_id, commission_percent, is_active)",
+                    "values ('HARVEY20', 'AFFILIATE_USER_UUID_HERE', 20, true)",
+                    "on conflict (code) do update set",
+                    "  affiliate_user_id = excluded.affiliate_user_id,",
+                    "  commission_percent = excluded.commission_percent,",
+                    "  is_active = excluded.is_active;",
+                ]
+            ),
+            language="sql",
+        )
 
     codes = load_my_affiliate_codes(user_id)
     if not codes:
@@ -675,32 +797,6 @@ def render_affiliates_page(user_id: str) -> None:
         st.info("No referrals yet.")
     else:
         st.dataframe(df_ref, use_container_width=True, hide_index=True)
-
-    code = get_query_param("ref").strip() or safe_str(st.session_state.get("ref_code")).strip()
-    if not code:
-        return
-
-    # Remember for the session so navigation doesn't lose it.
-    st.session_state["ref_code"] = code
-
-    try:
-        sb = authed_supabase()
-        existing = sb.table("referrals").select("referred_user_id").eq("referred_user_id", user_id).limit(1).execute()
-        if existing.data:
-            return
-
-        affiliate_user_id = resolve_affiliate(code)
-        if not affiliate_user_id:
-            return
-        if affiliate_user_id == user_id:
-            return
-
-        sb.table("referrals").insert(
-            {"referred_user_id": user_id, "affiliate_user_id": affiliate_user_id, "code": code}
-        ).execute()
-    except Exception:
-        # Fail open; referrals are optional and should never block the app.
-        return
 
 
 def get_entitlement(user_id: str) -> Optional[Dict[str, Any]]:
@@ -2808,6 +2904,11 @@ else:
     render_brand_header(center=False, hero=True)
 
     with st.sidebar:
+        add_trade = st.button("+ Add Trade", type="primary", use_container_width=True)
+        if add_trade:
+            st.session_state["nav_section"] = "New Trade"
+            st.rerun()
+
         st.markdown("### Navigation")
         section_options = ["Dashboard", "New Trade", "Analytics", "PnL Calendar", "Journal", "Strategy/Model Creation", "Affiliates"]
         section_param = get_query_param("section").strip()
@@ -2877,6 +2978,24 @@ else:
                 supabase.auth.sign_out()
                 st.session_state.clear()
                 st.rerun()
+
+        # Account card (bottom-ish)
+        user_obj = st.session_state.get("user")
+        email = ""
+        if isinstance(user_obj, dict):
+            email = safe_str(user_obj.get("email"))
+        else:
+            email = safe_str(getattr(user_obj, "email", ""))
+        if email:
+            st.markdown(
+                f"""
+                <div class="sidebar-usercard">
+                  <div class="small">Signed in as</div>
+                  <div class="value">{html_lib.escape(email)}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
     if section == "Journal":
         render_journal_page(user.id)
