@@ -907,7 +907,9 @@ def render_public_router() -> None:
 
     choice = render_public_sidebar(active)
 
-    if view == "auth":
+    # IMPORTANT: If the URL is stuck on `?view=auth` (user clicked login once),
+    # we still want the public menu to work. Only show auth when Home is selected.
+    if view == "auth" and choice == "Home":
         show_auth()
         return
 
