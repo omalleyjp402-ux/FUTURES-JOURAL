@@ -20,7 +20,12 @@ BRAND_NAME = "Tradylo"
 BRAND_TAGLINE = "Trading Journal"
 LOGO_PATH = Path("assets/tradylo-logo.png")
 
-st.set_page_config(page_title=BRAND_NAME, layout="wide", page_icon=str(LOGO_PATH))
+st.set_page_config(
+    page_title=BRAND_NAME,
+    layout="wide",
+    page_icon=str(LOGO_PATH),
+    initial_sidebar_state="expanded",
+)
 st.markdown("""
 <style>
 /* Sidebar (Tradezella-ish) */
@@ -2903,17 +2908,37 @@ else:
     apply_settings_to_session(user.id)
     render_brand_header(center=False, hero=True)
 
-    with st.sidebar:
-        add_trade = st.button("+ Add Trade", type="primary", use_container_width=True)
-        if add_trade:
-            st.session_state["nav_section"] = "New Trade"
-            st.rerun()
-
-        st.markdown("### Navigation")
+    # Mobile-friendly navigation fallback (sidebar can be hidden/collapsed on small screens).
+    nav_cols = st.columns([3, 2, 2])
+    with nav_cols[0]:
+        st.caption("Navigation")
+    with nav_cols[1]:
+        top_add = st.button("+ Add Trade", type="primary", use_container_width=True, key="top_add_trade")
+    with nav_cols[2]:
         section_options = ["Dashboard", "New Trade", "Analytics", "PnL Calendar", "Journal", "Strategy/Model Creation", "Affiliates"]
         section_param = get_query_param("section").strip()
         if section_param and section_param in section_options:
             st.session_state["nav_section"] = section_param
+        if "nav_section" not in st.session_state:
+            st.session_state["nav_section"] = section_options[0]
+        section = st.selectbox(
+            "Go to",
+            section_options,
+            index=section_options.index(st.session_state["nav_section"]) if st.session_state["nav_section"] in section_options else 0,
+            label_visibility="collapsed",
+            key="top_nav_section",
+        )
+        st.session_state["nav_section"] = section
+    if top_add:
+        st.session_state["nav_section"] = "New Trade"
+        st.rerun()
+
+    with st.sidebar:
+        st.markdown("### Navigation")
+        add_trade = st.button("+ Add Trade", type="primary", use_container_width=True, key="sidebar_add_trade")
+        if add_trade:
+            st.session_state["nav_section"] = "New Trade"
+            st.rerun()
 
         section = st.radio(
             "Go to",
