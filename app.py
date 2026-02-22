@@ -411,15 +411,340 @@ def render_public_footer() -> None:
         unsafe_allow_html=True,
     )
 
+def build_demo_trades(seed: int = 42) -> pd.DataFrame:
+    """
+    Generate a deterministic demo dataset for the public preview (no login required).
+    Never touches Supabase.
+    """
+    import random
+
+    random.seed(seed)
+    today = datetime.utcnow().date()
+    days = 75
+    n_trades = 140
+
+    instruments = ["MNQ", "NQ", "MES", "ES", "GC", "MGC"]
+    sessions = ["NY", "London", "Asia"]
+    directions = ["Long", "Short"]
+
+    def pick_time(session: str) -> str:
+        if session == "Asia":
+            h = random.choice([1, 2, 3, 4, 5, 6, 7])
+        elif session == "London":
+            h = random.choice([7, 8, 9, 10, 11])
+        else:
+            h = random.choice([13, 14, 15, 16, 17])
+        m = random.choice([0, 15, 30, 45])
+        return f"{h:02d}:{m:02d}"
+
+    def pick_confluences() -> str:
+        k = random.choice([1, 2, 2, 3])
+        picks = random.sample(CONFLUENCES, k=min(k, len(CONFLUENCES)))
+        # Include some "Other" style tags in demo
+        if random.random() < 0.25:
+            picks.append(random.choice(["News catalyst", "Macro level", "Higher timeframe bias"]))
+        return ", ".join(picks)
+
+    rows = []
+    for i in range(n_trades):
+        d = today - timedelta(days=random.randint(0, days))
+        session = random.choice(sessions)
+        direction = random.choice(directions)
+        instrument = random.choice(instruments)
+        contracts = random.choice([1, 1, 2, 2, 3, 5])
+
+        # Slight positive expectancy with occasional larger losses (feels realistic).
+        pnl_gross = random.gauss(28, 140)
+        if random.random() < 0.08:
+            pnl_gross -= random.uniform(250, 700)
+        if random.random() < 0.10:
+            pnl_gross += random.uniform(180, 520)
+
+        commission = round(random.uniform(2.0, 8.0), 2)
+        slippage = round(random.uniform(0.0, 3.0), 2)
+        pnl_net = float(pnl_gross) - commission - slippage
+        r_multiple = random.gauss(0.25, 1.1)
+
+        # Grade based loosely on pnl/r
+        grade = "B"
+        if pnl_net > 220 or r_multiple > 2.0:
+            grade = random.choice(["A+", "A", "A++"])
+        elif pnl_net > 80 or r_multiple > 1.2:
+            grade = "A"
+        elif pnl_net < -220 or r_multiple < -1.6:
+            grade = random.choice(["C", "D"])
+        elif pnl_net < -80 or r_multiple < -0.7:
+            grade = "C"
+        else:
+            grade = random.choice(["B+", "B"])
+
+        rows.append(
+            {
+                "id": f"demo-{i+1}",
+                "date": pd.to_datetime(d),
+                "entry_time": pick_time(session),
+                "instrument": instrument,
+                "direction": direction,
+                "contracts": contracts,
+                "session": session,
+                "trade_grade": grade,
+                "confluences": pick_confluences(),
+                "notes": random.choice(
+                    [
+                        "Clean execution, followed plan.",
+                        "Could have sized smaller here.",
+                        "Nice patience — waited for confirmation.",
+                        "Missed partials; review exit rules.",
+                        "",
+                    ]
+                ),
+                "pnl_gross": round(float(pnl_gross), 2),
+                "pnl_net": round(float(pnl_net), 2),
+                "r_multiple": round(float(r_multiple), 2),
+            }
+        )
+    df = pd.DataFrame(rows)
+    df["date"] = pd.to_datetime(df["date"])
+    df["pnl_gross"] = pd.to_numeric(df["pnl_gross"], errors="coerce").fillna(0.0)
+    df["pnl_net"] = pd.to_numeric(df["pnl_net"], errors="coerce").fillna(0.0)
+    df["r_multiple"] = pd.to_numeric(df["r_multiple"], errors="coerce")
+    return df.sort_values(["date", "entry_time"], ascending=True)
+
+
+def render_demo_dashboard() -> None:
+    render_brand_header(center=False, hero=False)
+    st.title("Demo dashboard")
+    st.caption("This is a public preview using sample data (no login required).")
+
+    df = build_demo_trades()
+    pnl_col = "pnl_net"
+
+    daily_df = (
+        df.groupby(df["date"].dt.date, as_index=False)[pnl_col]
+        .agg(pnl="sum", trades="count")
+        .rename(columns={"date": "date"})
+    )
+    daily_df["date"] = pd.to_datetime(daily_df["date"])
+
+    wins_df = df[df[pnl_col] > 0]
+    losses_df = df[df[pnl_col] < 0]
+    total_trades = len(df)
+    win_rate = float((df[pnl_col] > 0).mean() * 100.0) if total_trades else 0.0
+    total_pnl = float(df[pnl_col].sum()) if total_trades else 0.0
+    avg_rr = float(df["r_multiple"].dropna().mean()) if "r_multiple" in df.columns else 0.0
+    profit_factor = (float(wins_df[pnl_col].sum()) / abs(float(losses_df[pnl_col].sum()))) if not losses_df.empty else None
+
+    chart_df = df.sort_values("date").copy()
+    chart_df["equity"] = chart_df[pnl_col].cumsum()
+    chart_df["peak"] = chart_df["equity"].cummax()
+    chart_df["drawdown"] = chart_df["equity"] - chart_df["peak"]
+    max_dd = abs(float(chart_df["drawdown"].min())) if not chart_df.empty else 0.0
+
+    cards = [
+        ("Net PnL", format_money(total_pnl), f"{total_trades} trades"),
+        ("Win %", f"{win_rate:.2f}%", None),
+        ("Profit Factor", f"{profit_factor:.2f}" if profit_factor is not None else "n/a", None),
+        ("Avg RR", f"{avg_rr:.2f}" if pd.notna(avg_rr) else "n/a", None),
+        ("Max Drawdown", format_money(-max_dd), None),
+    ]
+    render_metric_cards(cards)
+
+    st.markdown("---")
+    c1, c2, c3 = st.columns([2.2, 1.2, 1.2])
+    with c1:
+        st.subheader("Equity curve")
+        curve = (
+            alt.Chart(chart_df)
+            .mark_area(
+                line={"color": "#A78BFA", "width": 2},
+                color=alt.Gradient(
+                    gradient="linear",
+                    stops=[alt.GradientStop(color="rgba(124,58,237,0.55)", offset=0),
+                           alt.GradientStop(color="rgba(56,189,248,0.18)", offset=1)],
+                    x1=0, x2=1, y1=0, y2=0,
+                ),
+            )
+            .encode(
+                x=alt.X("date:T", title=None),
+                y=alt.Y("equity:Q", title=None),
+                tooltip=["date:T", alt.Tooltip("equity:Q", format=",.2f")],
+            )
+            .properties(height=280)
+        )
+        st.altair_chart(style_altair_chart(curve), use_container_width=True)
+
+    with c2:
+        st.subheader("Daily PnL")
+        daily_df["pos"] = daily_df["pnl"] >= 0
+        bars = (
+            alt.Chart(daily_df)
+            .mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3)
+            .encode(
+                x=alt.X("date:T", title=None),
+                y=alt.Y("pnl:Q", title=None),
+                color=alt.condition("datum.pos", alt.value("#22C55E"), alt.value("#EF4444")),
+                tooltip=["date:T", alt.Tooltip("pnl:Q", format=",.2f"), "trades:Q"],
+            )
+            .properties(height=280)
+        )
+        st.altair_chart(style_altair_chart(bars), use_container_width=True)
+
+    with c3:
+        st.subheader("Zylo score")
+        # compute_zylo_score expects daily_df with 'pnl' field; we already named it,
+        # but pnl_col must refer to the column on df_view.
+        zylo = compute_zylo_score(df, daily_df, pnl_col)
+        st.markdown(f"**Your Zylo Score:** `{zylo['overall']:.2f}`")
+        render_zylo_radar(zylo["components"])
+
+    st.markdown("---")
+    st.subheader("Breakdowns")
+    b1, b2 = st.columns(2)
+    with b1:
+        inst = df.groupby("instrument", as_index=False)[pnl_col].sum().sort_values(pnl_col, ascending=False)
+        inst["pos"] = inst[pnl_col] >= 0
+        inst_chart = (
+            alt.Chart(inst)
+            .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
+            .encode(
+                x=alt.X("instrument:N", sort="-y", title=None),
+                y=alt.Y(f"{pnl_col}:Q", title=None),
+                color=alt.condition("datum.pos", alt.value("#60A5FA"), alt.value("#F87171")),
+                tooltip=["instrument:N", alt.Tooltip(f"{pnl_col}:Q", format=",.2f")],
+            )
+            .properties(height=240)
+        )
+        st.altair_chart(style_altair_chart(inst_chart), use_container_width=True)
+    with b2:
+        ses = df.groupby("session", as_index=False)[pnl_col].sum().sort_values(pnl_col, ascending=False)
+        ses["pos"] = ses[pnl_col] >= 0
+        ses_chart = (
+            alt.Chart(ses)
+            .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
+            .encode(
+                x=alt.X("session:N", sort="-y", title=None),
+                y=alt.Y(f"{pnl_col}:Q", title=None),
+                color=alt.condition("datum.pos", alt.value("#60A5FA"), alt.value("#F87171")),
+                tooltip=["session:N", alt.Tooltip(f"{pnl_col}:Q", format=",.2f")],
+            )
+            .properties(height=240)
+        )
+        st.altair_chart(style_altair_chart(ses_chart), use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("PnL calendar")
+    render_pnl_calendar(df[["date", pnl_col]].copy(), pnl_col)
+
+    st.markdown("---")
+    st.subheader("Recent trades")
+    recent = df.sort_values(["date", "entry_time"], ascending=False).head(10).copy()
+    recent["PnL"] = recent[pnl_col].apply(format_money)
+    st.dataframe(
+        recent[["date", "entry_time", "instrument", "direction", "session", "trade_grade", "r_multiple", "PnL"]],
+        use_container_width=True,
+        hide_index=True,
+    )
+    render_public_footer()
+
+
+def render_tour_page() -> None:
+    render_brand_header(center=False, hero=False)
+    st.title("Product tour")
+    st.caption("A quick look at what Tradylo Journal does before you create an account.")
+
+    st.markdown("### What you'll get")
+    st.markdown(
+        "- A clean dashboard with equity curve + daily PnL\n"
+        "- PnL calendar with day drill-down\n"
+        "- Analytics by instrument, session, time, and confluence\n"
+        "- Journaling + screenshots + notes"
+    )
+
+    st.markdown("---")
+    st.subheader("Preview: dashboard + calendar")
+    st.info("Below is the same demo data used in the public dashboard preview.")
+    df = build_demo_trades()
+    pnl_col = "pnl_net"
+    c1, c2 = st.columns([1.2, 1])
+    with c1:
+        st.markdown("**Equity curve (preview)**")
+        chart_df = df.sort_values("date").copy()
+        chart_df["equity"] = chart_df[pnl_col].cumsum()
+        curve = (
+            alt.Chart(chart_df)
+            .mark_area(line={"color": "#A78BFA", "width": 2}, color="rgba(124,58,237,0.25)")
+            .encode(x="date:T", y="equity:Q")
+            .properties(height=220)
+        )
+        st.altair_chart(style_altair_chart(curve), use_container_width=True)
+    with c2:
+        st.markdown("**PnL calendar (preview)**")
+        render_pnl_calendar(df[["date", pnl_col]].copy(), pnl_col)
+
+    st.markdown("---")
+    st.subheader("Preview: analytics")
+    b1, b2, b3 = st.columns(3)
+    with b1:
+        st.markdown("**By instrument**")
+        inst = df.groupby("instrument", as_index=False)[pnl_col].sum().sort_values(pnl_col, ascending=False).head(6)
+        inst_chart = alt.Chart(inst).mark_bar().encode(x="instrument:N", y=f"{pnl_col}:Q").properties(height=180)
+        st.altair_chart(style_altair_chart(inst_chart), use_container_width=True)
+    with b2:
+        st.markdown("**By session**")
+        ses = df.groupby("session", as_index=False)[pnl_col].sum().sort_values(pnl_col, ascending=False)
+        ses_chart = alt.Chart(ses).mark_bar().encode(x="session:N", y=f"{pnl_col}:Q").properties(height=180)
+        st.altair_chart(style_altair_chart(ses_chart), use_container_width=True)
+    with b3:
+        st.markdown("**Zylo score**")
+        daily_df = df.groupby(df["date"].dt.date, as_index=False)[pnl_col].sum().rename(columns={pnl_col: "pnl"})
+        zylo = compute_zylo_score(df, daily_df, pnl_col)
+        st.markdown(f"**Score:** `{zylo['overall']:.2f}`")
+        render_zylo_radar(zylo["components"])
+
+    st.markdown("---")
+    st.subheader("Ready?")
+    ref = safe_str(st.session_state.get("ref_code")).strip()
+    auth_url = "?view=auth" + (f"&ref={quote_plus(ref)}" if ref else "")
+    try:
+        st.link_button("Create account / Log in", auth_url, use_container_width=True)
+    except Exception:
+        st.markdown(f"[Create account / Log in]({auth_url})")
+    render_public_footer()
+
+
+def render_public_sidebar(active: str) -> str:
+    """
+    Returns the selected public page label.
+    """
+    ref = safe_str(st.session_state.get("ref_code")).strip()
+    auth_url = "?view=auth" + (f"&ref={quote_plus(ref)}" if ref else "")
+
+    with st.sidebar:
+        # A compact brand header in the sidebar for the public shell.
+        render_brand_header(center=True)
+        st.markdown("---")
+        options = ["Home", "Demo", "Tour", "Terms", "Privacy", "Refunds", "Contact"]
+        if active not in options:
+            active = "Home"
+        idx = options.index(active)
+        choice = st.radio("Menu", options, index=idx, label_visibility="collapsed", key="public_nav")
+        st.markdown("---")
+        try:
+            st.link_button("Log in / Sign up", auth_url, use_container_width=True)
+        except Exception:
+            st.markdown(f"[Log in / Sign up]({auth_url})")
+        st.caption("Payments not enabled yet.")
+    return st.session_state.get("public_nav", active)
+
 
 def render_landing_page() -> None:
-    render_brand_header(center=True)
+    # Sidebar handles the brand in the public shell; keep the main landing clean.
     ref = safe_str(st.session_state.get("ref_code")).strip()
     auth_url = "?view=auth" + (f"&ref={quote_plus(ref)}" if ref else "")
 
     top = st.container()
     with top:
-        c1, c2 = st.columns([3, 1])
+        c1, c2, c3 = st.columns([3, 1, 1])
         with c1:
             st.title("Tradylo Journal")
             st.write("A trading journal and performance analytics app for futures traders.")
@@ -430,6 +755,13 @@ def render_landing_page() -> None:
                 st.link_button("Log in / Sign up", auth_url, use_container_width=True)
             except Exception:
                 st.markdown(f"[Log in / Sign up]({auth_url})")
+        with c3:
+            st.markdown(" ")
+            st.markdown(" ")
+            try:
+                st.link_button("View demo", "?page=demo", use_container_width=True)
+            except Exception:
+                st.markdown("[View demo](?page=demo)")
 
     st.markdown("**Features**")
     st.markdown(
@@ -556,20 +888,45 @@ def render_public_router() -> None:
     if ref:
         st.session_state["ref_code"] = ref
 
+    # Public sidebar menu (Tradezella-like pre-login shell)
+    active = "Home"
+    if view == "auth":
+        active = "Home"
+    elif page == "demo":
+        active = "Demo"
+    elif page == "tour":
+        active = "Tour"
+    elif page == "terms":
+        active = "Terms"
+    elif page == "privacy":
+        active = "Privacy"
+    elif page in ("refunds", "refund", "refund-policy"):
+        active = "Refunds"
+    elif page == "contact":
+        active = "Contact"
+
+    choice = render_public_sidebar(active)
+
     if view == "auth":
         show_auth()
         return
 
-    if page == "terms":
+    if choice == "Demo":
+        render_demo_dashboard()
+        return
+    if choice == "Tour":
+        render_tour_page()
+        return
+    if choice == "Terms":
         render_terms_page()
         return
-    if page == "privacy":
+    if choice == "Privacy":
         render_privacy_page()
         return
-    if page in ("refunds", "refund", "refund-policy"):
+    if choice == "Refunds":
         render_refund_page()
         return
-    if page == "contact":
+    if choice == "Contact":
         render_contact_page()
         return
 
