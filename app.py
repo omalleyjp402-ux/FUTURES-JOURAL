@@ -1,7 +1,9 @@
 import base64
 import calendar
+import csv
 import html as html_lib
 import io
+import re
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -126,6 +128,15 @@ PAYWALL_ENABLED = truthy(get_secret("PAYWALL_ENABLED", "false"))
 AFFILIATES_ENABLED = truthy(get_secret("AFFILIATES_ENABLED", "false"))
 STRIPE_ENABLED = truthy(get_secret("STRIPE_ENABLED", "false"))
 SUPPORT_CONTACT_EMAIL = str(get_secret("SUPPORT_CONTACT_EMAIL", "") or "").strip()
+PUBLIC_CONTACT_EMAIL = str(get_secret("PUBLIC_CONTACT_EMAIL", "support@tradylojournal.com") or "").strip()
+
+# Pricing (prepared only; not displayed publicly until you say go)
+REFUND_WINDOW_DAYS = 1
+PRICING_PLANS_USD = {
+    "monthly": {"label": "Monthly", "usd_per_month": 19, "billing_months": 1},
+    "quarterly": {"label": "3-month", "usd_per_month": 16, "billing_months": 3},
+    "yearly": {"label": "Yearly", "usd_per_month": 14, "billing_months": 12},
+}
 
 
 def insert_support_request(user_id: str, email: str, subject: str, message: str, page: str) -> bool:
@@ -159,6 +170,251 @@ def insert_suggestion(user_id: str, email: str, title: str, suggestion: str) -> 
         return True
     except Exception:
         return False
+
+
+# ── Public Pages (landing + legal) ───────────────────────────────────────────
+
+DATA_DIR = Path("data")
+WAITLIST_CSV = DATA_DIR / "waitlist.csv"
+CONTACT_CSV = DATA_DIR / "contact_messages.csv"
+
+
+def ensure_data_dir() -> None:
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        return
+
+
+def is_valid_email(email: str) -> bool:
+    email = safe_str(email).strip()
+    if not email:
+        return False
+    # Basic sanity check; avoid being overly strict.
+    return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email))
+
+
+def append_csv_row(path: Path, header: list, row: dict) -> bool:
+    try:
+        ensure_data_dir()
+        exists = path.exists()
+        with path.open("a", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=header)
+            if not exists:
+                w.writeheader()
+            w.writerow(row)
+        return True
+    except Exception:
+        return False
+
+
+def insert_waitlist_email(email: str, source: str = "landing") -> bool:
+    email = safe_str(email).strip().lower()
+    if not is_valid_email(email):
+        return False
+
+    # Prefer Supabase if the table exists; otherwise fall back to CSV.
+    try:
+        sb = authed_supabase()
+        sb.table("waitlist_emails").insert({"email": email, "source": source}).execute()
+        return True
+    except Exception:
+        ts = datetime.utcnow().isoformat()
+        return append_csv_row(
+            WAITLIST_CSV,
+            header=["created_at", "email", "source"],
+            row={"created_at": ts, "email": email, "source": source},
+        )
+
+
+def insert_public_contact(email: str, subject: str, message: str, page: str = "contact") -> bool:
+    email = safe_str(email).strip().lower()
+    if email and not is_valid_email(email):
+        return False
+
+    payload = {
+        "email": email,
+        "subject": safe_str(subject).strip(),
+        "message": safe_str(message).strip(),
+        "page": safe_str(page).strip(),
+    }
+
+    try:
+        sb = authed_supabase()
+        sb.table("public_contact_messages").insert(payload).execute()
+        return True
+    except Exception:
+        ts = datetime.utcnow().isoformat()
+        return append_csv_row(
+            CONTACT_CSV,
+            header=["created_at", "email", "subject", "message", "page"],
+            row={"created_at": ts, **payload},
+        )
+
+
+def render_public_footer() -> None:
+    st.markdown("---")
+    st.markdown(
+        f"""
+        <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:rgba(148,163,184,0.95);">
+          <a href="?page=terms" style="color:inherit;text-decoration:none;">Terms of Service</a>
+          <a href="?page=privacy" style="color:inherit;text-decoration:none;">Privacy Policy</a>
+          <a href="?page=refunds" style="color:inherit;text-decoration:none;">Refund Policy</a>
+          <a href="?page=contact" style="color:inherit;text-decoration:none;">Contact</a>
+          <span style="opacity:0.75;">·</span>
+          <span style="opacity:0.95;">Tradylo Journal is analytics software. It does not provide trading signals or investment advice.</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_landing_page() -> None:
+    render_brand_header(center=True)
+    st.title("Tradylo Journal")
+    st.write("A trading journal and performance analytics app for futures traders.")
+
+    st.markdown("**Features**")
+    st.markdown(
+        "- Trade logging\n"
+        "- Confluence tagging\n"
+        "- Session stats\n"
+        "- Screenshots\n"
+        "- Notes + journaling\n"
+        "- Performance metrics & analytics"
+    )
+
+    st.info("Payments not enabled yet.")
+
+    st.markdown("---")
+    st.subheader("Join the waitlist")
+    with st.form("waitlist_form", clear_on_submit=True):
+        email = st.text_input("Email", placeholder="you@email.com")
+        submitted = st.form_submit_button("Join waitlist")
+    if submitted:
+        ok = insert_waitlist_email(email, source="public_landing")
+        if ok:
+            st.success("You're on the waitlist. We'll email you when it's ready.")
+        else:
+            st.error("Please enter a valid email address.")
+
+    st.markdown("---")
+    st.markdown("Already have an account?")
+    st.markdown("[Log in / Sign up](?view=auth)")
+
+    render_public_footer()
+
+
+def render_terms_page() -> None:
+    render_brand_header(center=True)
+    st.title("Terms of Service")
+    st.write("Last updated: (placeholder)")
+    st.markdown(
+        """
+**Software-only**
+Tradylo Journal is provided as analytics software for tracking and reviewing your trading activity.
+
+**No financial advice**
+We do not provide trading signals, investment advice, brokerage services, or recommendations. You are responsible for all trading decisions and outcomes.
+
+**User responsibility**
+You agree that any data you enter or upload is accurate to the best of your ability. You are responsible for securing your account credentials.
+
+**Acceptable use**
+Do not abuse the service, attempt to access other users’ data, reverse engineer, or disrupt the platform.
+        """
+    )
+    render_public_footer()
+
+
+def render_privacy_page() -> None:
+    render_brand_header(center=True)
+    st.title("Privacy Policy")
+    st.write("Last updated: (placeholder)")
+    st.markdown(
+        f"""
+**What we collect**
+- Account email address (for authentication)
+- Trading journal data you enter (trades, tags, notes, screenshots)
+- Basic usage/diagnostic data required to operate the app
+
+**How we use it**
+To provide the journal, analytics, and support.
+
+**Cookies**
+Streamlit and Supabase may use cookies/local storage for authentication sessions. We do not use advertising cookies.
+
+**Contact**
+For privacy questions, contact: {PUBLIC_CONTACT_EMAIL}
+        """
+    )
+    render_public_footer()
+
+
+def render_refund_page() -> None:
+    render_brand_header(center=True)
+    st.title("Refund Policy")
+    st.write("Last updated: (placeholder)")
+    st.markdown(
+        f"""
+**Payments not enabled yet**
+This policy will apply once subscriptions are enabled.
+
+**Refund window**
+Once payments are enabled: refunds will be available within **{REFUND_WINDOW_DAYS} day(s)** of purchase, subject to verification and abuse prevention.
+        """
+    )
+    render_public_footer()
+
+
+def render_contact_page() -> None:
+    render_brand_header(center=True)
+    st.title("Contact")
+    st.write(f"For support, email: {PUBLIC_CONTACT_EMAIL}")
+
+    st.subheader("Send a message")
+    with st.form("public_contact_form", clear_on_submit=True):
+        email = st.text_input("Your email (optional)", placeholder="you@email.com")
+        subject = st.text_input("Subject", placeholder="What do you need help with?")
+        message = st.text_area("Message", height=160, placeholder="Describe your issue or question.")
+        sent = st.form_submit_button("Send")
+    if sent:
+        if email and not is_valid_email(email):
+            st.error("Please enter a valid email, or leave it blank.")
+        elif not message.strip():
+            st.error("Please enter a message.")
+        else:
+            ok = insert_public_contact(email, subject, message, page="public_contact")
+            if ok:
+                st.success("Message sent. We'll get back to you soon.")
+            else:
+                st.error("Could not send message right now. Please try again later.")
+
+    render_public_footer()
+
+
+def render_public_router() -> None:
+    page = get_query_param("page").strip().lower()
+    view = get_query_param("view").strip().lower()
+
+    if view == "auth":
+        show_auth()
+        return
+
+    if page == "terms":
+        render_terms_page()
+        return
+    if page == "privacy":
+        render_privacy_page()
+        return
+    if page in ("refunds", "refund", "refund-policy"):
+        render_refund_page()
+        return
+    if page == "contact":
+        render_contact_page()
+        return
+
+    render_landing_page()
 
 
 def create_stripe_checkout_session(user_id: str, user_email: str) -> Optional[str]:
@@ -2424,7 +2680,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
 user = get_user()
 
 if not user:
-    show_auth()
+    render_public_router()
 else:
     maybe_record_referral(user.id)
     apply_settings_to_session(user.id)
