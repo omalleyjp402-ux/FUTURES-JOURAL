@@ -25,8 +25,10 @@ function json(res: unknown, status = 200) {
   });
 }
 
-const supabaseUrl = requireEnv("SUPABASE_URL");
-const supabaseServiceKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+// NOTE: Supabase Edge Function secrets cannot start with the `SUPABASE_` prefix.
+// Use SB_URL + SB_SERVICE_ROLE_KEY in Supabase Dashboard → Edge Functions → Secrets.
+const supabaseUrl = requireEnv("SB_URL");
+const supabaseServiceKey = requireEnv("SB_SERVICE_ROLE_KEY");
 const stripeSecretKey = requireEnv("STRIPE_SECRET_KEY");
 const stripeWebhookSecret = requireEnv("STRIPE_WEBHOOK_SECRET");
 
