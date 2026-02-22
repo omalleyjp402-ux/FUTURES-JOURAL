@@ -14,3 +14,6 @@ evaluation_images/
 funded_images/
 untitled folder/
 claude ai access.app.py
+
+# macOS Finder alias exports
+*.alias

@@ -75,10 +75,10 @@ INSTRUMENT_ORDER = list(INSTRUMENTS.keys())
 # - Pip value for USDJPY is computed from entry price (pip = 0.01).
 FOREX_PAIRS = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD"]
 INSTRUMENT_ORDER = INSTRUMENT_ORDER + FOREX_PAIRS
-SESSIONS = ["NY", "London", "Pre-market"]
+SESSIONS = ["NY", "London", "Asia", "Pre-market"]
 MARKET_CONDITIONS = ["Not set", "Trend", "Range", "Volatile", "News", "Mixed/Unsure"]
 TRADE_GRADES = ["Not set", "A++", "A+", "A", "B+", "B", "C", "D"]
-TRADE_TYPES = ["Not set", "Continuation model", "Reversal", "Turtle soup model"]
+TRADE_TYPES = ["Not set", "Continuation model", "Reversal", "Other"]
 TIME_OPTIONS = [f"{h:02d}:{m:02d}" for h in range(24) for m in (0, 15, 30, 45)]
 CONFLUENCES = [
     "V shape", "1/2/3/5 minute IVFG", "15/30 minute or 1 hour IVFG",
@@ -208,6 +208,57 @@ def maybe_record_referral(user_id: str) -> None:
     """
     if not AFFILIATES_ENABLED:
         return
+
+
+# ── Strategies (feature-tolerant) ─────────────────────────────────────────────
+
+def load_strategies(user_id: str) -> list:
+    try:
+        sb = authed_supabase()
+        res = sb.table("strategies").select("name,description").eq("user_id", user_id).order("name").execute()
+        return res.data or []
+    except Exception:
+        return []
+
+
+def upsert_strategy(user_id: str, name: str, description: str) -> bool:
+    name = safe_str(name).strip()
+    if not name:
+        return False
+    try:
+        sb = authed_supabase()
+        existing = sb.table("strategies").select("id").eq("user_id", user_id).eq("name", name).limit(1).execute()
+        if existing.data:
+            sb.table("strategies").update({"description": description}).eq("user_id", user_id).eq("name", name).execute()
+        else:
+            sb.table("strategies").insert({"user_id": user_id, "name": name, "description": description}).execute()
+        return True
+    except Exception:
+        return False
+
+
+def render_strategy_creation_page(user_id: str) -> None:
+    st.subheader("Strategy creation")
+    st.caption("Create reusable strategy templates you can pick from when logging trades.")
+
+    with st.form("strategy_create_form", clear_on_submit=False):
+        name = st.text_input("Strategy name", placeholder="e.g. London Sweep + Reversal")
+        description = st.text_area("What is the strategy?", height=160, placeholder="Rules, checklist, entries/exits, invalidation…")
+        submitted = st.form_submit_button("Save strategy")
+    if submitted:
+        ok = upsert_strategy(user_id, name, description)
+        if ok:
+            st.success("Saved.")
+        else:
+            st.error("Could not save strategy yet. If this is your first time using it, the `strategies` table may not be set up in Supabase.")
+
+    st.markdown("---")
+    st.markdown("**Your strategies**")
+    rows = load_strategies(user_id)
+    if rows:
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    else:
+        st.info("No strategies saved yet.")
 
     code = get_query_param("ref").strip()
     if not code:
@@ -1040,12 +1091,16 @@ def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
             pnl_text = format_money(value) if in_month and value != 0 else ""
             trades_text = f"{trades} trades" if in_month and trades else ""
             day_class = "cal-cell" + ("" if in_month else " cal-off")
+            link_date = day.strftime("%Y-%m-%d")
             cell_html.append(
+                "<a class='cal-link' href='?day={link}'>"
                 "<div class='{cls}' style='background:{bg};'>"
                 "<div class='cal-day'>{day}</div>"
                 "<div class='cal-pnl'>{pnl}</div>"
                 "<div class='cal-trades'>{trades}</div>"
-                "</div>".format(
+                "</div>"
+                "</a>".format(
+                    link=link_date,
                     cls=day_class,
                     bg=bg,
                     day=day.day,
@@ -1436,6 +1491,13 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     
                 row2b = st.columns(4)
                 trade_type = row2b[0].selectbox("Trade type", TRADE_TYPES, key=f"{form_key}_trade_type")
+                other_trade_type = ""
+                if trade_type == "Other":
+                    other_trade_type = row2b[1].text_input(
+                        "Other trade type",
+                        placeholder="Type your trade type…",
+                        key=f"{form_key}_trade_type_other",
+                    )
     
                 st.markdown("**Confluences (check all that apply)**")
                 conf_cols = st.columns(4)
@@ -1475,7 +1537,17 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                 with st.expander("Advanced (optional)", expanded=False):
                     adv1 = st.columns(4)
                     setup_tag = adv1[0].text_input("Setup / tag (comma-separated)", key=f"{form_key}_setup")
-                    strategy = adv1[1].text_input("Strategy name", key=f"{form_key}_strategy")
+                    strategies = load_strategies(user_id)
+                    strategy_names = [r.get("name") for r in strategies if r.get("name")]
+                    strategy_choice = adv1[1].selectbox(
+                        "Strategy",
+                        ["Custom…"] + strategy_names,
+                        key=f"{form_key}_strategy_choice",
+                    )
+                    if strategy_choice == "Custom…":
+                        strategy = adv1[1].text_input("Strategy name", key=f"{form_key}_strategy")
+                    else:
+                        strategy = strategy_choice
                     market_condition = adv1[2].selectbox("Market condition", MARKET_CONDITIONS, key=f"{form_key}_market")
                     account_size = adv1[3].number_input("Account size ($)", min_value=0.0, step=100.0, format="%.2f", key=f"{form_key}_account_size")
     
@@ -1566,7 +1638,11 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     "revenge_trade": revenge_trade,
                     "setup_tag": setup_tag,
                     "strategy": strategy,
-                    "trade_type": trade_type if trade_type != "Not set" else None,
+                    "trade_type": (
+                        safe_str(other_trade_type).strip()
+                        if trade_type == "Other"
+                        else (trade_type if trade_type != "Not set" else None)
+                    ),
                     "confluences": ",".join(selected_confluences),
                     "market_condition": market_condition if market_condition != "Not set" else None,
                     "trade_grade": trade_grade if trade_grade != "Not set" else None,
@@ -1621,8 +1697,8 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     
     # ── Dashboard + Analytics + Calendar ─────────────────────────────────────
     if section in ("Dashboard", "Analytics", "PnL Calendar"):
-        st.markdown(
-            """
+            st.markdown(
+                """
             <style>
             :root {
                 --tz-bg: var(--background-color);
@@ -1661,6 +1737,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
             .cal-week-label {font-size:11px;color:var(--tz-muted);text-transform:uppercase;letter-spacing:.08em}
             .cal-week-total {font-size:14px;font-weight:600;color:var(--tz-title)}
             .cal-week-trades {font-size:11px;color:var(--tz-muted)}
+            .cal-link {text-decoration:none;color:inherit;display:block}
             @media (max-width: 900px) {.calendar-wrap {grid-template-columns:1fr;}}
             div[data-testid="stVegaLiteChart"], div[data-testid="stChart"], div[data-testid="stPlotlyChart"] {
                 background: var(--tz-card);
@@ -1922,6 +1999,73 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
             st.markdown(f"**Biggest winning day:** {best_date} — {format_money(best_row['pnl'])}")
             st.markdown(f"**Biggest losing day:** {worst_date} — {format_money(worst_row['pnl'])}")
         render_pnl_calendar(chart_df, pnl_col)
+
+        # Day details (click a day on the calendar or pick below)
+        st.markdown("---")
+        st.markdown("**Day details**")
+        clicked = get_query_param("day").strip()
+        available_days = sorted({d.strftime("%Y-%m-%d") for d in pd.to_datetime(chart_df["date"]).dt.date})
+        default_day = clicked if clicked in available_days else (available_days[-1] if available_days else "")
+        selected_day = st.selectbox("Select day", available_days, index=(available_days.index(default_day) if default_day in available_days else 0))
+
+        day_dt = pd.to_datetime(selected_day).date() if selected_day else None
+        if day_dt is not None:
+            day_trades = chart_df[chart_df["date"].dt.date == day_dt].copy()
+            if day_trades.empty:
+                st.info("No trades on this day.")
+            else:
+                day_total = float(day_trades[pnl_col].sum())
+                day_wins = int((day_trades[pnl_col] > 0).sum())
+                st.markdown(f"**Total PnL:** {format_money(day_total)} · **Trades:** {len(day_trades)} · **Wins:** {day_wins}")
+
+                # Journal notes for the day (if available)
+                j = load_journal_entry(user_id, selected_day)
+                if j is not None and j.strip():
+                    with st.expander("Journal notes", expanded=False):
+                        st.write(j)
+
+                # Trade cards / table
+                cols = ["entry_time", "instrument", "direction", "contracts", "session", "trade_grade", "r_multiple", pnl_col, "notes"]
+                show = [c for c in cols if c in day_trades.columns]
+                view = day_trades.sort_values(["entry_time"], ascending=True, na_position="last").copy()
+                if "r_multiple" in view.columns:
+                    view["r_multiple"] = pd.to_numeric(view["r_multiple"], errors="coerce").round(2)
+                view["PnL"] = view[pnl_col].apply(format_money)
+                rename = {
+                    "entry_time": "Time",
+                    "instrument": "Instrument",
+                    "direction": "Side",
+                    "contracts": "Size",
+                    "session": "Session",
+                    "trade_grade": "Grade",
+                    "r_multiple": "RR",
+                    "notes": "Notes",
+                }
+                out_cols = []
+                for c in show:
+                    if c == pnl_col:
+                        continue
+                    out_cols.append(c)
+                df_out = view[out_cols + ["PnL"]].rename(columns=rename)
+                st.dataframe(df_out, use_container_width=True, hide_index=True)
+
+                # Images (if any)
+                images = []
+                for _, r in day_trades.iterrows():
+                    imgs = safe_str(r.get("images", ""))
+                    for p in imgs.split(";"):
+                        if p.strip():
+                            images.append((p.strip(), r))
+                if images:
+                    st.markdown("**Screenshots**")
+                    img_cols = st.columns(3)
+                    for i, (path, r) in enumerate(images[:12]):
+                        try:
+                            url = get_image_url(path)
+                            cap = f"{safe_str(r.get('instrument'))} {safe_str(r.get('direction'))} {safe_str(r.get('entry_time'))}"
+                            img_cols[i % 3].image(url, caption=cap, use_column_width=True)
+                        except Exception:
+                            img_cols[i % 3].warning("Could not load image")
 
     if section == "Analytics":
         st.subheader("Analytics")
@@ -2207,18 +2351,12 @@ else:
     maybe_record_referral(user.id)
     apply_settings_to_session(user.id)
     render_brand_header(center=False, hero=True)
-    col_title, col_logout = st.columns([8, 1])
-    with col_logout:
-        if st.button("Log out"):
-            supabase.auth.sign_out()
-            st.session_state.clear()
-            st.rerun()
 
     with st.sidebar:
         st.markdown("### Navigation")
         section = st.radio(
             "Go to",
-            ["Dashboard", "New Trade", "Analytics", "PnL Calendar", "Journal"],
+            ["Dashboard", "New Trade", "Analytics", "PnL Calendar", "Journal", "Strategy Creation"],
             key="nav_section",
             label_visibility="collapsed",
         )
@@ -2244,8 +2382,16 @@ else:
                 if not ok:
                     st.caption("Settings storage isn't set up yet. Run `sql/user_settings.sql` in Supabase to persist.")
 
+            st.markdown("---")
+            if st.button("Log out", key="sidebar_logout"):
+                supabase.auth.sign_out()
+                st.session_state.clear()
+                st.rerun()
+
     if section == "Journal":
         render_journal_page(user.id)
+    elif section == "Strategy Creation":
+        render_strategy_creation_page(user.id)
     else:
         tabs = st.tabs(ACCOUNT_TYPES)
         for tab, account_type in zip(tabs, ACCOUNT_TYPES):
