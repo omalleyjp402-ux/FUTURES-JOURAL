@@ -125,6 +125,40 @@ PAYWALL_ENABLED = truthy(get_secret("PAYWALL_ENABLED", "false"))
 
 AFFILIATES_ENABLED = truthy(get_secret("AFFILIATES_ENABLED", "false"))
 STRIPE_ENABLED = truthy(get_secret("STRIPE_ENABLED", "false"))
+SUPPORT_CONTACT_EMAIL = safe_str(get_secret("SUPPORT_CONTACT_EMAIL", "")).strip()
+
+
+def insert_support_request(user_id: str, email: str, subject: str, message: str, page: str) -> bool:
+    try:
+        sb = authed_supabase()
+        sb.table("support_requests").insert(
+            {
+                "user_id": user_id,
+                "email": safe_str(email).strip(),
+                "subject": safe_str(subject).strip(),
+                "message": safe_str(message).strip(),
+                "page": safe_str(page).strip(),
+            }
+        ).execute()
+        return True
+    except Exception:
+        return False
+
+
+def insert_suggestion(user_id: str, email: str, title: str, suggestion: str) -> bool:
+    try:
+        sb = authed_supabase()
+        sb.table("feature_suggestions").insert(
+            {
+                "user_id": user_id,
+                "email": safe_str(email).strip(),
+                "title": safe_str(title).strip(),
+                "suggestion": safe_str(suggestion).strip(),
+            }
+        ).execute()
+        return True
+    except Exception:
+        return False
 
 
 def create_stripe_checkout_session(user_id: str, user_email: str) -> Optional[str]:
@@ -2430,6 +2464,36 @@ else:
                 st.session_state["_settings_last_currency"] = current
                 if not ok:
                     st.caption("Settings storage isn't set up yet. Run `sql/user_settings.sql` in Supabase to persist.")
+
+            st.markdown("---")
+            st.markdown("**Support**")
+            if SUPPORT_CONTACT_EMAIL:
+                st.caption(f"Email: {SUPPORT_CONTACT_EMAIL}")
+            with st.form("support_form", clear_on_submit=True):
+                support_email = st.text_input("Your email", value=safe_str(getattr(user, "email", "")), key="support_email")
+                subject = st.text_input("Subject", placeholder="What do you need help with?", key="support_subject")
+                message = st.text_area("Message", placeholder="Describe the issue (what you clicked, what happened, any error).", height=120, key="support_message")
+                sent = st.form_submit_button("Send support request")
+            if sent:
+                ok = insert_support_request(user.id, support_email, subject, message, section)
+                if ok:
+                    st.success("Sent. We'll get back to you soon.")
+                else:
+                    st.warning("Support storage isn't set up yet. Run the support SQL in Supabase, or contact support by email.")
+
+            st.markdown("---")
+            st.markdown("**Suggestions**")
+            with st.form("suggestions_form", clear_on_submit=True):
+                sug_email = st.text_input("Your email", value=safe_str(getattr(user, "email", "")), key="sug_email")
+                title = st.text_input("Title", placeholder="Short idea name", key="sug_title")
+                suggestion = st.text_area("Suggestion", placeholder="What should we add/change?", height=120, key="sug_body")
+                sug_sent = st.form_submit_button("Submit suggestion")
+            if sug_sent:
+                ok = insert_suggestion(user.id, sug_email, title, suggestion)
+                if ok:
+                    st.success("Thanks — suggestion submitted!")
+                else:
+                    st.warning("Suggestions storage isn't set up yet. Run the suggestions SQL in Supabase.")
 
             st.markdown("---")
             if st.button("Log out", key="sidebar_logout"):
