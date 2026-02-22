@@ -3,6 +3,7 @@ import calendar
 import csv
 import html as html_lib
 import io
+import json
 import re
 import uuid
 from datetime import datetime, timedelta
@@ -126,6 +127,37 @@ try:
 except KeyError:
     st.error("App misconfigured: missing Supabase secrets.")
     st.caption("Set `SUPABASE_URL` and `SUPABASE_KEY` in Streamlit Community Cloud → App → Settings → Secrets, then restart the app.")
+    st.stop()
+
+
+def _extract_supabase_ref_from_url(url: str) -> str:
+    # https://<ref>.supabase.co
+    m = re.search(r"https?://([a-z0-9-]+)\\.supabase\\.co", safe_str(url).strip(), flags=re.I)
+    return (m.group(1) if m else "").strip()
+
+
+def _extract_ref_from_jwt(jwt_token: str) -> str:
+    tok = safe_str(jwt_token).strip()
+    parts = tok.split(".")
+    if len(parts) < 2:
+        return ""
+    payload_b64 = parts[1]
+    # Base64url padding
+    payload_b64 += "=" * (-len(payload_b64) % 4)
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64.encode("utf-8")).decode("utf-8"))
+        return safe_str(payload.get("ref")).strip()
+    except Exception:
+        return ""
+
+
+# Helpful sanity check: if URL and key belong to different Supabase projects, auth will always fail.
+_url_ref = _extract_supabase_ref_from_url(SUPABASE_URL)
+_key_ref = _extract_ref_from_jwt(SUPABASE_KEY)
+if _url_ref and _key_ref and _url_ref != _key_ref:
+    st.error("Supabase secrets mismatch: your URL and anon key are from different projects.")
+    st.caption(f"URL project ref: `{_url_ref}` · Key project ref: `{_key_ref}`")
+    st.caption("Fix Streamlit secrets: set `SUPABASE_URL` and `SUPABASE_KEY` from the SAME Supabase project (Settings → API).")
     st.stop()
 
 @st.cache_resource
