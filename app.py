@@ -29,6 +29,48 @@ st.set_page_config(
 )
 st.markdown("""
 <style>
+/* Brand accents */
+:root{
+  --accent-purple: rgba(124,58,237,1);
+  --accent-blue: rgba(56,189,248,1);
+  --accent-grad: linear-gradient(135deg, rgba(124,58,237,0.24) 0%, rgba(56,189,248,0.18) 52%, rgba(14,17,23,0.0) 100%);
+  --panel-bg: rgba(255,255,255,0.045);
+  --panel-brd: rgba(255,255,255,0.08);
+}
+
+/* Main background glow (subtle, doesn't fight dark theme) */
+div[data-testid="stAppViewContainer"]{
+  background:
+    radial-gradient(1200px 600px at 16% 8%, rgba(124,58,237,0.18) 0%, rgba(14,17,23,0) 55%),
+    radial-gradient(900px 520px at 74% 18%, rgba(56,189,248,0.10) 0%, rgba(14,17,23,0) 60%),
+    radial-gradient(900px 520px at 50% 100%, rgba(124,58,237,0.10) 0%, rgba(14,17,23,0) 55%),
+    #0E1117;
+}
+
+/* Section/card surfaces */
+.metric-card,
+.calendar-card,
+div[data-testid="stMetric"],
+div[data-testid="stExpander"] > div,
+div[data-testid="stPlotlyChart"],
+div[data-testid="stVegaLiteChart"],
+div[data-testid="stChart"],
+div[data-testid="stDataFrame"]{
+  background-image: var(--accent-grad);
+  background-blend-mode: soft-light;
+}
+
+/* Buttons: give a bit more "product" feel */
+.stButton > button{
+  border-radius: 12px !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  background: rgba(255,255,255,0.05) !important;
+}
+.stButton > button:hover{
+  border-color: rgba(124,58,237,0.35) !important;
+  background: rgba(124,58,237,0.10) !important;
+}
+
 /* Sidebar (Tradezella-ish) */
 section[data-testid="stSidebar"] > div {
   background: radial-gradient(1200px 420px at 20% 0%, rgba(124,58,237,0.28) 0%, rgba(14,17,23,0.0) 55%),
