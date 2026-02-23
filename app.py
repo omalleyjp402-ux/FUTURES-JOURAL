@@ -2404,18 +2404,17 @@ def summarize_performance(df_view: pd.DataFrame, pnl_col: str) -> Dict[str, Any]
     pf = _profit_factor(dfp[pnl_col])
 
     # Daily breakdown for best/worst day (trading days)
-    daily = (
-        dfp.groupby(pd.to_datetime(dfp["date"]).dt.date, as_index=False)[pnl_col]
-        .sum()
-        .rename(columns={pnl_col: "pnl", "date": "day"})
-    )
+    # Use an explicit "day" column to avoid pandas naming differences across versions.
+    day_series = pd.to_datetime(dfp.get("date"), errors="coerce")
+    daily = dfp.assign(day=day_series.dt.date).groupby("day", as_index=False)[pnl_col].sum()
+    daily = daily.rename(columns={pnl_col: "pnl"})
     best_day = None
     worst_day = None
     if not daily.empty:
         best_row = daily.sort_values("pnl", ascending=False).iloc[0]
         worst_row = daily.sort_values("pnl", ascending=True).iloc[0]
-        best_day = {"day": str(best_row["day"]), "pnl": float(best_row["pnl"])}
-        worst_day = {"day": str(worst_row["day"]), "pnl": float(worst_row["pnl"])}
+        best_day = {"day": str(best_row.get("day")), "pnl": float(best_row.get("pnl", 0.0))}
+        worst_day = {"day": str(worst_row.get("day")), "pnl": float(worst_row.get("pnl", 0.0))}
 
     # Max drawdown on equity curve (trade-by-trade)
     equity = dfp.sort_values("date")[pnl_col].cumsum()
