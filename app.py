@@ -2,11 +2,12 @@ import base64
 import calendar
 import csv
 import html as html_lib
+import hashlib
 import io
 import json
 import re
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional, Dict, Any
 from urllib.parse import quote_plus
@@ -352,6 +353,7 @@ def insert_suggestion(user_id: str, email: str, title: str, suggestion: str) -> 
 DATA_DIR = Path("data")
 WAITLIST_CSV = DATA_DIR / "waitlist.csv"
 CONTACT_CSV = DATA_DIR / "contact_messages.csv"
+NEWS_CSV = DATA_DIR / "news_events.csv"
 
 
 def ensure_data_dir() -> None:
@@ -381,6 +383,199 @@ def append_csv_row(path: Path, header: list, row: dict) -> bool:
         return True
     except Exception:
         return False
+
+
+def parse_high_impact_news_text(raw: str, default_year: int) -> list[dict]:
+    """
+    Parse a simple copy/paste economic calendar block into event rows.
+
+    Expected rough format (repeating):
+      Wed
+      Feb 25
+      2:00am
+      USD
+      Event name
+      optional extra lines...
+
+    We assume the pasted times are in Europe/Dublin (common for GMT-style calendars) and store as UTC ISO.
+    """
+    raw = safe_str(raw)
+    lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
+    if not lines:
+        return []
+
+    weekdays = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
+    month_map = {
+        "jan": 1,
+        "feb": 2,
+        "mar": 3,
+        "apr": 4,
+        "may": 5,
+        "jun": 6,
+        "jul": 7,
+        "aug": 8,
+        "sep": 9,
+        "oct": 10,
+        "nov": 11,
+        "dec": 12,
+    }
+
+    def is_time(s: str) -> bool:
+        return bool(re.match(r"^\d{1,2}:\d{2}(am|pm)$", s.strip().lower()))
+
+    def is_currency(s: str) -> bool:
+        return bool(re.match(r"^[A-Z]{3}$", s.strip()))
+
+    def parse_month_day(s: str) -> tuple[int, int] | None:
+        m = re.match(r"^([A-Za-z]{3})\s+(\d{1,2})$", s.strip())
+        if not m:
+            return None
+        mo = month_map.get(m.group(1).lower())
+        if not mo:
+            return None
+        return mo, int(m.group(2))
+
+    def parse_time_to_hm(s: str) -> tuple[int, int] | None:
+        s = s.strip().lower()
+        m = re.match(r"^(\d{1,2}):(\d{2})(am|pm)$", s)
+        if not m:
+            return None
+        hh = int(m.group(1)) % 12
+        mm = int(m.group(2))
+        ampm = m.group(3)
+        if ampm == "pm":
+            hh += 12
+        return hh, mm
+
+    out: list[dict] = []
+    i = 0
+    while i < len(lines):
+        tok = lines[i]
+        if tok.lower()[:3] not in weekdays:
+            i += 1
+            continue
+
+        # Date line
+        if i + 1 >= len(lines):
+            break
+        md = parse_month_day(lines[i + 1])
+        if not md:
+            i += 1
+            continue
+        month, day = md
+
+        # Optional time
+        tline = ""
+        if i + 2 < len(lines) and is_time(lines[i + 2]):
+            tline = lines[i + 2]
+            i_time = i + 2
+        else:
+            i_time = i + 1
+
+        # Currency
+        cur = ""
+        if i_time + 1 < len(lines) and is_currency(lines[i_time + 1]):
+            cur = lines[i_time + 1].strip().upper()
+            i_cur = i_time + 1
+        else:
+            i += 1
+            continue
+
+        # Title
+        if i_cur + 1 >= len(lines):
+            break
+        title = lines[i_cur + 1].strip()
+        if not title:
+            i += 1
+            continue
+
+        # Collect optional extra lines until next weekday
+        extras: list[str] = []
+        j = i_cur + 2
+        while j < len(lines) and lines[j].lower()[:3] not in weekdays:
+            # Stop if we hit another "USD" row (some calendars repeat currency for same timestamp)
+            if is_currency(lines[j]) and j + 1 < len(lines) and not is_time(lines[j + 1]):
+                break
+            extras.append(lines[j])
+            j += 1
+
+        # Build timestamp (Europe/Dublin -> UTC ISO)
+        hh = mm = 0
+        if tline:
+            hm = parse_time_to_hm(tline)
+            if hm:
+                hh, mm = hm
+        try:
+            import zoneinfo  # py3.9+
+            tz = zoneinfo.ZoneInfo("Europe/Dublin")
+            dt_local = datetime(default_year, month, day, hh, mm, tzinfo=tz)
+            dt_utc = dt_local.astimezone(timezone.utc)
+            event_at = dt_utc.isoformat()
+        except Exception:
+            # Fallback: naive UTC
+            event_at = datetime(default_year, month, day, hh, mm, tzinfo=timezone.utc).isoformat()
+
+        event_key_src = f"{event_at}|{cur}|{title}".encode("utf-8", errors="ignore")
+        event_key = hashlib.sha1(event_key_src).hexdigest()
+
+        out.append(
+            {
+                "event_key": event_key,
+                "event_at": event_at,
+                "currency": cur,
+                "title": title,
+                "details": " | ".join(extras).strip() if extras else None,
+                "raw_block": "\n".join([tok, lines[i + 1], tline, cur, title] + extras).strip(),
+            }
+        )
+        i = j
+    return out
+
+
+def upsert_news_events(rows: list[dict]) -> tuple[bool, str]:
+    """
+    Store events in Supabase if available; fall back to local CSV.
+    Returns (ok, message).
+    """
+    if not rows:
+        return False, "No events found in pasted text."
+
+    # Prefer Supabase if the table exists; otherwise fall back to CSV.
+    try:
+        sb = authed_supabase()
+        # Upsert by event_key to prevent duplicates.
+        sb.table("news_events").upsert(rows, on_conflict="event_key").execute()
+        return True, "Saved."
+    except Exception:
+        ts = datetime.utcnow().isoformat()
+        ok_all = True
+        for r in rows:
+            ok_all = ok_all and append_csv_row(
+                NEWS_CSV,
+                header=["created_at", "event_key", "event_at", "currency", "title", "details", "raw_block"],
+                row={"created_at": ts, **r},
+            )
+        return ok_all, ("Saved locally." if ok_all else "Could not save.")
+
+
+def load_news_events() -> pd.DataFrame:
+    # Prefer Supabase.
+    try:
+        sb = authed_supabase()
+        res = sb.table("news_events").select("*").order("event_at", desc=False).limit(500).execute()
+        if res.data:
+            df = pd.DataFrame(res.data)
+            return df
+    except Exception:
+        pass
+
+    # Fallback: local CSV.
+    try:
+        if NEWS_CSV.exists():
+            return pd.read_csv(NEWS_CSV)
+    except Exception:
+        pass
+    return pd.DataFrame()
 
 
 def insert_waitlist_email(email: str, source: str = "landing") -> bool:
@@ -763,7 +958,7 @@ def render_public_sidebar(active: str) -> str:
         # A compact brand header in the sidebar for the public shell.
         render_brand_header(center=True)
         st.markdown("---")
-        options = ["Home", "Demo", "Tour", "Terms", "Privacy", "Refunds", "Contact"]
+        options = ["Home", "Demo", "Terms", "Privacy", "Refunds", "Contact"]
         if active not in options:
             active = "Home"
         idx = options.index(active)
@@ -787,7 +982,7 @@ def render_landing_page() -> None:
         c1, c2, c3 = st.columns([3, 1, 1])
         with c1:
             st.title("Tradylo Journal")
-            st.write("A trading journal and performance analytics app for futures traders.")
+            st.write("A trading journal and performance analytics app for traders.")
         with c2:
             st.markdown(" ")
             st.markdown(" ")
@@ -920,6 +1115,116 @@ def render_contact_page() -> None:
                 st.error("Could not send message right now. Please try again later.")
 
     render_public_footer()
+
+
+def render_high_impact_news_page(user_id: str, user_email: str) -> None:
+    st.title("High Impact News")
+    st.caption("BETA · Manual calendar for now (no paid data feeds). Times are stored in UTC and displayed in your local time.")
+
+    is_admin = safe_str(user_email).strip().lower() == safe_str(SUPPORT_CONTACT_EMAIL).strip().lower()
+
+    df = load_news_events()
+    if not df.empty and "event_at" in df.columns:
+        df["event_at"] = pd.to_datetime(df["event_at"], errors="coerce", utc=True)
+        df = df.dropna(subset=["event_at"]).sort_values("event_at")
+    else:
+        df = pd.DataFrame(columns=["event_at", "currency", "title", "details"])
+
+    now = datetime.utcnow().replace(tzinfo=timezone.utc)
+    upcoming = df[df["event_at"] >= now].copy() if not df.empty else pd.DataFrame()
+    next_14 = upcoming[upcoming["event_at"] <= (now + timedelta(days=14))].copy() if not upcoming.empty else pd.DataFrame()
+
+    c1, c2, c3 = st.columns([1, 1, 1])
+    with c1:
+        st.metric("Next 14 days", int(len(next_14)) if not next_14.empty else 0)
+    with c2:
+        st.metric("Upcoming total", int(len(upcoming)) if not upcoming.empty else 0)
+    with c3:
+        if not upcoming.empty:
+            nxt = upcoming.iloc[0]
+            mins = int((nxt["event_at"].to_pydatetime() - now).total_seconds() // 60)
+            st.metric("Next event (mins)", max(0, mins))
+        else:
+            st.metric("Next event (mins)", "—")
+
+    st.markdown("---")
+
+    if upcoming.empty:
+        st.info("No upcoming events loaded yet.")
+    else:
+        view = upcoming.copy()
+        view["When"] = view["event_at"].dt.tz_convert(None).dt.strftime("%a %b %d · %H:%M")
+        view["Currency"] = view.get("currency", "")
+        view["Event"] = view.get("title", "")
+        view["Details"] = view.get("details", "")
+        st.subheader("Upcoming")
+        st.dataframe(
+            view[["When", "Currency", "Event", "Details"]].head(60),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    if not is_admin:
+        st.caption("Calendar updates are managed by the app owner.")
+        return
+
+    # Admin tools
+    st.markdown("---")
+    st.subheader("Admin: update calendar")
+    st.caption("Paste your calendar text block here. We’ll parse and upsert into storage.")
+
+    raw = st.text_area("Paste calendar text", height=280, key="news_raw_paste")
+    col_a, col_b = st.columns([1, 1])
+    with col_a:
+        do_parse = st.button("Parse preview", type="secondary", use_container_width=True)
+    with col_b:
+        do_save = st.button("Save to storage", type="primary", use_container_width=True)
+
+    preview_rows: list[dict] = []
+    if do_parse or do_save:
+        preview_rows = parse_high_impact_news_text(raw, default_year=datetime.utcnow().year)
+        if not preview_rows:
+            st.warning("No events detected. Make sure the format includes weekday, date, time, currency, and event name.")
+        else:
+            prev_df = pd.DataFrame(preview_rows)
+            prev_df["event_at"] = pd.to_datetime(prev_df["event_at"], utc=True, errors="coerce")
+            prev_df = prev_df.dropna(subset=["event_at"]).sort_values("event_at")
+            prev_df["When"] = prev_df["event_at"].dt.tz_convert(None).dt.strftime("%a %b %d · %H:%M")
+            st.dataframe(prev_df[["When", "currency", "title", "details"]], use_container_width=True, hide_index=True)
+
+    if do_save:
+        ok, msg = upsert_news_events(preview_rows)
+        if ok:
+            st.success(msg)
+        else:
+            st.warning(msg)
+            st.caption("If you want this shared for all users, create the Supabase table below (SQL Editor → Run):")
+            st.code(
+                """
+create table if not exists public.news_events (
+  event_key text primary key,
+  event_at timestamptz not null,
+  currency text not null,
+  title text not null,
+  details text,
+  raw_block text,
+  created_at timestamptz not null default now()
+);
+
+alter table public.news_events enable row level security;
+
+-- Read-only for authenticated users
+drop policy if exists "news_events_read" on public.news_events;
+create policy "news_events_read"
+on public.news_events for select
+to authenticated
+using (true);
+
+-- Only service role/admin should write (no insert/update policies).
+select pg_notify('pgrst', 'reload schema');
+                """.strip(),
+                language="sql",
+            )
 
 
 def render_public_router() -> None:
@@ -1993,53 +2298,67 @@ def render_zylo_radar(components: Dict[str, float]) -> None:
     """
     Pentagon radar chart (0-100) on a dark background with purple fill.
     """
-    try:
-        import plotly.graph_objects as go  # type: ignore
-    except Exception:
-        st.info("Radar chart requires Plotly. Add `plotly` to requirements to enable it.")
-        return
-
+    # SVG fallback (no Plotly dependency). Keeps the app robust on Streamlit Cloud rebuilds.
     labels = ["Win %", "Profit Factor", "Avg Win/Loss", "Consistency", "Max Drawdown"]
-    r = [float(components.get(k, 0.0)) for k in labels]
-    # Close the polygon
-    labels_closed = labels + [labels[0]]
-    r_closed = r + [r[0]]
+    values = [max(0.0, min(100.0, float(components.get(k, 0.0)))) for k in labels]
 
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatterpolar(
-            r=r_closed,
-            theta=labels_closed,
-            fill="toself",
-            fillcolor="rgba(124,58,237,0.35)",
-            line=dict(color="#A78BFA", width=2),
-            marker=dict(color="#C4B5FD", size=4),
-            hovertemplate="%{theta}: %{r:.1f}<extra></extra>",
-        )
-    )
-    fig.update_layout(
-        showlegend=False,
-        margin=dict(l=10, r=10, t=10, b=10),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        polar=dict(
-            bgcolor="rgba(0,0,0,0)",
-            radialaxis=dict(
-                visible=True,
-                range=[0, 100],
-                tickfont=dict(color="rgba(148,163,184,0.9)", size=10),
-                gridcolor="rgba(148,163,184,0.18)",
-                linecolor="rgba(148,163,184,0.25)",
-            ),
-            angularaxis=dict(
-                tickfont=dict(color="rgba(230,237,243,0.95)", size=11),
-                gridcolor="rgba(148,163,184,0.18)",
-                linecolor="rgba(148,163,184,0.25)",
-            ),
-        ),
-    )
+    # Geometry
+    size = 320
+    cx = cy = size / 2
+    outer = 120.0
+    rings = 4
+    import math
 
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    def pt(i: int, r: float) -> tuple[float, float]:
+        # Start at top (270deg) and go clockwise
+        ang = (-90.0 + i * (360.0 / len(labels))) * math.pi / 180.0
+        return (cx + r * math.cos(ang), cy + r * math.sin(ang))
+
+    # Grid rings
+    grid_paths = []
+    for k in range(1, rings + 1):
+        rr = outer * (k / rings)
+        ring = [pt(i, rr) for i in range(len(labels))]
+        d = "M " + " L ".join(f"{x:.1f} {y:.1f}" for x, y in ring) + " Z"
+        grid_paths.append(d)
+
+    # Axes
+    axes = []
+    for i in range(len(labels)):
+        x, y = pt(i, outer)
+        axes.append((cx, cy, x, y))
+
+    # Data polygon
+    poly = [pt(i, outer * (values[i] / 100.0)) for i in range(len(labels))]
+    poly_d = "M " + " L ".join(f"{x:.1f} {y:.1f}" for x, y in poly) + " Z"
+
+    # Label positions
+    label_nodes = []
+    for i, lab in enumerate(labels):
+        x, y = pt(i, outer + 28)
+        anchor = "middle"
+        # slight tweak for left/right
+        if x < cx - 30:
+            anchor = "end"
+        elif x > cx + 30:
+            anchor = "start"
+        label_nodes.append((x, y, anchor, lab))
+
+    svg = f"""
+    <svg width="100%" viewBox="0 0 {size} {size}" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="0" width="{size}" height="{size}" fill="rgba(0,0,0,0)"/>
+      <g>
+        {"".join([f'<path d="{d}" fill="none" stroke="rgba(148,163,184,0.20)" stroke-width="1"/>' for d in grid_paths])}
+        {"".join([f'<line x1="{x1}" y1="{y1}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="rgba(148,163,184,0.20)" stroke-width="1"/>' for x1,y1,x2,y2 in axes])}
+      </g>
+      <path d="{poly_d}" fill="rgba(124,58,237,0.35)" stroke="#A78BFA" stroke-width="2"/>
+      {"".join([f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.2" fill="#C4B5FD"/>' for x,y in poly])}
+      <g font-family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" font-size="12" fill="rgba(230,237,243,0.95)">
+        {"".join([f'<text x="{x:.1f}" y="{y:.1f}" text-anchor="{a}" dominant-baseline="middle">{html_lib.escape(t)}</text>' for x,y,a,t in label_nodes])}
+      </g>
+    </svg>
+    """
+    st.markdown(svg, unsafe_allow_html=True)
 
 def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
     if df.empty:
@@ -2722,7 +3041,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                             file_name="trade_sheet.html", mime="text/html", key=f"{form_key}_a4_dl")
         with st.expander("Preview (optional)", expanded=False):
             # The preview is a white A4 page; keep it collapsed by default so it doesn't dominate the dark UI.
-            components.html(sheet_html, height=980, scrolling=True)
+            components.html(sheet_html, height=820, scrolling=True)
     
     # ── Dashboard + Analytics + Calendar ─────────────────────────────────────
     if section in ("Dashboard", "Analytics", "PnL Calendar"):
@@ -3372,7 +3691,16 @@ else:
     apply_settings_to_session(user.id)
     render_brand_header(center=False, hero=True)
 
-    section_options = ["Dashboard", "New Trade", "Analytics", "PnL Calendar", "Journal", "Strategy/Model Creation", "Affiliates"]
+    section_options = [
+        "Dashboard",
+        "New Trade",
+        "Analytics",
+        "PnL Calendar",
+        "High Impact News (BETA)",
+        "Journal",
+        "Strategy/Model Creation",
+        "Affiliates",
+    ]
 
     # Keep a single source of truth for navigation to avoid "jumping" between widgets.
     def _sync_nav_from_top() -> None:
@@ -3512,6 +3840,8 @@ else:
 
     if section == "Journal":
         render_journal_page(user.id)
+    elif section == "High Impact News (BETA)":
+        render_high_impact_news_page(user.id, safe_str(getattr(user, "email", "")))
     elif section == "Strategy/Model Creation":
         render_strategy_creation_page(user.id)
     elif section == "Affiliates":
