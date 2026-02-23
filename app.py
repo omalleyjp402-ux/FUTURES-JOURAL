@@ -1121,7 +1121,13 @@ def render_high_impact_news_page(user_id: str, user_email: str) -> None:
     st.title("High Impact News")
     st.caption("BETA · Manual calendar for now (no paid data feeds). Times are stored in UTC and displayed in your local time.")
 
-    is_admin = safe_str(user_email).strip().lower() == safe_str(SUPPORT_CONTACT_EMAIL).strip().lower()
+    admin_emails = []
+    for v in [SUPPORT_CONTACT_EMAIL, PUBLIC_CONTACT_EMAIL, get_secret("ADMIN_EMAILS", "")]:
+        s = safe_str(v).strip()
+        if not s:
+            continue
+        admin_emails.extend([x.strip().lower() for x in s.split(",") if x.strip()])
+    is_admin = safe_str(user_email).strip().lower() in set(admin_emails)
 
     df = load_news_events()
     if not df.empty and "event_at" in df.columns:
