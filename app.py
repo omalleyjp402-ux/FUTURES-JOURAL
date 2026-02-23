@@ -559,23 +559,20 @@ def upsert_news_events(rows: list[dict]) -> tuple[bool, str]:
 
 
 def load_news_events() -> pd.DataFrame:
-    # Prefer Supabase.
+    # Supabase only (public app). Local CSV fallback can duplicate data and isn't reliable on Streamlit Cloud.
     try:
         sb = authed_supabase()
-        res = sb.table("news_events").select("*").order("event_at", desc=False).limit(500).execute()
-        if res.data:
-            df = pd.DataFrame(res.data)
-            return df
+        res = sb.table("news_events").select("*").order("event_at", desc=False).limit(1500).execute()
+        if not res.data:
+            return pd.DataFrame()
+        df = pd.DataFrame(res.data)
+        # Defensive de-duplication (in case older/manual inserts created near-duplicates).
+        keep_cols = [c for c in ["event_at", "currency", "title", "details"] if c in df.columns]
+        if keep_cols:
+            df = df.drop_duplicates(subset=keep_cols, keep="first")
+        return df
     except Exception:
-        pass
-
-    # Fallback: local CSV.
-    try:
-        if NEWS_CSV.exists():
-            return pd.read_csv(NEWS_CSV)
-    except Exception:
-        pass
-    return pd.DataFrame()
+        return pd.DataFrame()
 
 
 def insert_waitlist_email(email: str, source: str = "landing") -> bool:
@@ -1119,118 +1116,129 @@ def render_contact_page() -> None:
 
 def render_high_impact_news_page(user_id: str, user_email: str) -> None:
     st.title("High Impact News")
-    st.caption("BETA · Manual calendar for now (no paid data feeds). Times are stored in UTC and displayed in your local time.")
-
-    admin_emails = []
-    for v in [SUPPORT_CONTACT_EMAIL, PUBLIC_CONTACT_EMAIL, get_secret("ADMIN_EMAILS", "")]:
-        s = safe_str(v).strip()
-        if not s:
-            continue
-        admin_emails.extend([x.strip().lower() for x in s.split(",") if x.strip()])
-    is_admin = safe_str(user_email).strip().lower() in set(admin_emails)
+    st.caption("BETA · Calendar view (no paid data feeds).")
 
     df = load_news_events()
-    if not df.empty and "event_at" in df.columns:
-        df["event_at"] = pd.to_datetime(df["event_at"], errors="coerce", utc=True)
-        df = df.dropna(subset=["event_at"]).sort_values("event_at")
-    else:
-        df = pd.DataFrame(columns=["event_at", "currency", "title", "details"])
+    if df.empty or "event_at" not in df.columns:
+        st.info("No events loaded yet.")
+        st.caption("Admin note: manage events in Supabase → Table Editor → `news_events` (outside the app).")
+        return
+
+    df["event_at"] = pd.to_datetime(df["event_at"], errors="coerce", utc=True)
+    df = df.dropna(subset=["event_at"]).sort_values("event_at")
+
+    # Filters
+    cur_all = sorted({safe_str(x).strip().upper() for x in df.get("currency", pd.Series(dtype=str)).tolist() if safe_str(x).strip()})
+    currency = st.selectbox("Currency", ["All"] + cur_all, index=(0 if "USD" not in cur_all else (["All"] + cur_all).index("USD")))
+    if currency != "All":
+        df = df[df["currency"].astype(str).str.upper() == currency]
 
     now = datetime.utcnow().replace(tzinfo=timezone.utc)
-    upcoming = df[df["event_at"] >= now].copy() if not df.empty else pd.DataFrame()
-    next_14 = upcoming[upcoming["event_at"] <= (now + timedelta(days=14))].copy() if not upcoming.empty else pd.DataFrame()
+    upcoming = df[df["event_at"] >= now].copy()
 
-    c1, c2, c3 = st.columns([1, 1, 1])
+    # Month chooser like PnL calendar
+    months = sorted({d.to_period("M") for d in df["event_at"].dt.tz_convert(None)})
+    if not months:
+        st.info("No events found.")
+        return
+    default_month = (now.astimezone(timezone.utc).replace(day=1)).date()
+    month_labels = [m.strftime("%Y-%m") for m in months]
+    active_label = month_labels[-1]
+    active_idx = month_labels.index(active_label)
+    month_choice = st.selectbox("Month", month_labels, index=active_idx)
+    ym = pd.Period(month_choice, freq="M")
+
+    # Calendar grid
+    first_day = datetime(ym.year, ym.month, 1, tzinfo=timezone.utc).date()
+    last_day = (datetime(ym.year, ym.month, 1, tzinfo=timezone.utc) + pd.offsets.MonthEnd(1)).date()
+    start = first_day - timedelta(days=(first_day.weekday() + 1) % 7)  # Sunday start
+    end = last_day + timedelta(days=(6 - ((last_day.weekday() + 1) % 7)))
+
+    # Map events by day
+    local_times = df.copy()
+    local_times["local_dt"] = local_times["event_at"].dt.tz_convert(None)
+    local_times["local_date"] = local_times["local_dt"].dt.date
+    grouped = {}
+    for _, r in local_times.iterrows():
+        d = r["local_date"]
+        grouped.setdefault(d, []).append(r)
+    for d in grouped.keys():
+        grouped[d] = sorted(grouped[d], key=lambda x: x["local_dt"])
+
+    # Summary cards
+    c1, c2, c3 = st.columns(3)
     with c1:
-        st.metric("Next 14 days", int(len(next_14)) if not next_14.empty else 0)
+        st.metric("Upcoming (14d)", int((upcoming["event_at"] <= (now + timedelta(days=14))).sum()))
     with c2:
-        st.metric("Upcoming total", int(len(upcoming)) if not upcoming.empty else 0)
+        st.metric("Upcoming total", int(len(upcoming)))
     with c3:
         if not upcoming.empty:
-            nxt = upcoming.iloc[0]
-            mins = int((nxt["event_at"].to_pydatetime() - now).total_seconds() // 60)
+            nxt = upcoming.iloc[0]["event_at"].to_pydatetime()
+            mins = int((nxt - now).total_seconds() // 60)
             st.metric("Next event (mins)", max(0, mins))
         else:
             st.metric("Next event (mins)", "—")
 
     st.markdown("---")
+    st.subheader("Calendar")
 
+    # Build HTML calendar similar to PnL calendar styling
+    header = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    header_html = "".join([f"<div class='cal-head'>{h}</div>" for h in header])
+
+    cell_html = []
+    day = start
+    while day <= end:
+        off = day.month != ym.month
+        events = grouped.get(day, [])
+        day_cls = "cal-cell cal-off" if off else "cal-cell"
+
+        # Cell body: show up to 3 events
+        items = []
+        for ev in events[:3]:
+            t = ev["local_dt"].strftime("%H:%M")
+            title = html_lib.escape(safe_str(ev.get("title", "")))
+            items.append(f"<div style='font-size:11px;line-height:1.25;color:rgba(230,237,243,0.96);'><span style='color:rgba(148,163,184,0.95);'>{t}</span> {title}</div>")
+        more = ""
+        if len(events) > 3:
+            more = f"<div style='font-size:11px;color:rgba(148,163,184,0.95);'>+{len(events)-3} more</div>"
+
+        cell_html.append(
+            "<div class='{cls}'>"
+            "<div class='cal-day'>{day}</div>"
+            "{items}"
+            "{more}"
+            "</div>".format(
+                cls=day_cls,
+                day=day.day,
+                items="".join(items) if items else "<div style='margin-top:auto;color:rgba(148,163,184,0.65);font-size:11px;'>—</div>",
+                more=more,
+            )
+        )
+        day += timedelta(days=1)
+
+    st.markdown(
+        "<div class='calendar-card'>"
+        "<div class='calendar-wrap'>"
+        "<div class='calendar-grid'>{header}{cells}</div>"
+        "</div>"
+        "</div>".format(header=header_html, cells="".join(cell_html)),
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("---")
+    st.subheader("Upcoming list")
     if upcoming.empty:
-        st.info("No upcoming events loaded yet.")
+        st.info("No upcoming events.")
     else:
         view = upcoming.copy()
         view["When"] = view["event_at"].dt.tz_convert(None).dt.strftime("%a %b %d · %H:%M")
         view["Currency"] = view.get("currency", "")
         view["Event"] = view.get("title", "")
         view["Details"] = view.get("details", "")
-        st.subheader("Upcoming")
-        st.dataframe(
-            view[["When", "Currency", "Event", "Details"]].head(60),
-            use_container_width=True,
-            hide_index=True,
-        )
+        st.dataframe(view[["When", "Currency", "Event", "Details"]].head(80), use_container_width=True, hide_index=True)
 
-    if not is_admin:
-        st.caption("Calendar updates are managed by the app owner.")
-        return
-
-    # Admin tools
-    st.markdown("---")
-    st.subheader("Admin: update calendar")
-    st.caption("Paste your calendar text block here. We’ll parse and upsert into storage.")
-
-    raw = st.text_area("Paste calendar text", height=280, key="news_raw_paste")
-    col_a, col_b = st.columns([1, 1])
-    with col_a:
-        do_parse = st.button("Parse preview", type="secondary", use_container_width=True)
-    with col_b:
-        do_save = st.button("Save to storage", type="primary", use_container_width=True)
-
-    preview_rows: list[dict] = []
-    if do_parse or do_save:
-        preview_rows = parse_high_impact_news_text(raw, default_year=datetime.utcnow().year)
-        if not preview_rows:
-            st.warning("No events detected. Make sure the format includes weekday, date, time, currency, and event name.")
-        else:
-            prev_df = pd.DataFrame(preview_rows)
-            prev_df["event_at"] = pd.to_datetime(prev_df["event_at"], utc=True, errors="coerce")
-            prev_df = prev_df.dropna(subset=["event_at"]).sort_values("event_at")
-            prev_df["When"] = prev_df["event_at"].dt.tz_convert(None).dt.strftime("%a %b %d · %H:%M")
-            st.dataframe(prev_df[["When", "currency", "title", "details"]], use_container_width=True, hide_index=True)
-
-    if do_save:
-        ok, msg = upsert_news_events(preview_rows)
-        if ok:
-            st.success(msg)
-        else:
-            st.warning(msg)
-            st.caption("If you want this shared for all users, create the Supabase table below (SQL Editor → Run):")
-            st.code(
-                """
-create table if not exists public.news_events (
-  event_key text primary key,
-  event_at timestamptz not null,
-  currency text not null,
-  title text not null,
-  details text,
-  raw_block text,
-  created_at timestamptz not null default now()
-);
-
-alter table public.news_events enable row level security;
-
--- Read-only for authenticated users
-drop policy if exists "news_events_read" on public.news_events;
-create policy "news_events_read"
-on public.news_events for select
-to authenticated
-using (true);
-
--- Only service role/admin should write (no insert/update policies).
-select pg_notify('pgrst', 'reload schema');
-                """.strip(),
-                language="sql",
-            )
+    st.caption("Admin note: to update events without pasting into the app, use Supabase → Table Editor → `news_events`.")
 
 
 def render_public_router() -> None:
@@ -1246,8 +1254,6 @@ def render_public_router() -> None:
         active = "Home"
     elif page == "demo":
         active = "Demo"
-    elif page == "tour":
-        active = "Tour"
     elif page == "terms":
         active = "Terms"
     elif page == "privacy":
@@ -1268,9 +1274,7 @@ def render_public_router() -> None:
     if choice == "Demo":
         render_demo_dashboard()
         return
-    if choice == "Tour":
-        render_tour_page()
-        return
+    # (Tour removed; Demo is the product preview.)
     if choice == "Terms":
         render_terms_page()
         return
