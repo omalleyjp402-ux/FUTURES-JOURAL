@@ -351,6 +351,35 @@ def invoke_edge_function(function_name: str, payload: dict) -> tuple[bool, str]:
         return False, safe_str(e)
 
 
+def admin_create_test_commission(affiliate_user_id: str, amount_cents: int = 1900, pct: int = 20) -> tuple[bool, str]:
+    """
+    Insert a single pending commission row for pipeline testing.
+    Uses service-role only when the admin explicitly triggers it.
+    """
+    try:
+        service_key = str(get_secret("SUPABASE_SERVICE_ROLE_KEY", "") or "").strip()
+        if not service_key:
+            return False, "Missing SUPABASE_SERVICE_ROLE_KEY in Streamlit secrets."
+        sb_admin = create_client(SUPABASE_URL, service_key)
+        inv = f"inv_test_manual_{uuid.uuid4().hex[:8]}"
+        commission_cents = int(round(amount_cents * (pct / 100.0)))
+        row = {
+            "affiliate_user_id": affiliate_user_id,
+            "referred_user_id": affiliate_user_id,
+            "stripe_invoice_id": inv,
+            "stripe_customer_id": f"cus_test_{uuid.uuid4().hex[:8]}",
+            "amount_cents": int(amount_cents),
+            "commission_cents": int(commission_cents),
+            "currency": "usd",
+            "status": "pending",
+            "available_at": (datetime.utcnow() - timedelta(minutes=1)).isoformat(),
+        }
+        sb_admin.table("affiliate_commissions").insert(row).execute()
+        return True, f"Created test commission {inv} (${amount_cents/100:.2f} -> ${commission_cents/100:.2f})."
+    except Exception as e:
+        return False, safe_str(e)
+
+
 def insert_support_request(user_id: str, email: str, subject: str, message: str, page: str) -> bool:
     try:
         sb = authed_supabase()
@@ -3938,6 +3967,18 @@ else:
                 dry = st.toggle("Dry run (recommended)", value=True, key="admin_payouts_dry")
                 if not dry:
                     st.warning("Live payouts will attempt Stripe transfers. Only switch this on when live Stripe is ready.")
+                colx, coly = st.columns([1, 1])
+                with colx:
+                    if st.button("Create test commission", use_container_width=True, key="admin_make_test_commission"):
+                        ok, msg = admin_create_test_commission(user.id, amount_cents=1900, pct=20)
+                        if ok:
+                            st.success(msg)
+                        else:
+                            st.error(f"Could not create test commission: {msg}")
+                    st.caption("Creates a pending commission row (for testing only).")
+                with coly:
+                    st.markdown(" ")
+                    st.markdown(" ")
                 if st.button("Run payouts now", use_container_width=True, key="admin_run_payouts"):
                     ok, body = invoke_edge_function("affiliate-payouts", {"dry_run": bool(dry)})
                     if ok:
