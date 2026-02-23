@@ -2265,7 +2265,17 @@ def upload_image(user_id: str, file) -> str:
     sb = authed_supabase()
     ext = file.name.split(".")[-1].lower()
     filename = f"{user_id}/{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex}.{ext}"
-    sb.storage.from_("trade-images").upload(filename, file.getbuffer(), {"content-type": f"image/{ext}"})
+    # Streamlit's UploadedFile.getbuffer() returns a memoryview; Supabase expects bytes.
+    payload = file.getvalue() if hasattr(file, "getvalue") else bytes(file.getbuffer())
+    content_type_map = {
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+        "png": "image/png",
+        "gif": "image/gif",
+        "webp": "image/webp",
+    }
+    content_type = content_type_map.get(ext, "application/octet-stream")
+    sb.storage.from_("trade-images").upload(filename, payload, {"content-type": content_type})
     return filename
 
 
@@ -2408,13 +2418,15 @@ def build_a4_trade_sheet_html(row: pd.Series) -> str:
 <html><head><meta charset="utf-8"/>
 <style>
 @page{{size:A4;margin:12mm}}
+html,body{{background:#fff}}
 body{{font-family:Arial,Helvetica,sans-serif;margin:0;padding:0;color:#000}}
-.toolbar{{display:flex;gap:10px;align-items:center;padding:8px 0}}
-.toolbar button{{padding:6px 10px;border:1px solid #000;background:transparent;cursor:pointer}}
+.toolbar{{display:flex;gap:10px;align-items:center;padding:10px 0;margin:0 0 10px 0}}
+.toolbar .toolbar-inner{{display:flex;gap:10px;align-items:center;background:#fff;border:2px solid #000;border-radius:10px;padding:10px 12px}}
+.toolbar button{{padding:8px 12px;border:2px solid #000;background:#fff;color:#000;cursor:pointer;border-radius:10px;font-weight:700}}
 @media print{{.toolbar{{display:none}}}}
-.sheet{{width:210mm;min-height:297mm;box-sizing:border-box;padding:0}}
+.sheet{{width:210mm;min-height:297mm;box-sizing:border-box;padding:0;background:#fff}}
 .grid{{display:grid;gap:6mm}}
-.box{{border:2px solid #000;box-sizing:border-box}}
+.box{{border:2px solid #000;box-sizing:border-box;background:#fff}}
 .box-title{{font-weight:700;text-align:center;padding:3mm 2mm;border-bottom:2px solid #000;letter-spacing:.5px}}
 .row{{display:grid;gap:6mm;grid-template-columns:1fr 1fr}}
 .kv{{display:grid;grid-template-columns:38mm 1fr;border-top:2px solid #000}}
@@ -2441,7 +2453,7 @@ body{{font-family:Arial,Helvetica,sans-serif;margin:0;padding:0;color:#000}}
 .feedback .k{{padding:3mm;border-right:2px solid #000;font-weight:700}}
 .feedback .v{{padding:3mm}}
 </style></head><body>
-<div class="toolbar"><button onclick="window.print()">Print (A4)</button></div>
+<div class="toolbar"><div class="toolbar-inner"><button onclick="window.print()">Print (A4)</button></div></div>
 <div class="sheet grid">
 <div class="box"><div class="topline">
 <div><b>DATE:</b> {date}</div><div><b>SYMBOL:</b> {instrument}</div>
