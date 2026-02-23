@@ -74,7 +74,8 @@ async function getActivePayoutAccount(affiliateUserId: string): Promise<PayoutAc
     .maybeSingle();
   if (error || !data) return null;
   const status = (data.status ?? "").toString().toLowerCase();
-  if (status !== "active") return null;
+  // Treat "pending" as usable (common during initial onboarding). Only block explicit pauses.
+  if (status === "paused") return null;
   if (!data.stripe_account_id) return null;
   return data as PayoutAccountRow;
 }
@@ -96,6 +97,22 @@ async function markPayable(id: string) {
     .update({ status: "payable" })
     .eq("id", id)
     .eq("status", "pending");
+}
+
+async function markFailed(id: string) {
+  // Minimal + schema-safe: we only flip status so this row won't be retried forever.
+  // (We don't assume an error_message column exists.)
+  await sb.from("affiliate_commissions").update({ status: "failed" }).eq("id", id);
+}
+
+function isPermanentStripeError(errStr: string): boolean {
+  const s = (errStr || "").toLowerCase();
+  return (
+    s.includes("idempotent requests can only be used") ||
+    s.includes("stripe_balance.stripe_transfers") ||
+    s.includes("funds can't be sent to accounts located in") ||
+    s.includes("restricted outside of your platform's region")
+  );
 }
 
 Deno.serve(async (req) => {
@@ -143,9 +160,11 @@ Deno.serve(async (req) => {
       continue;
     }
 
+    const destination = acct.stripe_account_id;
+
     const amount = Number(row.commission_cents ?? 0);
     if (!Number.isFinite(amount) || amount <= 0) {
-      skipped.push({ id: row.id, reason: "invalid_commission_amount" });
+      skipped.push({ id: row.id, reason: "invalid_commission_amount", destination });
       continue;
     }
 
@@ -156,7 +175,7 @@ Deno.serve(async (req) => {
         {
           amount,
           currency,
-          destination: acct.stripe_account_id,
+          destination,
           metadata: {
             affiliate_user_id: row.affiliate_user_id,
             referred_user_id: row.referred_user_id,
@@ -171,13 +190,17 @@ Deno.serve(async (req) => {
         await markPaid(row.id, transferId);
         paid += 1;
       } else {
-        skipped.push({ id: row.id, reason: "transfer_missing_id" });
+        skipped.push({ id: row.id, reason: "transfer_missing_id", destination });
       }
     } catch (err) {
-      skipped.push({ id: row.id, reason: `stripe_error:${String(err)}`.slice(0, 180) });
+      const errStr = String(err);
+      const reason = `stripe_error:${errStr}`.slice(0, 180);
+      skipped.push({ id: row.id, reason, destination });
+      if (isPermanentStripeError(errStr)) {
+        await markFailed(row.id);
+      }
     }
   }
 
   return json({ ok: true, processed, paid, skipped });
 });
-
