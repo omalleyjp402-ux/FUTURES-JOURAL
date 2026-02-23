@@ -814,6 +814,7 @@ def render_landing_page() -> None:
     )
 
     st.info("Payments not enabled yet.")
+    st.caption("Tip: best experienced on a laptop or iPad. Mobile support is improving.")
 
     st.markdown("---")
     st.subheader("Join the waitlist")
@@ -2163,28 +2164,9 @@ def load_logo_data():
 
 
 def apply_brand_watermark(logo_uri: str) -> None:
-    if not logo_uri:
-        return
-    st.markdown(
-        f"""
-        <style>
-        :root {{ --brand-logo: url('{logo_uri}'); }}
-        .metric-card,
-        .calendar-card,
-        div[data-testid="stVegaLiteChart"],
-        div[data-testid="stChart"],
-        div[data-testid="stPlotlyChart"],
-        div[data-testid="stDataFrame"] {{
-            background-image: var(--brand-logo);
-            background-repeat: no-repeat;
-            background-position: right 12px bottom 12px;
-            background-size: 110px;
-            background-blend-mode: soft-light;
-        }}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    # Disabled: a watermark on metric cards/charts makes values harder to read.
+    # We keep branding via headers + sidebar styling instead.
+    return
 
 
 def render_brand_header(center: bool = False, hero: bool = False) -> None:
@@ -2420,9 +2402,9 @@ def build_a4_trade_sheet_html(row: pd.Series) -> str:
 @page{{size:A4;margin:12mm}}
 html,body{{background:#fff}}
 body{{font-family:Arial,Helvetica,sans-serif;margin:0;padding:0;color:#000}}
-.toolbar{{display:flex;gap:10px;align-items:center;padding:10px 0;margin:0 0 10px 0}}
-.toolbar .toolbar-inner{{display:flex;gap:10px;align-items:center;background:#fff;border:2px solid #000;border-radius:10px;padding:10px 12px}}
-.toolbar button{{padding:8px 12px;border:2px solid #000;background:#fff;color:#000;cursor:pointer;border-radius:10px;font-weight:700}}
+.toolbar{{display:flex;gap:10px;align-items:center;padding:6px 0;margin:0 0 6px 0}}
+.toolbar .toolbar-inner{{display:flex;gap:10px;align-items:center;background:#fff;border:2px solid #000;border-radius:10px;padding:8px 10px}}
+.toolbar button{{padding:6px 10px;border:2px solid #000;background:#fff;color:#000;cursor:pointer;border-radius:10px;font-weight:700}}
 @media print{{.toolbar{{display:none}}}}
 .sheet{{width:210mm;min-height:297mm;box-sizing:border-box;padding:0;background:#fff}}
 .grid{{display:grid;gap:6mm}}
@@ -2738,7 +2720,9 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         sheet_html = build_a4_trade_sheet_html(selected_row)
         st.download_button("Download trade sheet HTML (A4)", sheet_html.encode("utf-8"),
                             file_name="trade_sheet.html", mime="text/html", key=f"{form_key}_a4_dl")
-        components.html(sheet_html, height=1250, scrolling=True)
+        with st.expander("Preview (optional)", expanded=False):
+            # The preview is a white A4 page; keep it collapsed by default so it doesn't dominate the dark UI.
+            components.html(sheet_html, height=980, scrolling=True)
     
     # ── Dashboard + Analytics + Calendar ─────────────────────────────────────
     if section in ("Dashboard", "Analytics", "PnL Calendar"):
