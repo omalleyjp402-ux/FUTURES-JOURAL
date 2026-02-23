@@ -1193,87 +1193,97 @@ def render_affiliates_page(user_id: str) -> None:
 
     if not AFFILIATES_ENABLED:
         st.warning("Affiliates are currently disabled. Turn on `AFFILIATES_ENABLED = true` in Streamlit secrets to record referrals.")
-    with st.expander("Admin setup (paste in Supabase SQL Editor)", expanded=False):
-        st.caption("Step 1: Create the affiliate tables (run once).")
-        st.code(
-            "\n".join(
-                [
-                    "-- Affiliate / referral tracking (Stripe commission is handled via webhook later)",
-                    "create table if not exists public.affiliate_codes (",
-                    "  code text primary key,",
-                    "  affiliate_user_id uuid not null references auth.users(id) on delete cascade,",
-                    "  commission_percent numeric not null default 20,",
-                    "  is_active boolean not null default true,",
-                    "  created_at timestamptz not null default now()",
-                    ");",
-                    "",
-                    "create table if not exists public.referrals (",
-                    "  referred_user_id uuid primary key references auth.users(id) on delete cascade,",
-                    "  affiliate_user_id uuid not null references auth.users(id) on delete cascade,",
-                    "  code text not null references public.affiliate_codes(code) on delete restrict,",
-                    "  created_at timestamptz not null default now()",
-                    ");",
-                    "",
-                    "alter table public.affiliate_codes enable row level security;",
-                    "alter table public.referrals enable row level security;",
-                    "",
-                    "drop policy if exists \"affiliate_codes_select_authed\" on public.affiliate_codes;",
-                    "create policy \"affiliate_codes_select_authed\"",
-                    "  on public.affiliate_codes",
-                    "  for select",
-                    "  to authenticated",
-                    "  using (is_active = true);",
-                    "",
-                    "drop policy if exists \"affiliate_codes_manage_own\" on public.affiliate_codes;",
-                    "create policy \"affiliate_codes_manage_own\"",
-                    "  on public.affiliate_codes",
-                    "  for all",
-                    "  to authenticated",
-                    "  using (auth.uid() = affiliate_user_id)",
-                    "  with check (auth.uid() = affiliate_user_id);",
-                    "",
-                    "drop policy if exists \"referrals_select_own\" on public.referrals;",
-                    "create policy \"referrals_select_own\"",
-                    "  on public.referrals",
-                    "  for select",
-                    "  to authenticated",
-                    "  using (auth.uid() = referred_user_id);",
-                    "",
-                    "drop policy if exists \"referrals_select_affiliate\" on public.referrals;",
-                    "create policy \"referrals_select_affiliate\"",
-                    "  on public.referrals",
-                    "  for select",
-                    "  to authenticated",
-                    "  using (auth.uid() = affiliate_user_id);",
-                    "",
-                    "drop policy if exists \"referrals_insert_self\" on public.referrals;",
-                    "create policy \"referrals_insert_self\"",
-                    "  on public.referrals",
-                    "  for insert",
-                    "  to authenticated",
-                    "  with check (",
-                    "    auth.uid() = referred_user_id",
-                    "    and affiliate_user_id <> referred_user_id",
-                    "  );",
-                ]
-            ),
-            language="sql",
-        )
+    # Admin-only setup (so normal users don't see scary SQL).
+    user_obj = st.session_state.get("user")
+    email = safe_str(user_obj.get("email")) if isinstance(user_obj, dict) else safe_str(getattr(user_obj, "email", ""))
+    admin_emails = []
+    for v in [SUPPORT_CONTACT_EMAIL, get_secret("ADMIN_EMAILS", "")]:
+        s = safe_str(v).strip()
+        if not s:
+            continue
+        admin_emails.extend([x.strip().lower() for x in s.split(",") if x.strip()])
+    is_admin = safe_str(email).strip().lower() in set(admin_emails)
 
-        st.caption("Step 2: Assign ONE affiliate code (admin insert). Replace the UUID with the affiliate's Supabase Auth user id.")
-        st.code(
-            "\n".join(
-                [
-                    "insert into public.affiliate_codes (code, affiliate_user_id, commission_percent, is_active)",
-                    "values ('HARVEY20', 'AFFILIATE_USER_UUID_HERE', 20, true)",
-                    "on conflict (code) do update set",
-                    "  affiliate_user_id = excluded.affiliate_user_id,",
-                    "  commission_percent = excluded.commission_percent,",
-                    "  is_active = excluded.is_active;",
-                ]
-            ),
-            language="sql",
-        )
+    if is_admin:
+        with st.expander("Admin setup (paste in Supabase SQL Editor)", expanded=False):
+            st.caption("Step 1: Create/update the affiliate tables + policies (run once).")
+            st.code(
+                "\n".join(
+                    [
+                        "-- Affiliate / referral tracking (Stripe commission is handled via webhook later)",
+                        "create table if not exists public.affiliate_codes (",
+                        "  code text primary key,",
+                        "  affiliate_user_id uuid not null references auth.users(id) on delete cascade,",
+                        "  commission_percent numeric not null default 20,",
+                        "  is_active boolean not null default true,",
+                        "  created_at timestamptz not null default now()",
+                        ");",
+                        "",
+                        "create table if not exists public.referrals (",
+                        "  referred_user_id uuid primary key references auth.users(id) on delete cascade,",
+                        "  affiliate_user_id uuid not null references auth.users(id) on delete cascade,",
+                        "  code text not null references public.affiliate_codes(code) on delete restrict,",
+                        "  created_at timestamptz not null default now()",
+                        ");",
+                        "",
+                        "alter table public.affiliate_codes enable row level security;",
+                        "alter table public.referrals enable row level security;",
+                        "",
+                        "-- SELECT: allow users to read active codes, and also read codes assigned to them.",
+                        "drop policy if exists \"affiliate_codes_select_authed\" on public.affiliate_codes;",
+                        "create policy \"affiliate_codes_select_authed\"",
+                        "  on public.affiliate_codes",
+                        "  for select",
+                        "  to authenticated",
+                        "  using (is_active = true or auth.uid() = affiliate_user_id);",
+                        "",
+                        "-- OWNER-ONLY: remove user self-management; only admin/service-role should insert/update/delete.",
+                        "drop policy if exists \"affiliate_codes_manage_own\" on public.affiliate_codes;",
+                        "",
+                        "drop policy if exists \"referrals_select_own\" on public.referrals;",
+                        "create policy \"referrals_select_own\"",
+                        "  on public.referrals",
+                        "  for select",
+                        "  to authenticated",
+                        "  using (auth.uid() = referred_user_id);",
+                        "",
+                        "drop policy if exists \"referrals_select_affiliate\" on public.referrals;",
+                        "create policy \"referrals_select_affiliate\"",
+                        "  on public.referrals",
+                        "  for select",
+                        "  to authenticated",
+                        "  using (auth.uid() = affiliate_user_id);",
+                        "",
+                        "drop policy if exists \"referrals_insert_self\" on public.referrals;",
+                        "create policy \"referrals_insert_self\"",
+                        "  on public.referrals",
+                        "  for insert",
+                        "  to authenticated",
+                        "  with check (",
+                        "    auth.uid() = referred_user_id",
+                        "    and affiliate_user_id <> referred_user_id",
+                        "  );",
+                        "",
+                        "select pg_notify('pgrst','reload schema');",
+                    ]
+                ),
+                language="sql",
+            )
+
+            st.caption("Step 2: Assign ONE affiliate code (admin insert). Replace the UUID with the affiliate's Supabase Auth user id.")
+            st.code(
+                "\n".join(
+                    [
+                        "insert into public.affiliate_codes (code, affiliate_user_id, commission_percent, is_active)",
+                        "values ('HARVEY20', 'AFFILIATE_USER_UUID_HERE', 20, true)",
+                        "on conflict (code) do update set",
+                        "  affiliate_user_id = excluded.affiliate_user_id,",
+                        "  commission_percent = excluded.commission_percent,",
+                        "  is_active = excluded.is_active;",
+                    ]
+                ),
+                language="sql",
+            )
 
     codes = load_my_affiliate_codes(user_id)
     if not codes:
