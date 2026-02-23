@@ -305,6 +305,7 @@ AFFILIATES_ENABLED = truthy(get_secret("AFFILIATES_ENABLED", "false"))
 STRIPE_ENABLED = truthy(get_secret("STRIPE_ENABLED", "false"))
 SUPPORT_CONTACT_EMAIL = str(get_secret("SUPPORT_CONTACT_EMAIL", "") or "").strip()
 PUBLIC_CONTACT_EMAIL = str(get_secret("PUBLIC_CONTACT_EMAIL", "support@tradylojournal.com") or "").strip()
+ADMIN_EMAILS = str(get_secret("ADMIN_EMAILS", "") or "").strip()
 
 # Pricing (prepared only; not displayed publicly until you say go)
 REFUND_WINDOW_DAYS = 1
@@ -313,6 +314,41 @@ PRICING_PLANS_USD = {
     "quarterly": {"label": "3-month", "usd_per_month": 16, "billing_months": 3},
     "yearly": {"label": "Yearly", "usd_per_month": 14, "billing_months": 12},
 }
+
+
+def is_admin_email(email: str) -> bool:
+    email = safe_str(email).strip().lower()
+    if not email:
+        return False
+    allow = []
+    for v in [SUPPORT_CONTACT_EMAIL, ADMIN_EMAILS]:
+        s = safe_str(v).strip()
+        if not s:
+            continue
+        allow.extend([x.strip().lower() for x in s.split(",") if x.strip()])
+    return email in set(allow)
+
+
+def invoke_edge_function(function_name: str, payload: dict) -> tuple[bool, str]:
+    """
+    Call a Supabase Edge Function. Uses anon key headers to satisfy gateway requirements.
+    Returns (ok, response_text).
+    """
+    try:
+        import urllib.request
+
+        url = f"{SUPABASE_URL}/functions/v1/{function_name}"
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(url, data=data, method="POST")
+        req.add_header("Content-Type", "application/json")
+        # These headers are safe for Edge Function invocation (do NOT use service role in Streamlit).
+        req.add_header("apikey", SUPABASE_KEY)
+        req.add_header("Authorization", f"Bearer {SUPABASE_KEY}")
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+            return True, body
+    except Exception as e:
+        return False, safe_str(e)
 
 
 def insert_support_request(user_id: str, email: str, subject: str, message: str, page: str) -> bool:
@@ -3894,6 +3930,20 @@ else:
                     st.success("Thanks — suggestion submitted!")
                 else:
                     st.warning("Suggestions storage isn't set up yet. Run the suggestions SQL in Supabase.")
+
+            # Admin: payouts runner (safer than terminal; defaults to dry-run).
+            if is_admin_email(safe_str(getattr(user, "email", ""))):
+                st.markdown("---")
+                st.markdown("**Admin: Affiliate Payouts**")
+                dry = st.toggle("Dry run (recommended)", value=True, key="admin_payouts_dry")
+                if not dry:
+                    st.warning("Live payouts will attempt Stripe transfers. Only switch this on when live Stripe is ready.")
+                if st.button("Run payouts now", use_container_width=True, key="admin_run_payouts"):
+                    ok, body = invoke_edge_function("affiliate-payouts", {"dry_run": bool(dry)})
+                    if ok:
+                        st.code(body, language="json")
+                    else:
+                        st.error(f"Payout run failed: {body}")
 
             st.markdown("---")
             if st.button("Log out", key="sidebar_logout"):
