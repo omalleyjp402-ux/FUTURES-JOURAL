@@ -2370,6 +2370,379 @@ def render_zylo_radar(components: Dict[str, float]) -> None:
     """
     st.markdown(svg, unsafe_allow_html=True)
 
+
+def _max_drawdown(equity: pd.Series) -> float:
+    if equity is None or len(equity) == 0:
+        return 0.0
+    eq = pd.to_numeric(equity, errors="coerce").fillna(0.0)
+    peak = eq.cummax()
+    dd = eq - peak
+    return float(abs(dd.min())) if len(dd) else 0.0
+
+
+def _profit_factor(pnl: pd.Series) -> Optional[float]:
+    pnl = pd.to_numeric(pnl, errors="coerce").fillna(0.0)
+    wins = pnl[pnl > 0].sum()
+    losses = pnl[pnl < 0].sum()
+    if losses == 0:
+        return None if wins == 0 else float("inf")
+    return float(wins / abs(losses))
+
+
+def summarize_performance(df_view: pd.DataFrame, pnl_col: str) -> Dict[str, Any]:
+    dfp = df_view.copy()
+    dfp[pnl_col] = pd.to_numeric(dfp[pnl_col], errors="coerce").fillna(0.0)
+    total_trades = int(len(dfp))
+    wins = int((dfp[pnl_col] > 0).sum()) if total_trades else 0
+    win_rate = (wins / total_trades * 100.0) if total_trades else 0.0
+    total_pnl = float(dfp[pnl_col].sum()) if total_trades else 0.0
+
+    wins_df = dfp[dfp[pnl_col] > 0]
+    losses_df = dfp[dfp[pnl_col] < 0]
+    avg_win = float(wins_df[pnl_col].mean()) if not wins_df.empty else 0.0
+    avg_loss = float(losses_df[pnl_col].mean()) if not losses_df.empty else 0.0
+    pf = _profit_factor(dfp[pnl_col])
+
+    # Daily breakdown for best/worst day (trading days)
+    daily = (
+        dfp.groupby(pd.to_datetime(dfp["date"]).dt.date, as_index=False)[pnl_col]
+        .sum()
+        .rename(columns={pnl_col: "pnl", "date": "day"})
+    )
+    best_day = None
+    worst_day = None
+    if not daily.empty:
+        best_row = daily.sort_values("pnl", ascending=False).iloc[0]
+        worst_row = daily.sort_values("pnl", ascending=True).iloc[0]
+        best_day = {"day": str(best_row["day"]), "pnl": float(best_row["pnl"])}
+        worst_day = {"day": str(worst_row["day"]), "pnl": float(worst_row["pnl"])}
+
+    # Max drawdown on equity curve (trade-by-trade)
+    equity = dfp.sort_values("date")[pnl_col].cumsum()
+    max_dd = _max_drawdown(equity)
+
+    return {
+        "total_trades": total_trades,
+        "wins": wins,
+        "win_rate": win_rate,
+        "total_pnl": total_pnl,
+        "avg_win": avg_win,
+        "avg_loss": avg_loss,
+        "profit_factor": pf,
+        "max_drawdown": max_dd,
+        "best_day": best_day,
+        "worst_day": worst_day,
+    }
+
+
+def build_report_card_png(
+    title: str,
+    subtitle: str,
+    metrics: list[tuple[str, str]],
+    logo_path: Path,
+    footer: str = "",
+) -> Optional[bytes]:
+    """
+    Generate a shareable "certificate-like" report card image (PNG).
+    Returns PNG bytes, or None if Pillow isn't available.
+    """
+    try:
+        from PIL import Image, ImageDraw, ImageFont  # type: ignore
+    except Exception:
+        return None
+
+    W, H = 1400, 800
+    img = Image.new("RGBA", (W, H), (14, 17, 23, 255))
+    draw = ImageDraw.Draw(img)
+
+    # Background gradient
+    for y in range(H):
+        t = y / max(1, H - 1)
+        # Purple -> deep -> blue
+        r = int(14 + (124 - 14) * max(0.0, 1.0 - t * 1.3))
+        g = int(17 + (58 - 17) * max(0.0, 1.0 - t * 1.3))
+        b = int(23 + (237 - 23) * max(0.0, 1.0 - (1.0 - t) * 1.1) * 0.22)
+        draw.line([(0, y), (W, y)], fill=(r, g, b, 255))
+    # Accent glow blobs
+    draw.ellipse((-120, -160, 560, 520), fill=(124, 58, 237, 55))
+    draw.ellipse((840, -220, 1560, 520), fill=(56, 189, 248, 35))
+    draw.ellipse((260, 420, 1140, 1180), fill=(124, 58, 237, 25))
+
+    # Panel
+    pad = 64
+    panel = (pad, pad, W - pad, H - pad)
+    draw.rounded_rectangle(panel, radius=34, fill=(16, 20, 30, 210), outline=(255, 255, 255, 30), width=2)
+
+    # Fonts (fallback to default if truetype not available)
+    def fnt(size: int):
+        try:
+            return ImageFont.truetype("DejaVuSans.ttf", size=size)
+        except Exception:
+            return ImageFont.load_default()
+
+    font_title = fnt(58)
+    font_sub = fnt(26)
+    font_k = fnt(22)
+    font_v = fnt(34)
+    font_footer = fnt(18)
+
+    # Logo
+    x0, y0 = panel[0] + 38, panel[1] + 34
+    if logo_path.exists():
+        try:
+            logo = Image.open(logo_path).convert("RGBA")
+            logo.thumbnail((110, 110))
+            lx, ly = logo.size
+            # logo tile with border
+            tile = Image.new("RGBA", (lx + 32, ly + 32), (255, 255, 255, 0))
+            td = ImageDraw.Draw(tile)
+            td.rounded_rectangle((0, 0, lx + 32, ly + 32), radius=20, fill=(255, 255, 255, 18), outline=(255, 255, 255, 40), width=2)
+            tile.paste(logo, (16, 16), logo)
+            img.alpha_composite(tile, (x0, y0))
+            x_text = x0 + lx + 64
+        except Exception:
+            x_text = x0
+    else:
+        x_text = x0
+
+    # Header text
+    draw.text((x_text, y0 + 6), title, font=font_title, fill=(230, 237, 243, 245))
+    draw.text((x_text, y0 + 78), subtitle, font=font_sub, fill=(148, 163, 184, 235))
+
+    # Metric grid (2 rows x 4 cols)
+    grid_top = panel[1] + 190
+    grid_left = panel[0] + 38
+    grid_right = panel[2] - 38
+    cols = 4
+    rows = int((len(metrics) + cols - 1) / cols)
+    card_w = int((grid_right - grid_left - (cols - 1) * 18) / cols)
+    card_h = 140
+
+    for idx, (k, v) in enumerate(metrics):
+        r = idx // cols
+        c = idx % cols
+        x = grid_left + c * (card_w + 18)
+        y = grid_top + r * (card_h + 18)
+        rect = (x, y, x + card_w, y + card_h)
+        draw.rounded_rectangle(rect, radius=24, fill=(255, 255, 255, 10), outline=(255, 255, 255, 26), width=2)
+        # Key
+        draw.text((x + 18, y + 16), k.upper(), font=font_k, fill=(148, 163, 184, 235))
+        # Value
+        draw.text((x + 18, y + 58), v, font=font_v, fill=(230, 237, 243, 245))
+
+    # Footer
+    if footer:
+        draw.text((panel[0] + 38, panel[3] - 44), footer, font=font_footer, fill=(148, 163, 184, 220))
+
+    out = io.BytesIO()
+    img.save(out, format="PNG")
+    return out.getvalue()
+
+
+def compute_streaks(daily_pnl: pd.DataFrame) -> Dict[str, Any]:
+    """
+    daily_pnl: columns [date (datetime64[ns]), pnl (float)]
+    Streaks are based on trading days/weeks present in data.
+    """
+    out: Dict[str, Any] = {}
+    if daily_pnl is None or daily_pnl.empty:
+        return {"daily": {"current": 0, "record": 0}, "weekly": {"current": 0, "record": 0}}
+
+    d = daily_pnl.copy()
+    d["date"] = pd.to_datetime(d["date"]).dt.normalize()
+    d["pnl"] = pd.to_numeric(d["pnl"], errors="coerce").fillna(0.0)
+    d = d.sort_values("date")
+
+    # Daily streak (consecutive trading days with pnl > 0)
+    wins = (d["pnl"] > 0).tolist()
+    current = 0
+    for w in reversed(wins):
+        if w:
+            current += 1
+        else:
+            break
+    record = 0
+    run = 0
+    for w in wins:
+        if w:
+            run += 1
+            record = max(record, run)
+        else:
+            run = 0
+    out["daily"] = {"current": current, "record": record}
+
+    # Weekly streak (consecutive weeks with total weekly pnl > 0)
+    wk = d.set_index("date")["pnl"].resample("W-SUN").sum().reset_index()
+    wk["win"] = wk["pnl"] > 0
+    wlist = wk["win"].tolist()
+    wcur = 0
+    for w in reversed(wlist):
+        if w:
+            wcur += 1
+        else:
+            break
+    wrec = 0
+    run = 0
+    for w in wlist:
+        if w:
+            run += 1
+            wrec = max(wrec, run)
+        else:
+            run = 0
+    out["weekly"] = {"current": wcur, "record": wrec}
+    return out
+
+
+def render_reports_page(df_view: pd.DataFrame, pnl_col: str, account_type: str) -> None:
+    st.title("Report Cards")
+    st.caption("Shareable weekly + monthly summaries. (You can download as PNG.)")
+
+    dfp = df_view.copy()
+    dfp["date"] = pd.to_datetime(dfp["date"], errors="coerce").dt.normalize()
+    dfp = dfp.dropna(subset=["date"])
+    dfp[pnl_col] = pd.to_numeric(dfp[pnl_col], errors="coerce").fillna(0.0)
+    if dfp.empty:
+        st.info("No trades yet.")
+        return
+
+    daily = dfp.groupby("date", as_index=False)[pnl_col].sum().rename(columns={pnl_col: "pnl"})
+    daily = daily.sort_values("date")
+
+    tab_week, tab_month = st.tabs(["Weekly", "Monthly"])
+
+    def render_period(title: str, period_df: pd.DataFrame, subtitle: str) -> None:
+        stats = summarize_performance(period_df, pnl_col)
+        pf = stats["profit_factor"]
+        pf_txt = "∞" if pf == float("inf") else (f"{pf:.2f}" if isinstance(pf, (int, float)) else "n/a")
+
+        metrics = [
+            ("Total PnL", format_money(stats["total_pnl"])),
+            ("Trades", str(stats["total_trades"])),
+            ("Win Rate", f"{stats['win_rate']:.1f}%"),
+            ("Profit Factor", pf_txt),
+            ("Avg Win", format_money(stats["avg_win"])),
+            ("Avg Loss", format_money(stats["avg_loss"])),
+            ("Max Drawdown", format_money(-abs(stats["max_drawdown"]))),
+            ("Best Day", format_money(stats["best_day"]["pnl"]) if stats["best_day"] else "—"),
+        ]
+
+        # On-screen cards
+        cols = st.columns(4)
+        for i, (k, v) in enumerate(metrics[:8]):
+            cols[i % 4].metric(k, v)
+
+        # Shareable certificate
+        st.markdown("---")
+        st.subheader("Shareable card")
+        footer = f"{BRAND_NAME} · {account_type} · Generated {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"
+        png = build_report_card_png(
+            title=f"{BRAND_NAME} {title}",
+            subtitle=subtitle,
+            metrics=metrics[:8],
+            logo_path=LOGO_PATH,
+            footer=footer,
+        )
+        if png:
+            st.image(png, use_container_width=True)
+            st.download_button(
+                "Download PNG",
+                data=png,
+                file_name=f"{BRAND_NAME.lower()}_{title.lower().replace(' ','_')}_{account_type.lower().replace(' ','_')}.png",
+                mime="image/png",
+                use_container_width=True,
+            )
+        else:
+            st.info("PNG export requires Pillow. Add `pillow` to requirements to enable it.")
+
+    with tab_week:
+        wk = daily.set_index("date")["pnl"].resample("W-SUN").sum().reset_index()
+        wk = wk.sort_values("date")
+        wk["start"] = wk["date"] - pd.to_timedelta(6, unit="D")
+        wk["label"] = wk.apply(lambda r: f"{r['start'].strftime('%b %d')} - {r['date'].strftime('%b %d, %Y')}", axis=1)
+        labels = wk["label"].tolist()
+        default_idx = len(labels) - 1
+        choice = st.selectbox("Select week", labels, index=max(0, default_idx))
+        row = wk[wk["label"] == choice].iloc[0]
+        start = row["start"]
+        end = row["date"]
+        period_trades = dfp[(dfp["date"] >= start) & (dfp["date"] <= end)].copy()
+        render_period("Weekly Report", period_trades, subtitle=choice)
+
+    with tab_month:
+        mo = daily.set_index("date")["pnl"].resample("M").sum().reset_index()
+        mo = mo.sort_values("date")
+        mo["label"] = mo["date"].dt.strftime("%B %Y")
+        labels = mo["label"].tolist()
+        default_idx = len(labels) - 1
+        choice = st.selectbox("Select month", labels, index=max(0, default_idx))
+        row = mo[mo["label"] == choice].iloc[0]
+        end = row["date"]
+        start = (end - pd.offsets.MonthBegin(1)).normalize()
+        period_trades = dfp[(dfp["date"] >= start) & (dfp["date"] <= end)].copy()
+        render_period("Monthly Report", period_trades, subtitle=choice)
+
+
+def render_streaks_page(df_view: pd.DataFrame, pnl_col: str) -> None:
+    st.title("Streaks & Milestones")
+    st.caption("Built from your trading days and weekly net PnL.")
+
+    dfp = df_view.copy()
+    dfp["date"] = pd.to_datetime(dfp["date"], errors="coerce").dt.normalize()
+    dfp = dfp.dropna(subset=["date"])
+    dfp[pnl_col] = pd.to_numeric(dfp[pnl_col], errors="coerce").fillna(0.0)
+    if dfp.empty:
+        st.info("No trades yet.")
+        return
+
+    daily = dfp.groupby("date", as_index=False)[pnl_col].sum().rename(columns={pnl_col: "pnl"}).sort_values("date")
+    streaks = compute_streaks(daily.rename(columns={"date": "date", "pnl": "pnl"}))
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Daily Win Streak", streaks["daily"]["current"], f"Record: {streaks['daily']['record']}")
+    c2.metric("Weekly Win Streak", streaks["weekly"]["current"], f"Record: {streaks['weekly']['record']}")
+
+    stats = summarize_performance(dfp, pnl_col)
+    c3.metric("Best Day", format_money(stats["best_day"]["pnl"]) if stats["best_day"] else "—", stats["best_day"]["day"] if stats["best_day"] else "")
+    c4.metric("Worst Day", format_money(stats["worst_day"]["pnl"]) if stats["worst_day"] else "—", stats["worst_day"]["day"] if stats["worst_day"] else "")
+
+    st.markdown("---")
+    st.subheader("Milestones")
+    wk = daily.set_index("date")["pnl"].resample("W-SUN").sum().reset_index()
+    mo = daily.set_index("date")["pnl"].resample("M").sum().reset_index()
+
+    best_week = wk.sort_values("pnl", ascending=False).head(1)
+    best_month = mo.sort_values("pnl", ascending=False).head(1)
+    cols = st.columns(3)
+    if not best_week.empty:
+        end = best_week.iloc[0]["date"]
+        start = end - pd.to_timedelta(6, unit="D")
+        cols[0].metric("Best Week", format_money(float(best_week.iloc[0]["pnl"])), f"{start.strftime('%b %d')} – {end.strftime('%b %d')}")
+    else:
+        cols[0].metric("Best Week", "—")
+    if not best_month.empty:
+        end = best_month.iloc[0]["date"]
+        cols[1].metric("Best Month", format_money(float(best_month.iloc[0]["pnl"])), end.strftime("%B %Y"))
+    else:
+        cols[1].metric("Best Month", "—")
+    cols[2].metric("Max Drawdown", format_money(-abs(stats["max_drawdown"])))
+
+    st.markdown("---")
+    st.subheader("Daily PnL (trading days)")
+    dd = daily.copy()
+    dd["pos"] = dd["pnl"] >= 0
+    chart = (
+        alt.Chart(dd)
+        .mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3)
+        .encode(
+            x=alt.X("date:T", axis=alt.Axis(title=None, format="%b %d")),
+            y=alt.Y("pnl:Q", axis=alt.Axis(title=None), scale=alt.Scale(zero=False)),
+            color=alt.condition("datum.pos", alt.value("#22c55e"), alt.value("#ef4444")),
+            tooltip=[alt.Tooltip("date:T", title="Date"), alt.Tooltip("pnl:Q", title="PnL", format=",.2f")],
+        )
+        .properties(height=260)
+    )
+    st.altair_chart(style_altair_chart(chart), use_container_width=True)
+
 def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
     if df.empty:
         st.info("No daily PnL yet.")
@@ -3076,7 +3449,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
 
     df_view = df.copy()
     df_view.columns = [str(c).strip() for c in df_view.columns]
-    show_filters = section in ("Dashboard", "Analytics", "PnL Calendar")
+    show_filters = section in ("Dashboard", "Analytics", "PnL Calendar", "Reports", "Streaks & Milestones")
     if show_filters:
         with st.expander("Filters", expanded=False):
             fp = f"{form_key}_filter_"
@@ -3121,7 +3494,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
 
     total_trades = len(df_view)
     if total_trades == 0:
-        if section in ("Dashboard", "Analytics", "PnL Calendar"):
+        if section in ("Dashboard", "Analytics", "PnL Calendar", "Reports", "Streaks & Milestones"):
             st.info("No trades match your filters.")
         return
 
@@ -3178,6 +3551,14 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     session_df = chart_df.groupby("session", as_index=False)[pnl_col].sum().rename(columns={pnl_col: "pnl"})
     session_df["session"] = pd.Categorical(session_df["session"], categories=SESSIONS, ordered=True)
     session_df = session_df.sort_values("session")
+
+    # ── Reports / Streaks (keep fast: run before building charts) ────────────
+    if section == "Reports":
+        render_reports_page(df_view, pnl_col, account_type)
+        return
+    if section == "Streaks & Milestones":
+        render_streaks_page(df_view, pnl_col)
+        return
 
     equity_chart = (
         alt.Chart(daily_df)
@@ -3707,6 +4088,8 @@ else:
         "Analytics",
         "PnL Calendar",
         "High Impact News (BETA)",
+        "Reports",
+        "Streaks & Milestones",
         "Journal",
         "Strategy/Model Creation",
         "Affiliates",
