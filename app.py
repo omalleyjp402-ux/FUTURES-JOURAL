@@ -477,24 +477,48 @@ def admin_grandfather_existing_users(cutoff_utc: Optional[datetime] = None) -> t
         cutoff = cutoff_utc or datetime.utcnow()
         cutoff_iso = cutoff.isoformat() + "Z"
 
+        def _parse_iso_dt(s: str) -> Optional[datetime]:
+            s = safe_str(s).strip()
+            if not s:
+                return None
+            try:
+                # Handles "2026-02-24T08:03:44.597042Z"
+                if s.endswith("Z"):
+                    s = s[:-1] + "+00:00"
+                return datetime.fromisoformat(s)
+            except Exception:
+                return None
+
+        cutoff_dt = cutoff.replace(tzinfo=None)
+
         # List users via Auth Admin API (auth schema is not exposed via PostgREST).
         user_ids: List[str] = []
         page = 1
         per_page = 200
         while True:
             resp = sb_admin.auth.admin.list_users(page=page, per_page=per_page)  # type: ignore[attr-defined]
-            users = getattr(resp, "users", None) or (resp.get("users") if isinstance(resp, dict) else None)  # type: ignore[union-attr]
+
+            # supabase-py returns List[User] here (not a response object).
+            if isinstance(resp, list):
+                users = resp
+            elif isinstance(resp, dict):
+                users = resp.get("users") or []
+            else:
+                users = getattr(resp, "users", None) or []
+
             if not users:
                 break
+
             for u in users:
                 uid = safe_str(getattr(u, "id", "") if not isinstance(u, dict) else u.get("id", "")).strip()
-                created_at = safe_str(getattr(u, "created_at", "") if not isinstance(u, dict) else u.get("created_at", "")).strip()
+                created_at_raw = safe_str(getattr(u, "created_at", "") if not isinstance(u, dict) else u.get("created_at", "")).strip()
                 if not uid:
                     continue
-                # created_at is ISO; lexicographic compare is safe for same format.
-                if created_at and created_at > cutoff_iso:
+                created_dt = _parse_iso_dt(created_at_raw)
+                if created_dt and created_dt.replace(tzinfo=None) > cutoff_dt:
                     continue
                 user_ids.append(uid)
+
             if len(users) < per_page:
                 break
             page += 1
