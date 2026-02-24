@@ -1330,13 +1330,54 @@ def create_stripe_checkout_session(
     except Exception:
         return None
 
+    def trial_days_for_email(email: str) -> int:
+        """
+        Prevent easy trial abuse: if this email has ever had a Stripe subscription trial,
+        do not grant another trial. This is best-effort and intentionally fails CLOSED
+        (no trial) if Stripe lookup errors, to avoid giving free trials on transient issues.
+        """
+        if not TRIAL_DAYS or TRIAL_DAYS <= 0:
+            return 0
+        email = safe_str(email).strip().lower()
+        if not email:
+            return int(TRIAL_DAYS)
+        try:
+            customers: List[Any] = []
+            # Prefer Search API when available.
+            try:
+                r = stripe.Customer.search(query=f"email:'{email}'", limit=10)
+                customers = list(getattr(r, "data", []) or [])
+            except Exception:
+                r = stripe.Customer.list(email=email, limit=10)
+                customers = list(getattr(r, "data", []) or [])
+
+            if not customers:
+                return int(TRIAL_DAYS)
+
+            for c in customers:
+                cid = safe_str(getattr(c, "id", "")).strip()
+                if not cid:
+                    continue
+                subs = stripe.Subscription.list(customer=cid, status="all", limit=100)
+                for s in list(getattr(subs, "data", []) or []):
+                    # Stripe returns Unix timestamps for trial_start/trial_end when a trial exists.
+                    ts = getattr(s, "trial_start", None)
+                    te = getattr(s, "trial_end", None)
+                    if ts or te:
+                        return 0
+            return int(TRIAL_DAYS)
+        except Exception:
+            # Fail closed: no trial if we can't verify.
+            return 0
+
     try:
         stripe.api_key = stripe_secret
         subscription_data: Dict[str, Any] = {}
         # Optional free trial that still requires card details up front.
         # Stripe will automatically charge at the end of the trial.
-        if TRIAL_DAYS and TRIAL_DAYS > 0:
-            subscription_data["trial_period_days"] = int(TRIAL_DAYS)
+        allowed_trial_days = trial_days_for_email(user_email)
+        if allowed_trial_days and allowed_trial_days > 0:
+            subscription_data["trial_period_days"] = int(allowed_trial_days)
             # If payment method is missing at trial end, cancel (avoids past_due surprises).
             subscription_data["trial_settings"] = {"end_behavior": {"missing_payment_method": "cancel"}}
 
@@ -1350,7 +1391,7 @@ def create_stripe_checkout_session(
             metadata={"user_id": user_id},
             allow_promotion_codes=True,
             # Collect card details even when trialing.
-            payment_method_collection="always" if (TRIAL_DAYS and TRIAL_DAYS > 0) else "if_required",
+            payment_method_collection="always" if (allowed_trial_days and allowed_trial_days > 0) else "if_required",
             subscription_data=subscription_data or None,
         )
         return getattr(session, "url", None)
