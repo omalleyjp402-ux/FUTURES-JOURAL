@@ -38,6 +38,63 @@ const sb = createClient(supabaseUrl, supabaseServiceKey, {
   auth: { persistSession: false },
 });
 
+type BillingConfig = {
+  affiliate_promo_start_at: string | null;
+  affiliate_promo_end_at: string | null;
+  promo_commission_percent: number | null;
+  default_commission_percent: number | null;
+};
+
+async function getBillingConfig(): Promise<BillingConfig | null> {
+  try {
+    const { data, error } = await sb
+      .from("billing_config")
+      .select(
+        "affiliate_promo_start_at,affiliate_promo_end_at,promo_commission_percent,default_commission_percent",
+      )
+      .eq("id", 1)
+      .maybeSingle();
+    if (error || !data) return null;
+    return {
+      affiliate_promo_start_at: (data.affiliate_promo_start_at as string) ?? null,
+      affiliate_promo_end_at: (data.affiliate_promo_end_at as string) ?? null,
+      promo_commission_percent: Number(data.promo_commission_percent ?? null),
+      default_commission_percent: Number(data.default_commission_percent ?? null),
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+function percentForAffiliateCommission(params: {
+  basePercent: number;
+  invoiceCreatedUnixSeconds: number | null;
+  cfg: BillingConfig | null;
+}): number {
+  let pct = params.basePercent;
+
+  const cfg = params.cfg;
+  const created = params.invoiceCreatedUnixSeconds;
+  if (!cfg || !Number.isFinite(created as number)) return pct;
+
+  const startMs = cfg.affiliate_promo_start_at ? Date.parse(cfg.affiliate_promo_start_at) : NaN;
+  const endMs = cfg.affiliate_promo_end_at ? Date.parse(cfg.affiliate_promo_end_at) : NaN;
+  const createdMs = Number(created) * 1000;
+
+  const promoPct = Number(cfg.promo_commission_percent ?? NaN);
+  const defaultPct = Number(cfg.default_commission_percent ?? NaN);
+
+  // If configured, never go below the default.
+  if (Number.isFinite(defaultPct) && defaultPct > pct) pct = defaultPct;
+
+  // If we're inside the promo window, bump up (but don't override higher custom rates).
+  if (Number.isFinite(startMs) && Number.isFinite(endMs) && createdMs >= startMs && createdMs < endMs) {
+    if (Number.isFinite(promoPct) && promoPct > pct) pct = promoPct;
+  }
+
+  return pct;
+}
+
 async function insertStripeEvent(eventId: string, eventType: string, payload: unknown) {
   // Best-effort: never fail the webhook solely because logging failed.
   try {
@@ -113,6 +170,8 @@ async function recordAffiliateCommissionForInvoice(params: {
   amountPaidCents: number;
   currency: string;
   stripeCustomerId?: string | null;
+  invoiceCreatedUnixSeconds?: number | null;
+  billingConfig?: BillingConfig | null;
 }) {
   if (!params.referredUserId || !params.stripeInvoiceId) return;
   if (!Number.isFinite(params.amountPaidCents) || params.amountPaidCents <= 0) return;
@@ -138,7 +197,12 @@ async function recordAffiliateCommissionForInvoice(params: {
       .maybeSingle();
     if (!codeRow || codeRow.is_active === false) return;
 
-    const pct = Number(codeRow.commission_percent ?? 0);
+    const basePct = Number(codeRow.commission_percent ?? 0);
+    const pct = percentForAffiliateCommission({
+      basePercent: basePct,
+      invoiceCreatedUnixSeconds: params.invoiceCreatedUnixSeconds ?? null,
+      cfg: params.billingConfig ?? null,
+    });
     if (!Number.isFinite(pct) || pct <= 0) return;
 
     const commissionCents = Math.round((params.amountPaidCents * pct) / 100);
@@ -230,6 +294,7 @@ Deno.serve(async (req) => {
       const invoiceId = (invoice.id || "").toString();
       const amountPaid = Number(invoice.amount_paid ?? 0);
       const currency = (invoice.currency || "usd").toString();
+      const invoiceCreated = Number((invoice as any).created ?? null);
 
       if (!subscriptionId) return json({ ok: true });
       const userId = await userIdForSubscription(subscriptionId);
@@ -256,12 +321,15 @@ Deno.serve(async (req) => {
       });
 
       if (invoiceId && amountPaid > 0) {
+        const billingConfig = await getBillingConfig();
         await recordAffiliateCommissionForInvoice({
           referredUserId: userId,
           stripeInvoiceId: invoiceId,
           amountPaidCents: amountPaid,
           currency,
           stripeCustomerId: customerId,
+          invoiceCreatedUnixSeconds: Number.isFinite(invoiceCreated) ? invoiceCreated : null,
+          billingConfig,
         });
       }
     }

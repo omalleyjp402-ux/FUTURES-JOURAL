@@ -380,6 +380,86 @@ def admin_create_test_commission(affiliate_user_id: str, amount_cents: int = 190
         return False, safe_str(e)
 
 
+def admin_upsert_affiliate_code(affiliate_user_id: str, code: str, commission_percent: float, is_active: bool) -> tuple[bool, str]:
+    """
+    Admin helper: create/update an affiliate code for a given Supabase Auth user UUID.
+    Uses service-role (must be present in Streamlit secrets).
+    """
+    try:
+        service_key = str(get_secret("SUPABASE_SERVICE_ROLE_KEY", "") or "").strip()
+        if not service_key:
+            return False, "Missing SUPABASE_SERVICE_ROLE_KEY in Streamlit secrets."
+        affiliate_user_id = safe_str(affiliate_user_id).strip()
+        code = safe_str(code).strip().upper()
+        if not affiliate_user_id or not re.match(r"^[0-9a-fA-F-]{36}$", affiliate_user_id):
+            return False, "Affiliate user UUID must be a valid UUID."
+        if not code or len(code) < 4:
+            return False, "Code must be at least 4 characters."
+        pct = float(commission_percent)
+        if pct <= 0 or pct > 80:
+            return False, "Commission percent must be between 0 and 80."
+
+        sb_admin = create_client(SUPABASE_URL, service_key)
+        sb_admin.table("affiliate_codes").upsert(
+            {
+                "code": code,
+                "affiliate_user_id": affiliate_user_id,
+                "commission_percent": pct,
+                "is_active": bool(is_active),
+            },
+            on_conflict="code",
+        ).execute()
+        return True, f"Saved affiliate code `{code}`."
+    except Exception as e:
+        return False, safe_str(e)
+
+
+def admin_get_billing_config() -> tuple[bool, dict]:
+    """
+    Admin helper: read billing_config singleton row (id=1).
+    Uses service-role (must be present in Streamlit secrets).
+    Returns (ok, data_or_error).
+    """
+    try:
+        service_key = str(get_secret("SUPABASE_SERVICE_ROLE_KEY", "") or "").strip()
+        if not service_key:
+            return False, {"error": "Missing SUPABASE_SERVICE_ROLE_KEY in Streamlit secrets."}
+        sb_admin = create_client(SUPABASE_URL, service_key)
+        res = sb_admin.table("billing_config").select("*").eq("id", 1).maybe_single().execute()
+        return True, res.data or {}
+    except Exception as e:
+        return False, {"error": safe_str(e)}
+
+
+def admin_start_affiliate_promo_window(days: int = 30, promo_pct: float = 30.0, default_pct: float = 20.0) -> tuple[bool, str]:
+    """
+    Admin helper: starts (or restarts) a global affiliate promo window.
+    During this window, webhook commissions are bumped up to promo_pct (if higher than code/default).
+    Uses service-role; requires `sql/billing_config.sql` to have been run once.
+    """
+    try:
+        service_key = str(get_secret("SUPABASE_SERVICE_ROLE_KEY", "") or "").strip()
+        if not service_key:
+            return False, "Missing SUPABASE_SERVICE_ROLE_KEY in Streamlit secrets."
+        sb_admin = create_client(SUPABASE_URL, service_key)
+        start = datetime.utcnow()
+        end = start + timedelta(days=int(days))
+        sb_admin.table("billing_config").upsert(
+            {
+                "id": 1,
+                "affiliate_promo_start_at": start.isoformat() + "Z",
+                "affiliate_promo_end_at": end.isoformat() + "Z",
+                "promo_commission_percent": float(promo_pct),
+                "default_commission_percent": float(default_pct),
+                "updated_at": datetime.utcnow().isoformat() + "Z",
+            },
+            on_conflict="id",
+        ).execute()
+        return True, f"Promo window started: {start.strftime('%Y-%m-%d %H:%M UTC')} → {end.strftime('%Y-%m-%d %H:%M UTC')}."
+    except Exception as e:
+        return False, safe_str(e)
+
+
 def insert_support_request(user_id: str, email: str, subject: str, message: str, page: str) -> bool:
     try:
         sb = authed_supabase()
@@ -1335,6 +1415,36 @@ def render_affiliates_page(user_id: str) -> None:
                 language="sql",
             )
 
+            st.caption("Step 1b (optional now, required later): Affiliate promo window config (run once).")
+            st.code(
+                "\n".join(
+                    [
+                        "create table if not exists public.billing_config (",
+                        "  id integer primary key,",
+                        "  affiliate_promo_start_at timestamptz,",
+                        "  affiliate_promo_end_at timestamptz,",
+                        "  promo_commission_percent numeric not null default 30,",
+                        "  default_commission_percent numeric not null default 20,",
+                        "  created_at timestamptz not null default now(),",
+                        "  updated_at timestamptz not null default now()",
+                        ");",
+                        "",
+                        "insert into public.billing_config (id) values (1) on conflict (id) do nothing;",
+                        "",
+                        "alter table public.billing_config enable row level security;",
+                        "drop policy if exists \"billing_config_select_authed\" on public.billing_config;",
+                        "create policy \"billing_config_select_authed\"",
+                        "  on public.billing_config",
+                        "  for select",
+                        "  to authenticated",
+                        "  using (true);",
+                        "",
+                        "select pg_notify('pgrst','reload schema');",
+                    ]
+                ),
+                language="sql",
+            )
+
             st.caption("Step 2: Assign ONE affiliate code (admin insert). Replace the UUID with the affiliate's Supabase Auth user id.")
             st.code(
                 "\n".join(
@@ -1350,9 +1460,27 @@ def render_affiliates_page(user_id: str) -> None:
                 language="sql",
             )
 
+        with st.expander("Admin: assign / update affiliate code (no SQL)", expanded=False):
+            st.caption("Use this to create/update a code for any user UUID. (Owner-only)")
+            with st.form("admin_affiliate_code_form", clear_on_submit=False):
+                auid = st.text_input("Affiliate user UUID", placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
+                code = st.text_input("Code", placeholder="DODGY1010").upper()
+                pct = st.number_input("Commission %", min_value=1.0, max_value=80.0, value=20.0, step=1.0)
+                active = st.checkbox("Active", value=True)
+                saved = st.form_submit_button("Save code")
+            if saved:
+                ok, msg = admin_upsert_affiliate_code(auid, code, pct, active)
+                if ok:
+                    st.success(msg)
+                else:
+                    st.error(msg)
+
     codes = load_my_affiliate_codes(user_id)
     if not codes:
-        st.info("No affiliate code is assigned to your account yet. Contact support to be added as an affiliate.")
+        if not is_admin:
+            st.info("No affiliate code is assigned to your account yet. Contact support to be added as an affiliate.")
+            return
+        st.info("No affiliate code is assigned to your account yet. Use the admin tools above to assign one.")
         return
 
     active = next((c for c in codes if c.get("is_active", True)), codes[0])
@@ -3985,6 +4113,34 @@ else:
                         st.code(body, language="json")
                     else:
                         st.error(f"Payout run failed: {body}")
+
+                st.markdown("---")
+                st.markdown("**Admin: Affiliate Promo Window**")
+                ok_cfg, cfg = admin_get_billing_config()
+                if ok_cfg and cfg:
+                    st.caption(
+                        "Current window: "
+                        f"{safe_str(cfg.get('affiliate_promo_start_at') or 'not set')} → "
+                        f"{safe_str(cfg.get('affiliate_promo_end_at') or 'not set')}"
+                    )
+                    st.caption(
+                        f"Promo %: {safe_str(cfg.get('promo_commission_percent') or 30)} • "
+                        f"Default %: {safe_str(cfg.get('default_commission_percent') or 20)}"
+                    )
+                elif ok_cfg:
+                    st.caption("Promo window: not set yet.")
+                else:
+                    st.caption(f"Promo window status: {safe_str(cfg.get('error') or '')}")
+
+                if st.button("Start 30-day promo (30% then 20%)", use_container_width=True, key="admin_start_aff_promo"):
+                    ok, msg = admin_start_affiliate_promo_window(days=30, promo_pct=30.0, default_pct=20.0)
+                    if ok:
+                        st.success(msg)
+                    else:
+                        st.error(
+                            f"Could not start promo window: {msg}\n\n"
+                            "Make sure you ran `sql/billing_config.sql` in the SAME Supabase project."
+                        )
 
             st.markdown("---")
             if st.button("Log out", key="sidebar_logout"):
