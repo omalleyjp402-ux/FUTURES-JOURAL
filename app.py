@@ -4228,6 +4228,22 @@ else:
                         except Exception:
                             st.markdown(f"[Open Checkout]({url})")
                     else:
+                        # Distinguish missing secrets vs missing dependency (common on deploy).
+                        try:
+                            import stripe  # type: ignore  # noqa: F401
+
+                            stripe_ok = True
+                        except Exception:
+                            stripe_ok = False
+
+                        if not stripe_ok:
+                            st.error(
+                                "Stripe Python SDK isn't installed in the Streamlit environment yet. "
+                                "We added it to `requirements.txt`; wait for Streamlit to redeploy, then try again."
+                            )
+                            st.caption("If it still fails after redeploy: check Streamlit logs for pip install errors.")
+                            return
+
                         st.error(
                             "Could not create a Checkout link. Make sure these Streamlit secrets exist:\n\n"
                             "- STRIPE_SECRET_KEY\n"
