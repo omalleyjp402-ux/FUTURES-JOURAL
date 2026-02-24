@@ -461,6 +461,61 @@ def admin_start_affiliate_promo_window(days: int = 30, promo_pct: float = 30.0, 
         return False, safe_str(e)
 
 
+def admin_grandfather_existing_users(cutoff_utc: Optional[datetime] = None) -> tuple[bool, str]:
+    """
+    Admin helper: mark all users created at/before cutoff_utc as grandfathered (unlimited trades).
+    This is intended to be clicked once at launch time (or whenever you decide).
+    Uses Supabase Auth Admin API (service role key required).
+    """
+    try:
+        service_key = str(get_secret("SUPABASE_SERVICE_ROLE_KEY", "") or "").strip()
+        if not service_key:
+            return False, "Missing SUPABASE_SERVICE_ROLE_KEY in Streamlit secrets."
+
+        sb_admin = create_client(SUPABASE_URL, service_key)
+
+        cutoff = cutoff_utc or datetime.utcnow()
+        cutoff_iso = cutoff.isoformat() + "Z"
+
+        # List users via Auth Admin API (auth schema is not exposed via PostgREST).
+        user_ids: List[str] = []
+        page = 1
+        per_page = 200
+        while True:
+            resp = sb_admin.auth.admin.list_users(page=page, per_page=per_page)  # type: ignore[attr-defined]
+            users = getattr(resp, "users", None) or (resp.get("users") if isinstance(resp, dict) else None)  # type: ignore[union-attr]
+            if not users:
+                break
+            for u in users:
+                uid = safe_str(getattr(u, "id", "") if not isinstance(u, dict) else u.get("id", "")).strip()
+                created_at = safe_str(getattr(u, "created_at", "") if not isinstance(u, dict) else u.get("created_at", "")).strip()
+                if not uid:
+                    continue
+                # created_at is ISO; lexicographic compare is safe for same format.
+                if created_at and created_at > cutoff_iso:
+                    continue
+                user_ids.append(uid)
+            if len(users) < per_page:
+                break
+            page += 1
+
+        if not user_ids:
+            return True, f"No users found at/before {cutoff_iso}."
+
+        rows = [{"user_id": uid, "plan": "grandfathered", "trade_limit": None} for uid in user_ids]
+        # Chunk to avoid request size limits.
+        updated = 0
+        chunk_size = 200
+        for i in range(0, len(rows), chunk_size):
+            chunk = rows[i : i + chunk_size]
+            sb_admin.table("entitlements").upsert(chunk, on_conflict="user_id").execute()
+            updated += len(chunk)
+
+        return True, f"Grandfathered {updated} users (cutoff {cutoff_iso})."
+    except Exception as e:
+        return False, safe_str(e)
+
+
 def insert_support_request(user_id: str, email: str, subject: str, message: str, page: str) -> bool:
     try:
         sb = authed_supabase()
@@ -4250,8 +4305,24 @@ else:
                                 "- STRIPE_CANCEL_URL\n"
                                 "- STRIPE_PRICE_ID_MONTHLY (or STRIPE_PRICE_ID)\n"
                                 "- STRIPE_PRICE_ID_QUARTERLY\n"
-                                "- STRIPE_PRICE_ID_YEARLY\n"
-                            )
+                            "- STRIPE_PRICE_ID_YEARLY\n"
+                        )
+
+                st.markdown("---")
+                st.markdown("**Admin: Grandfather Existing Users**")
+                st.caption(
+                    "This marks all accounts that exist right now as `grandfathered` (unlimited trades) so they keep access after paywall launch."
+                )
+                confirm = st.checkbox("I understand this grants unlimited access to existing users.", value=False, key="admin_grandfather_confirm")
+                if st.button("Grandfather all current users", use_container_width=True, key="admin_grandfather_now", disabled=not confirm):
+                    ok, msg = admin_grandfather_existing_users(datetime.utcnow())
+                    if ok:
+                        st.success(msg)
+                    else:
+                        st.error(
+                            f"Grandfathering failed: {msg}\n\n"
+                            "Make sure `SUPABASE_SERVICE_ROLE_KEY` is set in Streamlit secrets."
+                        )
 
             st.markdown("---")
             if st.button("Log out", key="sidebar_logout"):
