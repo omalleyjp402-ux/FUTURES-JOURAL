@@ -4242,17 +4242,16 @@ else:
                                 "We added it to `requirements.txt`; wait for Streamlit to redeploy, then try again."
                             )
                             st.caption("If it still fails after redeploy: check Streamlit logs for pip install errors.")
-                            return
-
-                        st.error(
-                            "Could not create a Checkout link. Make sure these Streamlit secrets exist:\n\n"
-                            "- STRIPE_SECRET_KEY\n"
-                            "- STRIPE_SUCCESS_URL\n"
-                            "- STRIPE_CANCEL_URL\n"
-                            "- STRIPE_PRICE_ID_MONTHLY (or STRIPE_PRICE_ID)\n"
-                            "- STRIPE_PRICE_ID_QUARTERLY\n"
-                            "- STRIPE_PRICE_ID_YEARLY\n"
-                        )
+                        else:
+                            st.error(
+                                "Could not create a Checkout link. Make sure these Streamlit secrets exist:\n\n"
+                                "- STRIPE_SECRET_KEY\n"
+                                "- STRIPE_SUCCESS_URL\n"
+                                "- STRIPE_CANCEL_URL\n"
+                                "- STRIPE_PRICE_ID_MONTHLY (or STRIPE_PRICE_ID)\n"
+                                "- STRIPE_PRICE_ID_QUARTERLY\n"
+                                "- STRIPE_PRICE_ID_YEARLY\n"
+                            )
 
             st.markdown("---")
             if st.button("Log out", key="sidebar_logout"):
