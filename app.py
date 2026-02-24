@@ -920,6 +920,7 @@ def render_public_sidebar(active: str) -> str:
             st.link_button("Log in / Sign up", auth_url, use_container_width=True)
         except Exception:
             st.markdown(f"[Log in / Sign up]({auth_url})")
+        st.caption("-> Access is free for life for now - won't last long.")
         st.caption("Payments not enabled yet.")
     return st.session_state.get("public_nav", active)
 
@@ -942,6 +943,7 @@ def render_landing_page() -> None:
                 st.link_button("Log in / Sign up", auth_url, use_container_width=True)
             except Exception:
                 st.markdown(f"[Log in / Sign up]({auth_url})")
+            st.caption("-> Access is free for life for now - won't last long.")
         with c3:
             st.markdown(" ")
             st.markdown(" ")
