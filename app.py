@@ -1121,16 +1121,38 @@ def render_public_router() -> None:
     render_landing_page()
 
 
-def create_stripe_checkout_session(user_id: str, user_email: str) -> Optional[str]:
+def _stripe_price_id_for_plan(plan: str) -> Optional[str]:
+    """
+    Supports multi-plan pricing.
+    Back-compat: STRIPE_PRICE_ID is treated as monthly if plan-specific ids aren't provided.
+    """
+    plan = safe_str(plan).strip().lower()
+    # Preferred per-plan keys
+    if plan in ("monthly", "month"):
+        return get_secret("STRIPE_PRICE_ID_MONTHLY") or get_secret("STRIPE_PRICE_ID")
+    if plan in ("quarterly", "3-month", "3month", "three-month", "three_month"):
+        return get_secret("STRIPE_PRICE_ID_QUARTERLY")
+    if plan in ("yearly", "annual", "year"):
+        return get_secret("STRIPE_PRICE_ID_YEARLY")
+    return None
+
+
+def create_stripe_checkout_session(
+    user_id: str,
+    user_email: str,
+    plan: str = "monthly",
+    *,
+    force_when_disabled: bool = False,
+) -> Optional[str]:
     """
     Returns a Stripe Checkout URL, or None if Stripe isn't configured.
     This is only used when STRIPE_ENABLED=true and Stripe secrets exist.
     """
-    if not STRIPE_ENABLED:
+    if not STRIPE_ENABLED and not force_when_disabled:
         return None
 
     stripe_secret = get_secret("STRIPE_SECRET_KEY")
-    price_id = get_secret("STRIPE_PRICE_ID")
+    price_id = _stripe_price_id_for_plan(plan)
     success_url = get_secret("STRIPE_SUCCESS_URL")
     cancel_url = get_secret("STRIPE_CANCEL_URL")
     if not (stripe_secret and price_id and success_url and cancel_url):
@@ -4164,6 +4186,56 @@ else:
                         st.error(
                             f"Could not start promo window: {msg}\n\n"
                             "Make sure you ran `sql/billing_config.sql` in the SAME Supabase project."
+                        )
+
+                st.markdown("---")
+                st.markdown("**Admin: Stripe Test Checkout Links**")
+                st.caption("Creates real Stripe Checkout Sessions using your `STRIPE_SECRET_KEY` (use test keys while testing).")
+                # Show detected price ids (helps prevent secret typos).
+                detected = {
+                    "monthly": bool(_stripe_price_id_for_plan("monthly")),
+                    "quarterly": bool(_stripe_price_id_for_plan("quarterly")),
+                    "yearly": bool(_stripe_price_id_for_plan("yearly")),
+                }
+                st.caption(
+                    "Price IDs set: "
+                    f"monthly={detected['monthly']} • quarterly={detected['quarterly']} • yearly={detected['yearly']}"
+                )
+                plan = st.selectbox(
+                    "Plan",
+                    ["monthly", "quarterly", "yearly"],
+                    index=0,
+                    key="admin_stripe_plan",
+                    help="Uses STRIPE_PRICE_ID_MONTHLY / QUARTERLY / YEARLY (monthly falls back to STRIPE_PRICE_ID).",
+                )
+                if st.button("Create Checkout Link", use_container_width=True, key="admin_create_checkout"):
+                    user_obj = st.session_state.get("user")
+                    email_val = (
+                        safe_str(user_obj.get("email"))
+                        if isinstance(user_obj, dict)
+                        else safe_str(getattr(user_obj, "email", ""))
+                    )
+                    url = create_stripe_checkout_session(
+                        user.id,
+                        email_val,
+                        plan=plan,
+                        force_when_disabled=True,
+                    )
+                    if url:
+                        st.code(url)
+                        try:
+                            st.link_button("Open Checkout", url, use_container_width=True)
+                        except Exception:
+                            st.markdown(f"[Open Checkout]({url})")
+                    else:
+                        st.error(
+                            "Could not create a Checkout link. Make sure these Streamlit secrets exist:\n\n"
+                            "- STRIPE_SECRET_KEY\n"
+                            "- STRIPE_SUCCESS_URL\n"
+                            "- STRIPE_CANCEL_URL\n"
+                            "- STRIPE_PRICE_ID_MONTHLY (or STRIPE_PRICE_ID)\n"
+                            "- STRIPE_PRICE_ID_QUARTERLY\n"
+                            "- STRIPE_PRICE_ID_YEARLY\n"
                         )
 
             st.markdown("---")
