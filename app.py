@@ -9,7 +9,7 @@ import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from urllib.parse import quote_plus
 
 import altair as alt
@@ -17,6 +17,11 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 from supabase import create_client, Client
+
+try:
+    from streamlit_cookies_manager import CookieManager  # type: ignore
+except Exception:
+    CookieManager = None  # type: ignore
 
 BRAND_NAME = "Tradylo"
 BRAND_TAGLINE = "Trading Journal"
@@ -241,6 +246,73 @@ def get_supabase() -> Client:
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 supabase = get_supabase()
+
+# ── Auth persistence (optional "Remember me") ────────────────────────────────
+
+def _cookie_manager():
+    """
+    Best-effort cookie manager.
+    If the dependency isn't available or not ready yet, we simply skip persistence.
+    """
+    if CookieManager is None:
+        return None
+    cm = st.session_state.get("_cookie_manager")
+    if cm is None:
+        try:
+            cm = CookieManager()
+        except Exception:
+            return None
+        st.session_state["_cookie_manager"] = cm
+    try:
+        if not cm.ready():
+            return None
+    except Exception:
+        return None
+    return cm
+
+
+def _clear_remember_me():
+    cm = _cookie_manager()
+    if not cm:
+        return
+    try:
+        cm["tradylo_refresh_token"] = ""
+        cm["tradylo_remember"] = ""
+        cm.save()
+    except Exception:
+        return
+
+
+def _maybe_restore_session_from_cookie():
+    """
+    If the user isn't logged in but we have a saved refresh token, restore session.
+    """
+    if st.session_state.get("user"):
+        return
+    cm = _cookie_manager()
+    if not cm:
+        return
+    remember = str(cm.get("tradylo_remember") or "").strip().lower()
+    if remember not in ("1", "true", "yes", "on"):
+        return
+    refresh_token = str(cm.get("tradylo_refresh_token") or "").strip()
+    if not refresh_token:
+        return
+    try:
+        res = supabase.auth.refresh_session(refresh_token)
+        if getattr(res, "user", None) is None or getattr(res, "session", None) is None:
+            _clear_remember_me()
+            return
+        st.session_state["user"] = res.user
+        st.session_state["access_token"] = res.session.access_token
+        st.session_state["refresh_token"] = res.session.refresh_token
+    except Exception:
+        _clear_remember_me()
+        return
+
+
+# Attempt restore as early as possible.
+_maybe_restore_session_from_cookie()
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 ACCOUNT_TYPES = ["Evaluation Account Data", "Funded Account Data", "Live Account Data"]
@@ -971,10 +1043,14 @@ def render_tour_page() -> None:
     st.subheader("Ready?")
     ref = safe_str(st.session_state.get("ref_code")).strip()
     auth_url = "?view=auth" + (f"&ref={quote_plus(ref)}" if ref else "")
-    try:
-        st.link_button("Create account / Log in", auth_url, use_container_width=True)
-    except Exception:
-        st.markdown(f"[Create account / Log in]({auth_url})")
+    if st.button("Create account / Log in", use_container_width=True, key="demo_login_btn"):
+        try:
+            st.query_params["view"] = "auth"
+            if ref:
+                st.query_params["ref"] = ref
+        except Exception:
+            pass
+        st.rerun()
     render_public_footer()
 
 
@@ -984,6 +1060,14 @@ def render_public_sidebar(active: str) -> str:
     """
     ref = safe_str(st.session_state.get("ref_code")).strip()
     auth_url = "?view=auth" + (f"&ref={quote_plus(ref)}" if ref else "")
+    def _go_auth():
+        try:
+            st.query_params["view"] = "auth"
+            if ref:
+                st.query_params["ref"] = ref
+        except Exception:
+            pass
+        st.rerun()
 
     with st.sidebar:
         # A compact brand header in the sidebar for the public shell.
@@ -995,10 +1079,8 @@ def render_public_sidebar(active: str) -> str:
         idx = options.index(active)
         choice = st.radio("Menu", options, index=idx, label_visibility="collapsed", key="public_nav")
         st.markdown("---")
-        try:
-            st.link_button("Log in / Sign up", auth_url, use_container_width=True)
-        except Exception:
-            st.markdown(f"[Log in / Sign up]({auth_url})")
+        if st.button("Log in / Sign up", use_container_width=True, key="public_login_btn"):
+            _go_auth()
         st.caption("-> Access is free for life for now - won't last long.")
         st.caption("Payments not enabled yet.")
     return st.session_state.get("public_nav", active)
@@ -1008,6 +1090,14 @@ def render_landing_page() -> None:
     # Sidebar handles the brand in the public shell; keep the main landing clean.
     ref = safe_str(st.session_state.get("ref_code")).strip()
     auth_url = "?view=auth" + (f"&ref={quote_plus(ref)}" if ref else "")
+    def _go_auth():
+        try:
+            st.query_params["view"] = "auth"
+            if ref:
+                st.query_params["ref"] = ref
+        except Exception:
+            pass
+        st.rerun()
 
     top = st.container()
     with top:
@@ -1018,10 +1108,8 @@ def render_landing_page() -> None:
         with c2:
             st.markdown(" ")
             st.markdown(" ")
-            try:
-                st.link_button("Log in / Sign up", auth_url, use_container_width=True)
-            except Exception:
-                st.markdown(f"[Log in / Sign up]({auth_url})")
+            if st.button("Log in / Sign up", use_container_width=True, key="landing_login_btn"):
+                _go_auth()
             st.caption("-> Access is free for life for now - won't last long.")
         with c3:
             st.markdown(" ")
@@ -1882,11 +1970,19 @@ def show_auth():
     with tab_login:
         email = st.text_input("Email", key="login_email")
         password = st.text_input("Password", type="password", key="login_password")
+        remember_me = st.checkbox("Remember me on this device", value=True, key="remember_me")
         if st.button("Log in"):
             try:
                 res = supabase.auth.sign_in_with_password({"email": email, "password": password})
                 st.session_state["user"] = res.user
                 st.session_state["access_token"] = res.session.access_token
+                st.session_state["refresh_token"] = res.session.refresh_token
+                if remember_me:
+                    cm = _cookie_manager()
+                    if cm:
+                        cm["tradylo_remember"] = "true"
+                        cm["tradylo_refresh_token"] = res.session.refresh_token
+                        cm.save()
                 st.rerun()
             except Exception as e:
                 msg = safe_str(e)
@@ -4351,6 +4447,7 @@ else:
             st.markdown("---")
             if st.button("Log out", key="sidebar_logout"):
                 supabase.auth.sign_out()
+                _clear_remember_me()
                 st.session_state.clear()
                 st.rerun()
 
