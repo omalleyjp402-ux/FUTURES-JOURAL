@@ -306,6 +306,7 @@ STRIPE_ENABLED = truthy(get_secret("STRIPE_ENABLED", "false"))
 SUPPORT_CONTACT_EMAIL = str(get_secret("SUPPORT_CONTACT_EMAIL", "") or "").strip()
 PUBLIC_CONTACT_EMAIL = str(get_secret("PUBLIC_CONTACT_EMAIL", "support@tradylojournal.com") or "").strip()
 ADMIN_EMAILS = str(get_secret("ADMIN_EMAILS", "") or "").strip()
+TRIAL_DAYS = int(str(get_secret("TRIAL_DAYS", "0") or "0").strip() or 0)
 
 # Pricing (prepared only; not displayed publicly until you say go)
 REFUND_WINDOW_DAYS = 1
@@ -1140,6 +1141,14 @@ def create_stripe_checkout_session(user_id: str, user_email: str) -> Optional[st
 
     try:
         stripe.api_key = stripe_secret
+        subscription_data: Dict[str, Any] = {}
+        # Optional free trial that still requires card details up front.
+        # Stripe will automatically charge at the end of the trial.
+        if TRIAL_DAYS and TRIAL_DAYS > 0:
+            subscription_data["trial_period_days"] = int(TRIAL_DAYS)
+            # If payment method is missing at trial end, cancel (avoids past_due surprises).
+            subscription_data["trial_settings"] = {"end_behavior": {"missing_payment_method": "cancel"}}
+
         session = stripe.checkout.Session.create(
             mode="subscription",
             line_items=[{"price": price_id, "quantity": 1}],
@@ -1149,6 +1158,9 @@ def create_stripe_checkout_session(user_id: str, user_email: str) -> Optional[st
             client_reference_id=user_id,
             metadata={"user_id": user_id},
             allow_promotion_codes=True,
+            # Collect card details even when trialing.
+            payment_method_collection="always" if (TRIAL_DAYS and TRIAL_DAYS > 0) else "if_required",
+            subscription_data=subscription_data or None,
         )
         return getattr(session, "url", None)
     except Exception:
