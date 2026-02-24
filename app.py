@@ -3987,12 +3987,28 @@ else:
         st.session_state["nav_section"] = st.session_state.get("sidebar_nav_section", section_options[0])
         st.session_state["top_nav_section"] = st.session_state["nav_section"]
 
+    def _request_nav(section_name: str) -> None:
+        """
+        Request navigation to a section on the *next* rerun.
+        We can't set widget-backed keys (like top_nav_section) after the widget is created
+        in the same run, otherwise Streamlit raises StreamlitAPIException.
+        """
+        st.session_state["_nav_request"] = section_name
+        st.rerun()
+
     # Query param can deep-link to a section (used by some Stripe URLs).
     section_param = get_query_param("section").strip()
     if "nav_section" not in st.session_state:
         st.session_state["nav_section"] = section_param if section_param in section_options else section_options[0]
     if section_param and section_param in section_options:
         st.session_state["nav_section"] = section_param
+
+    # Apply any pending navigation request *before* we create navigation widgets.
+    pending = safe_str(st.session_state.pop("_nav_request", "")).strip()
+    if pending and pending in section_options:
+        st.session_state["nav_section"] = pending
+        st.session_state["top_nav_section"] = pending
+        st.session_state["sidebar_nav_section"] = pending
 
     # Initialize widget keys to the canonical nav value.
     if "top_nav_section" not in st.session_state:
@@ -4015,19 +4031,13 @@ else:
             on_change=_sync_nav_from_top,
         )
     if top_add:
-        st.session_state["nav_section"] = "New Trade"
-        st.session_state["top_nav_section"] = "New Trade"
-        st.session_state["sidebar_nav_section"] = "New Trade"
-        st.rerun()
+        _request_nav("New Trade")
 
     with st.sidebar:
         st.markdown("### Navigation")
         add_trade = st.button("+ Add Trade", type="primary", use_container_width=True, key="sidebar_add_trade")
         if add_trade:
-            st.session_state["nav_section"] = "New Trade"
-            st.session_state["top_nav_section"] = "New Trade"
-            st.session_state["sidebar_nav_section"] = "New Trade"
-            st.rerun()
+            _request_nav("New Trade")
 
         st.radio(
             "Go to",
