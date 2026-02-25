@@ -611,6 +611,73 @@ def admin_grandfather_existing_users(cutoff_utc: Optional[datetime] = None) -> t
     except Exception as e:
         return False, safe_str(e)
 
+def admin_system_status() -> Dict[str, Any]:
+    """
+    Admin-only: quick health/status snapshot for go-live readiness.
+    Best-effort; never raises.
+    """
+    out: Dict[str, Any] = {
+        "flags": {
+            "PAYWALL_ENABLED": bool(PAYWALL_ENABLED),
+            "STRIPE_ENABLED": bool(STRIPE_ENABLED),
+            "AFFILIATES_ENABLED": bool(AFFILIATES_ENABLED),
+            "TRIAL_DAYS": int(TRIAL_DAYS or 0),
+        },
+        "secrets_present": {
+            "SUPABASE_URL": bool(SUPABASE_URL),
+            "SUPABASE_KEY": bool(SUPABASE_KEY),
+            "SUPABASE_SERVICE_ROLE_KEY": bool(str(get_secret("SUPABASE_SERVICE_ROLE_KEY", "") or "").strip()),
+            "STRIPE_SECRET_KEY": bool(str(get_secret("STRIPE_SECRET_KEY", "") or "").strip()),
+            "STRIPE_WEBHOOK_SECRET": bool(str(get_secret("STRIPE_WEBHOOK_SECRET", "") or "").strip()),
+            "STRIPE_SUCCESS_URL": bool(str(get_secret("STRIPE_SUCCESS_URL", "") or "").strip()),
+            "STRIPE_CANCEL_URL": bool(str(get_secret("STRIPE_CANCEL_URL", "") or "").strip()),
+            "STRIPE_PRICE_ID_MONTHLY": bool(str(get_secret("STRIPE_PRICE_ID_MONTHLY", "") or "").strip() or str(get_secret("STRIPE_PRICE_ID", "") or "").strip()),
+            "STRIPE_PRICE_ID_QUARTERLY": bool(str(get_secret("STRIPE_PRICE_ID_QUARTERLY", "") or "").strip()),
+            "STRIPE_PRICE_ID_YEARLY": bool(str(get_secret("STRIPE_PRICE_ID_YEARLY", "") or "").strip()),
+        },
+        "dependencies": {},
+        "db": {},
+    }
+
+    # Dependency check
+    try:
+        import stripe  # type: ignore  # noqa: F401
+
+        out["dependencies"]["stripe_sdk_installed"] = True
+    except Exception as e:
+        out["dependencies"]["stripe_sdk_installed"] = False
+        out["dependencies"]["stripe_sdk_error"] = safe_str(e)
+
+    # DB checks (service role preferred)
+    try:
+        service_key = str(get_secret("SUPABASE_SERVICE_ROLE_KEY", "") or "").strip()
+        sb_admin = create_client(SUPABASE_URL, service_key) if service_key else authed_supabase()
+
+        # Latest webhook event
+        try:
+            res = sb_admin.table("stripe_events").select("event_type,received_at").order("received_at", desc=True).limit(1).execute()
+            out["db"]["last_stripe_event"] = (res.data[0] if res.data else None)
+        except Exception as e:
+            out["db"]["last_stripe_event_error"] = safe_str(e)
+
+        # Promo window config
+        try:
+            res = sb_admin.table("billing_config").select("*").eq("id", 1).maybe_single().execute()
+            out["db"]["billing_config"] = res.data or None
+        except Exception as e:
+            out["db"]["billing_config_error"] = safe_str(e)
+
+        # Pending commissions count (best-effort)
+        try:
+            res = sb_admin.table("affiliate_commissions").select("id", count="exact").eq("status", "pending").execute()
+            out["db"]["affiliate_commissions_pending"] = int(getattr(res, "count", 0) or 0)
+        except Exception as e:
+            out["db"]["affiliate_commissions_pending_error"] = safe_str(e)
+    except Exception as e:
+        out["db"]["error"] = safe_str(e)
+
+    return out
+
 
 def insert_support_request(user_id: str, email: str, subject: str, message: str, page: str) -> bool:
     try:
@@ -4484,6 +4551,14 @@ else:
                             f"Grandfathering failed: {msg}\n\n"
                             "Make sure `SUPABASE_SERVICE_ROLE_KEY` is set in Streamlit secrets."
                         )
+
+                st.markdown("---")
+                st.markdown("**Admin: System Status**")
+                if st.button("Refresh status", use_container_width=True, key="admin_status_refresh"):
+                    st.session_state["_admin_status"] = admin_system_status()
+                if "_admin_status" not in st.session_state:
+                    st.session_state["_admin_status"] = admin_system_status()
+                st.json(st.session_state.get("_admin_status") or {})
 
             st.markdown("---")
             if st.button("Log out", key="sidebar_logout"):
