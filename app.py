@@ -532,6 +532,52 @@ def admin_start_affiliate_promo_window(days: int = 30, promo_pct: float = 30.0, 
     except Exception as e:
         return False, safe_str(e)
 
+def admin_load_all_referrals() -> pd.DataFrame:
+    """
+    Admin-only: load all referral rows (requires service role key).
+    Shows exactly which affiliate/code referred each user.
+    """
+    try:
+        service_key = str(get_secret("SUPABASE_SERVICE_ROLE_KEY", "") or "").strip()
+        if not service_key:
+            return pd.DataFrame()
+        sb_admin = create_client(SUPABASE_URL, service_key)
+        res = sb_admin.table("referrals").select("referred_user_id,affiliate_user_id,code,created_at").order("created_at", desc=True).limit(5000).execute()
+        return pd.DataFrame(res.data or [])
+    except Exception:
+        return pd.DataFrame()
+
+
+def admin_load_all_commissions() -> pd.DataFrame:
+    """
+    Admin-only: load all affiliate commission rows (requires service role key).
+    """
+    try:
+        service_key = str(get_secret("SUPABASE_SERVICE_ROLE_KEY", "") or "").strip()
+        if not service_key:
+            return pd.DataFrame()
+        sb_admin = create_client(SUPABASE_URL, service_key)
+        cols = "id,affiliate_user_id,referred_user_id,stripe_invoice_id,amount_cents,commission_cents,currency,status,available_at,stripe_transfer_id,paid_at,created_at"
+        res = sb_admin.table("affiliate_commissions").select(cols).order("created_at", desc=True).limit(5000).execute()
+        return pd.DataFrame(res.data or [])
+    except Exception:
+        return pd.DataFrame()
+
+
+def admin_load_all_payout_accounts() -> pd.DataFrame:
+    """
+    Admin-only: load affiliate payout account mappings (requires service role key).
+    """
+    try:
+        service_key = str(get_secret("SUPABASE_SERVICE_ROLE_KEY", "") or "").strip()
+        if not service_key:
+            return pd.DataFrame()
+        sb_admin = create_client(SUPABASE_URL, service_key)
+        res = sb_admin.table("affiliate_payout_accounts").select("affiliate_user_id,stripe_account_id,status,updated_at,created_at").order("updated_at", desc=True).limit(5000).execute()
+        return pd.DataFrame(res.data or [])
+    except Exception:
+        return pd.DataFrame()
+
 
 def admin_grandfather_existing_users(cutoff_utc: Optional[datetime] = None) -> tuple[bool, str]:
     """
@@ -1785,6 +1831,66 @@ def render_affiliates_page(user_id: str) -> None:
                     st.success(msg)
                 else:
                     st.error(msg)
+
+        with st.expander("Admin: referral + commission audit", expanded=False):
+            st.caption("This is the full pipeline: which code referred a user, what commissions were generated, and payout status.")
+            df_ref_all = admin_load_all_referrals()
+            df_com_all = admin_load_all_commissions()
+            df_pay_all = admin_load_all_payout_accounts()
+
+            tab_over, tab_ref, tab_com, tab_pay = st.tabs(["Overview", "Referrals", "Commissions", "Payout Accounts"])
+
+            with tab_over:
+                # Aggregate commissions per referred user.
+                overview = None
+                if not df_com_all.empty:
+                    tmp = df_com_all.copy()
+                    tmp["commission_usd"] = pd.to_numeric(tmp.get("commission_cents"), errors="coerce").fillna(0) / 100.0
+                    tmp["amount_usd"] = pd.to_numeric(tmp.get("amount_cents"), errors="coerce").fillna(0) / 100.0
+                    agg = (
+                        tmp.groupby(["affiliate_user_id", "referred_user_id"], as_index=False)
+                        .agg(
+                            invoices=("stripe_invoice_id", "nunique"),
+                            total_amount_usd=("amount_usd", "sum"),
+                            total_commission_usd=("commission_usd", "sum"),
+                            last_status=("status", "first"),
+                            last_paid_at=("paid_at", "first"),
+                        )
+                    )
+                    overview = agg
+                if overview is None:
+                    overview = pd.DataFrame(columns=["affiliate_user_id", "referred_user_id", "invoices", "total_amount_usd", "total_commission_usd", "last_status", "last_paid_at"])
+
+                if not df_ref_all.empty:
+                    overview = overview.merge(
+                        df_ref_all[["affiliate_user_id", "referred_user_id", "code", "created_at"]].rename(columns={"created_at": "referred_at"}),
+                        on=["affiliate_user_id", "referred_user_id"],
+                        how="left",
+                    )
+                cols = ["code", "referred_user_id", "affiliate_user_id", "referred_at", "invoices", "total_amount_usd", "total_commission_usd", "last_status", "last_paid_at"]
+                for c in cols:
+                    if c not in overview.columns:
+                        overview[c] = None
+                st.dataframe(overview[cols], use_container_width=True, hide_index=True)
+                st.caption("If there are 2 affiliates, you will see exactly which code referred each user (one referral per user).")
+
+            with tab_ref:
+                if df_ref_all.empty:
+                    st.info("No referral rows found yet.")
+                else:
+                    st.dataframe(df_ref_all, use_container_width=True, hide_index=True)
+
+            with tab_com:
+                if df_com_all.empty:
+                    st.info("No commissions found yet.")
+                else:
+                    st.dataframe(df_com_all, use_container_width=True, hide_index=True)
+
+            with tab_pay:
+                if df_pay_all.empty:
+                    st.info("No payout accounts mapped yet.")
+                else:
+                    st.dataframe(df_pay_all, use_container_width=True, hide_index=True)
 
     codes = load_my_affiliate_codes(user_id)
     if not codes:
