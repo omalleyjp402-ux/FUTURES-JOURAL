@@ -1,0 +1,42 @@
+
+name: Affiliate payouts (cron)
+
+on:
+  schedule:
+    # Daily at 08:10 UTC
+    - cron: "10 8 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run in dry-run mode (true/false)"
+        required: false
+        default: "true"
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Call Supabase affiliate-payouts function
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          AFFILIATE_PAYOUTS_SECRET: ${{ secrets.AFFILIATE_PAYOUTS_SECRET }}
+          INPUT_DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          DRY_RUN="${INPUT_DRY_RUN:-false}"
+          if [ "$DRY_RUN" != "true" ] && [ "$DRY_RUN" != "false" ]; then
+            DRY_RUN="false"
+          fi
+
+          echo "Running affiliate payouts. dry_run=$DRY_RUN"
+          RESP="$(curl -sS -L -X POST "${SUPABASE_URL}/functions/v1/affiliate-payouts" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "x-tradylo-admin: ${AFFILIATE_PAYOUTS_SECRET}" \
+            -H "Content-Type: application/json" \
+            --data "{\"dry_run\": ${DRY_RUN}}")"
+
+          echo "$RESP"
+          echo "$RESP" | grep -q '"ok":true' || (echo "payout run failed" && exit 1)
