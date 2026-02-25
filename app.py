@@ -96,9 +96,6 @@ div[data-testid="stDataFrame"]{
 .cal-week-label {font-size:11px;color:rgba(148,163,184,0.9);text-transform:uppercase;letter-spacing:.10em}
 .cal-week-total {font-size:14px;font-weight:700;color:rgba(230,237,243,0.98)}
 .cal-week-trades {font-size:11px;color:rgba(148,163,184,0.92)}
-.cal-link {display:block; color:inherit; text-decoration:none;}
-.cal-link:visited {color:inherit;}
-.cal-link:hover {text-decoration:none;}
 @media (max-width: 900px) {.calendar-wrap {grid-template-columns:1fr;}}
 
 /* Buttons: give a bit more "product" feel */
@@ -3130,13 +3127,11 @@ def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
             pnl_text = format_money(value) if in_month and value != 0 else ""
             trades_text = f"{trades} trades" if in_month and trades else ""
             day_class = "cal-cell" + ("" if in_month else " cal-off")
-            href = ""
-            if in_month:
-                # Keep user on the same section even if Streamlit starts a new session.
-                # (We now have "Remember me" to keep users logged in.)
-                href = f"?section=PnL%20Calendar&day={day.strftime('%Y-%m-%d')}"
-
-            inner = (
+            link_date = day.strftime("%Y-%m-%d")
+            # NOTE: We intentionally avoid clickable <a href> links here.
+            # Streamlit treats this as a full navigation and can create a new session,
+            # which would log users out (because auth is stored in session_state).
+            cell_html.append(
                 "<div class='{cls}' style='background:{bg};'>"
                 "<div class='cal-day'>{day}</div>"
                 "<div class='cal-pnl'>{pnl}</div>"
@@ -3149,21 +3144,16 @@ def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
                     trades=trades_text,
                 )
             )
-            if href:
-                inner = f"<a class='cal-link' href='{href}' target='_self'>{inner}</a>"
-            cell_html.append(inner)
         week_label = f"Week {week_idx}"
         week_total_text = format_money(week_total) if week_total != 0 else "$0"
         week_date_map[str(week_idx)] = [d.strftime("%Y-%m-%d") for d in week_dates]
-        week_inner = (
+        week_html.append(
             "<div class='cal-week'>"
             f"<div class='cal-week-label'>{week_label}</div>"
             f"<div class='cal-week-total'>{week_total_text}</div>"
             f"<div class='cal-week-trades'>{week_trades} trades</div>"
             "</div>"
         )
-        week_href = f"?section=PnL%20Calendar&week={week_idx}"
-        week_html.append(f"<a class='cal-link' href='{week_href}' target='_self'>{week_inner}</a>")
         week_idx += 1
 
     st.markdown(
