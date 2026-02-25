@@ -417,6 +417,11 @@ def invoke_edge_function(function_name: str, payload: dict) -> tuple[bool, str]:
         # These headers are safe for Edge Function invocation (do NOT use service role in Streamlit).
         req.add_header("apikey", SUPABASE_KEY)
         req.add_header("Authorization", f"Bearer {SUPABASE_KEY}")
+        # Optional guard for sensitive functions (recommended).
+        if function_name == "affiliate-payouts":
+            guard = str(get_secret("AFFILIATE_PAYOUTS_SECRET", "") or "").strip()
+            if guard:
+                req.add_header("x-tradylo-admin", guard)
         with urllib.request.urlopen(req, timeout=30) as resp:
             body = resp.read().decode("utf-8", errors="replace")
             return True, body

@@ -125,6 +125,15 @@ Deno.serve(async (req) => {
     if (got !== guard) return json({ ok: false, error: "Unauthorized" }, 401);
   }
 
+  // Default to dry-run for safety.
+  let dryRun = true;
+  try {
+    const body = await req.json().catch(() => ({}));
+    dryRun = Boolean((body as any)?.dry_run ?? true);
+  } catch (_) {
+    dryRun = true;
+  }
+
   const nowIso = new Date().toISOString();
 
   // Fetch a small batch of commissions that are past the refund window and not yet transferred.
@@ -145,6 +154,7 @@ Deno.serve(async (req) => {
   let processed = 0;
   let paid = 0;
   const skipped: Array<Record<string, string>> = [];
+  const results: Array<Record<string, string>> = [];
 
   for (const row of rows) {
     processed += 1;
@@ -171,6 +181,16 @@ Deno.serve(async (req) => {
     const currency = (row.currency || "usd").toString().toLowerCase();
 
     try {
+      if (dryRun) {
+        results.push({
+          id: row.id,
+          stripe_invoice_id: row.stripe_invoice_id ?? "",
+          status: "dry_run_would_pay",
+          destination,
+        });
+        continue;
+      }
+
       const transfer = await stripe.transfers.create(
         {
           amount,
@@ -189,6 +209,12 @@ Deno.serve(async (req) => {
       if (transferId) {
         await markPaid(row.id, transferId);
         paid += 1;
+        results.push({
+          id: row.id,
+          stripe_invoice_id: row.stripe_invoice_id ?? "",
+          status: "paid",
+          stripe_transfer_id: transferId,
+        });
       } else {
         skipped.push({ id: row.id, reason: "transfer_missing_id", destination });
       }
@@ -196,11 +222,17 @@ Deno.serve(async (req) => {
       const errStr = String(err);
       const reason = `stripe_error:${errStr}`.slice(0, 180);
       skipped.push({ id: row.id, reason, destination });
+      results.push({
+        id: row.id,
+        stripe_invoice_id: row.stripe_invoice_id ?? "",
+        status: "failed",
+        error: errStr.slice(0, 240),
+      });
       if (isPermanentStripeError(errStr)) {
         await markFailed(row.id);
       }
     }
   }
 
-  return json({ ok: true, processed, paid, skipped });
+  return json({ ok: true, processed, paid, skipped, dry_run: dryRun, results });
 });
