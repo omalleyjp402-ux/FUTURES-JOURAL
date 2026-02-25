@@ -3107,78 +3107,61 @@ def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
             return f"rgba(34, 197, 94, {alpha:.3f})"
         return f"rgba(239, 68, 68, {alpha:.3f})"
 
+    def _set_query_params(params: Dict[str, str]) -> None:
+        try:
+            for k, v in params.items():
+                st.query_params[k] = v
+        except Exception:
+            pass
+
+    def _pick_day(day_str: str) -> None:
+        st.session_state["calendar_selected_day"] = day_str
+        _set_query_params({"section": "PnL Calendar", "day": day_str})
+        st.rerun()
+
+    def _pick_week(week_idx: int) -> None:
+        st.session_state["calendar_selected_week"] = str(week_idx)
+        _set_query_params({"section": "PnL Calendar", "week": str(week_idx)})
+        st.rerun()
+
     cal = calendar.Calendar(firstweekday=6)
     weeks = cal.monthdatescalendar(year, month)
-    day_names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-    header_html = "".join([f"<div class='cal-head'>{d}</div>" for d in day_names])
-    cell_html = []
-    week_html = []
-    week_date_map = {}
-    week_idx = 1
-    for week in weeks:
-        week_total = 0
-        week_trades = 0
-        week_dates = []
-        for day in week:
-            in_month = day.month == month
-            value, trades = month_daily.get(day, (0, 0)) if in_month else (0, 0)
-            if in_month:
-                week_total += value
-                week_trades += trades
-                week_dates.append(day)
-            bg = pnl_color(value) if in_month else "rgba(148, 163, 184, 0.04)"
-            pnl_text = format_money(value) if in_month and value != 0 else ""
-            trades_text = f"{trades} trades" if in_month and trades else ""
-            day_class = "cal-cell" + ("" if in_month else " cal-off")
-            href = ""
-            if in_month:
-                # Keep user on the same section even if Streamlit starts a new session.
-                # (We now have "Remember me" to keep users logged in.)
-                href = f"?section=PnL%20Calendar&day={day.strftime('%Y-%m-%d')}"
+    week_date_map: Dict[str, List[str]] = {}
 
-            inner = (
-                "<div class='{cls}' style='background:{bg};'>"
-                "<div class='cal-day'>{day}</div>"
-                "<div class='cal-pnl'>{pnl}</div>"
-                "<div class='cal-trades'>{trades}</div>"
-                "</div>".format(
-                    cls=day_class,
-                    bg=bg,
-                    day=day.day,
-                    pnl=pnl_text,
-                    trades=trades_text,
-                )
-            )
-            if href:
-                inner = f"<a class='cal-link' href='{href}' target='_self'>{inner}</a>"
-            cell_html.append(inner)
-        week_label = f"Week {week_idx}"
-        week_total_text = format_money(week_total) if week_total != 0 else "$0"
-        week_date_map[str(week_idx)] = [d.strftime("%Y-%m-%d") for d in week_dates]
-        week_inner = (
-            "<div class='cal-week'>"
-            f"<div class='cal-week-label'>{week_label}</div>"
-            f"<div class='cal-week-total'>{week_total_text}</div>"
-            f"<div class='cal-week-trades'>{week_trades} trades</div>"
-            "</div>"
-        )
-        week_href = f"?section=PnL%20Calendar&week={week_idx}"
-        week_html.append(f"<a class='cal-link' href='{week_href}' target='_self'>{week_inner}</a>")
-        week_idx += 1
+    # Render as native Streamlit widgets (no <a href>), so clicks never create a new session.
+    left, right = st.columns([4, 1])
+    with left:
+        header_cols = st.columns(7)
+        for i, d in enumerate(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]):
+            header_cols[i].caption(d)
 
-    st.markdown(
-        "<div class='calendar-card'>"
-        "<div class='calendar-wrap'>"
-        "<div class='calendar-grid'>{header}{cells}</div>"
-        "<div class='calendar-weeks'>{weeks}</div>"
-        "</div>"
-        "</div>".format(
-            header=header_html,
-            cells="".join(cell_html),
-            weeks="".join(week_html),
-        ),
-        unsafe_allow_html=True,
-    )
+        for week in weeks:
+            row_cols = st.columns(7)
+            for i, day in enumerate(week):
+                in_month = day.month == month
+                value, trades = month_daily.get(day, (0, 0)) if in_month else (0, 0)
+                pnl_txt = format_money(value) if in_month and value != 0 else ""
+                trades_txt = f"{trades}t" if in_month and trades else ""
+                label = f"{day.day} {pnl_txt} {trades_txt}".strip()
+                day_str = day.strftime("%Y-%m-%d")
+                key = f"calbtn_{year}_{month}_{day_str}"
+                # Provide a subtle visual hint without breaking theme.
+                chip = "🟩" if (in_month and value > 0) else ("🟥" if (in_month and value < 0) else ("⬛" if in_month else ""))
+                btn_label = (chip + " " + label).strip() if in_month else str(day.day)
+                if row_cols[i].button(btn_label, key=key, use_container_width=True, disabled=not in_month):
+                    _pick_day(day_str)
+
+    with right:
+        st.caption("Weeks")
+        for idx, week in enumerate(weeks, start=1):
+            week_dates = [d for d in week if d.month == month]
+            week_date_map[str(idx)] = [d.strftime("%Y-%m-%d") for d in week_dates]
+            week_total = sum(month_daily.get(d, (0, 0))[0] for d in week_dates)
+            week_trades = sum(month_daily.get(d, (0, 0))[1] for d in week_dates)
+            label = f"Week {idx}\n{format_money(week_total)} · {week_trades}t"
+            if st.button(label, key=f"weekbtn_{year}_{month}_{idx}", use_container_width=True):
+                _pick_week(idx)
+
     st.session_state["calendar_week_date_map"] = week_date_map
 
 
