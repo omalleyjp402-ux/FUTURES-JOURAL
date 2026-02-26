@@ -2228,7 +2228,9 @@ def show_auth():
         remember_me = st.checkbox("Remember me on this device", value=True, key="remember_me")
         if st.button("Log in"):
             try:
-                res = supabase.auth.sign_in_with_password({"email": email, "password": password})
+                email_clean = safe_str(email).strip()
+                password_clean = safe_str(password).strip()
+                res = supabase.auth.sign_in_with_password({"email": email_clean, "password": password_clean})
                 st.session_state["user"] = res.user
                 st.session_state["access_token"] = res.session.access_token
                 st.session_state["refresh_token"] = res.session.refresh_token
@@ -2252,7 +2254,9 @@ def show_auth():
         password = st.text_input("Password (min 6 chars)", type="password", key="signup_password")
         if st.button("Sign up"):
             try:
-                res = supabase.auth.sign_up({"email": email, "password": password})
+                email_clean = safe_str(email).strip()
+                password_clean = safe_str(password).strip()
+                res = supabase.auth.sign_up({"email": email_clean, "password": password_clean})
                 st.success("Account created! You can log in now.")
             except Exception as e:
                 st.error(f"Sign up failed: {e}")
