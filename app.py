@@ -2222,14 +2222,26 @@ def show_auth():
     render_brand_header(center=True)
     tab_login, tab_signup = st.tabs(["Log in", "Sign up"])
 
+    def _clean_cred(s: str, *, lower: bool = False) -> str:
+        # Mobile keyboards/password managers sometimes add non-breaking spaces.
+        s = safe_str(s).replace("\u00A0", " ").strip()
+        return s.lower() if lower else s
+
     with tab_login:
         email = st.text_input("Email", key="login_email")
         password = st.text_input("Password", type="password", key="login_password")
         remember_me = st.checkbox("Remember me on this device", value=True, key="remember_me")
+        forgot = st.button("Forgot password?", key="forgot_password")
+        if forgot:
+            try:
+                supabase.auth.reset_password_for_email(_clean_cred(email, lower=True))
+                st.success("Password reset email sent (check inbox/spam).")
+            except Exception as e:
+                st.error(f"Could not send reset email: {e}")
         if st.button("Log in"):
             try:
-                email_clean = safe_str(email).strip()
-                password_clean = safe_str(password).strip()
+                email_clean = _clean_cred(email, lower=True)
+                password_clean = _clean_cred(password)
                 res = supabase.auth.sign_in_with_password({"email": email_clean, "password": password_clean})
                 st.session_state["user"] = res.user
                 st.session_state["access_token"] = res.session.access_token
@@ -2254,8 +2266,8 @@ def show_auth():
         password = st.text_input("Password (min 6 chars)", type="password", key="signup_password")
         if st.button("Sign up"):
             try:
-                email_clean = safe_str(email).strip()
-                password_clean = safe_str(password).strip()
+                email_clean = _clean_cred(email, lower=True)
+                password_clean = _clean_cred(password)
                 res = supabase.auth.sign_up({"email": email_clean, "password": password_clean})
                 st.success("Account created! You can log in now.")
             except Exception as e:
