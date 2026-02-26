@@ -4427,11 +4427,19 @@ else:
         st.rerun()
 
     # Query param can deep-link to a section (used by some Stripe URLs).
+    # IMPORTANT: treat it as a one-time (per value) deep link; otherwise the sidebar can't change pages
+    # because the URL keeps forcing nav_section back on every rerun.
     section_param = get_query_param("section").strip()
     if "nav_section" not in st.session_state:
         st.session_state["nav_section"] = section_param if section_param in section_options else section_options[0]
+
     if section_param and section_param in section_options:
-        st.session_state["nav_section"] = section_param
+        last_applied = safe_str(st.session_state.get("_applied_section_param_value")).strip()
+        if section_param != last_applied:
+            st.session_state["nav_section"] = section_param
+            st.session_state["top_nav_section"] = section_param
+            st.session_state["sidebar_nav_section"] = section_param
+            st.session_state["_applied_section_param_value"] = section_param
 
     # Apply any pending navigation request *before* we create navigation widgets.
     pending = safe_str(st.session_state.pop("_nav_request", "")).strip()
