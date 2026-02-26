@@ -150,6 +150,42 @@ section[data-testid="stSidebar"] .sidebar-usercard .value {
   font-weight: 600;
   word-break: break-word;
 }
+section[data-testid="stSidebar"] .sidebar-usercard .plan-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-top:6px;
+}
+section[data-testid="stSidebar"] .sidebar-usercard .badge{
+  display:inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: rgba(230,237,243,0.95);
+  white-space: nowrap;
+}
+section[data-testid="stSidebar"] .sidebar-usercard .badge.pro{
+  border-color: rgba(56,189,248,0.28);
+  background: rgba(56,189,248,0.10);
+}
+section[data-testid="stSidebar"] .sidebar-usercard .badge.trial{
+  border-color: rgba(124,58,237,0.30);
+  background: rgba(124,58,237,0.14);
+}
+section[data-testid="stSidebar"] .sidebar-usercard .badge.free{
+  border-color: rgba(148,163,184,0.22);
+  background: rgba(148,163,184,0.08);
+}
+section[data-testid="stSidebar"] .sidebar-usercard .badge.grandfathered{
+  border-color: rgba(34,197,94,0.26);
+  background: rgba(34,197,94,0.10);
+}
 
  .brand-row {display:flex;align-items:center;gap:12px;margin:6px 0 12px;}
  .brand-row.center {justify-content:center;text-align:center;flex-direction:column;}
@@ -4694,11 +4730,33 @@ else:
         else:
             email = safe_str(getattr(user_obj, "email", ""))
         if email:
+            # Plan badge (best-effort; doesn't create entitlements unless you enabled paywall elsewhere)
+            ent = get_entitlement(user.id)
+            plan_raw = safe_str((ent or {}).get("plan")).strip().lower()
+            sub_status = safe_str((ent or {}).get("subscription_status")).strip().lower()
+            if plan_raw in ("grandfathered", "lifetime"):
+                plan_label = "Lifetime"
+                plan_class = "grandfathered"
+            elif plan_raw == "pro":
+                if sub_status == "trialing":
+                    plan_label = "Pro Trial"
+                    plan_class = "trial"
+                else:
+                    plan_label = "Pro"
+                    plan_class = "pro"
+            else:
+                plan_label = "Free"
+                plan_class = "free"
+
             st.markdown(
                 f"""
                 <div class="sidebar-usercard">
                   <div class="small">Signed in as</div>
                   <div class="value">{html_lib.escape(email)}</div>
+                  <div class="plan-row">
+                    <div class="small">Plan</div>
+                    <div class="badge {plan_class}">{html_lib.escape(plan_label)}</div>
+                  </div>
                 </div>
                 """,
                 unsafe_allow_html=True,
