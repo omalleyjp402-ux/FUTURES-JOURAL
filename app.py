@@ -245,6 +245,19 @@ except KeyError:
     st.caption("Set `SUPABASE_URL` and `SUPABASE_KEY` in Streamlit Community Cloud → App → Settings → Secrets, then restart the app.")
     st.stop()
 
+def _looks_like_supabase_anon_jwt(key: str) -> bool:
+    k = ("" if key is None else str(key)).strip()
+    # Supabase anon keys are JWTs (three dot-separated segments) and usually start with "eyJ".
+    return k.count(".") == 2 and k.startswith("eyJ")
+
+# If someone accidentally pastes a Supabase "publishable" key (sb_publishable_...) or anything non-JWT,
+# auth will fail in confusing ways (often "invalid login credentials"). Fail fast with a clear fix.
+if not _looks_like_supabase_anon_jwt(SUPABASE_KEY):
+    st.error("App misconfigured: `SUPABASE_KEY` must be the Supabase *Anon public key* (a JWT that starts with `eyJ...`).")
+    st.caption("Do NOT use keys that start with `sb_publishable_...` here.")
+    st.caption("Fix: Supabase Dashboard → Settings → API → copy the `anon public` key → set Streamlit secret `SUPABASE_KEY`.")
+    st.stop()
+
 
 def _extract_supabase_ref_from_url(url: str) -> str:
     # https://<ref>.supabase.co
@@ -2231,13 +2244,6 @@ def show_auth():
         email = st.text_input("Email", key="login_email")
         password = st.text_input("Password", type="password", key="login_password")
         remember_me = st.checkbox("Remember me on this device", value=True, key="remember_me")
-        forgot = st.button("Forgot password?", key="forgot_password")
-        if forgot:
-            try:
-                supabase.auth.reset_password_for_email(_clean_cred(email, lower=True))
-                st.success("Password reset email sent (check inbox/spam).")
-            except Exception as e:
-                st.error(f"Could not send reset email: {e}")
         if st.button("Log in"):
             try:
                 email_clean = _clean_cred(email, lower=True)
