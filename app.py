@@ -3752,11 +3752,8 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                         key=f"{form_key}_use_scale_avg_exit",
                         help="If enabled, your saved Exit price will be the weighted average of Exit 1/2/3 (by qty).",
                     )
-
-                    if avg_exit is not None:
-                        if st.button("Apply calculated avg exit price now", key=f"{form_key}_apply_avg_exit"):
-                            st.session_state[f"{form_key}_exit"] = float(avg_exit)
-                            st.rerun()
+                    # NOTE: Can't use `st.button` inside a form. The checkbox above is enough:
+                    # if enabled, we'll store the weighted avg as `exit_price` on save.
     
                 row4 = st.columns(4)
                 emotion = row4[0].slider("Emotion score (1–10)", 1, 10, 5, key=f"{form_key}_emotion")
