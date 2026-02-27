@@ -540,6 +540,30 @@ def admin_upsert_affiliate_code(affiliate_user_id: str, code: str, commission_pe
     except Exception as e:
         return False, safe_str(e)
 
+def admin_set_user_password(target_user_id: str, new_password: str) -> tuple[bool, str]:
+    """
+    Admin helper: set a user's password directly via Supabase Auth Admin API.
+    This avoids relying on email delivery for demo accounts.
+    Requires SUPABASE_SERVICE_ROLE_KEY in Streamlit secrets.
+    """
+    try:
+        service_key = str(get_secret("SUPABASE_SERVICE_ROLE_KEY", "") or "").strip()
+        if not service_key:
+            return False, "Missing SUPABASE_SERVICE_ROLE_KEY in Streamlit secrets."
+        uid = safe_str(target_user_id).strip()
+        if not re.match(r"^[0-9a-fA-F-]{36}$", uid):
+            return False, "User UUID must be a valid UUID."
+        pwd = safe_str(new_password)
+        if len(pwd) < 6:
+            return False, "Password must be at least 6 characters."
+
+        sb_admin = create_client(SUPABASE_URL, service_key)
+        # gotrue admin API: update user by id
+        sb_admin.auth.admin.update_user_by_id(uid, {"password": pwd})  # type: ignore[attr-defined]
+        return True, "Password updated."
+    except Exception as e:
+        return False, safe_str(e)
+
 
 def admin_get_billing_config() -> tuple[bool, dict]:
     """
@@ -4728,6 +4752,24 @@ else:
                             f"Grandfathering failed: {msg}\n\n"
                             "Make sure `SUPABASE_SERVICE_ROLE_KEY` is set in Streamlit secrets."
                         )
+
+                st.markdown("---")
+                st.markdown("**Admin: Set User Password (Demo Accounts)**")
+                st.caption("Use this to fix demo logins without email. Owner-only.")
+                with st.form("admin_set_password_form", clear_on_submit=False):
+                    target_uid = st.text_input(
+                        "User UUID",
+                        placeholder="e.g. 7a77939a-23c0-413b-b7f2-5d9c1c3cc325",
+                        key="admin_pwd_uid",
+                    )
+                    new_pwd = st.text_input("New password", type="password", key="admin_pwd_new")
+                    saved_pwd = st.form_submit_button("Update password")
+                if saved_pwd:
+                    ok, msg = admin_set_user_password(target_uid, new_pwd)
+                    if ok:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
 
                 st.markdown("---")
                 st.markdown("**Admin: System Status**")
