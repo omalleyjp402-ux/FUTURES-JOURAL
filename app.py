@@ -2354,6 +2354,54 @@ def safe_str(value) -> str:
         return ""
     return str(value)
 
+
+def _build_scale_out_payload(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Minimal structured payload for scale-out exits/targets.
+    Stored inside notes so we don't require a DB migration.
+    """
+    out: Dict[str, Any] = {}
+    for k in [
+        "tp1",
+        "tp2",
+        "tp3",
+        "exit1",
+        "exit2",
+        "exit3",
+        "qty1",
+        "qty2",
+        "qty3",
+    ]:
+        v = data.get(k)
+        if v is None:
+            continue
+        try:
+            # Keep as float for prices, int for qty
+            if k.startswith("qty"):
+                v = int(v)
+            else:
+                v = float(v)
+        except Exception:
+            continue
+        if v:
+            out[k] = v
+    return out
+
+
+def _append_scale_out_to_notes(notes: str, payload: Dict[str, Any]) -> str:
+    """
+    Append a hidden JSON block into notes (idempotent-ish).
+    """
+    if not payload:
+        return notes
+    marker = "SCALE_OUT_JSON:"
+    base = safe_str(notes)
+    # If a prior block exists, replace it.
+    if marker in base:
+        head = base.split(marker, 1)[0].rstrip()
+        return head + "\n\n" + marker + " " + json.dumps(payload, separators=(",", ":"))
+    return (base.rstrip() + ("\n\n" if base.strip() else "")) + marker + " " + json.dumps(payload, separators=(",", ":"))
+
 def get_currency_symbol() -> str:
     return safe_str(st.session_state.get("currency_symbol")) or "$"
 
@@ -3658,8 +3706,57 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                 row3 = st.columns(4)
                 entry = row3[0].number_input("Entry price", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_entry")
                 stop = row3[1].number_input("Stop loss", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_stop")
-                take_profit = row3[2].number_input("Take profit", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_take_profit")
-                exit_price = row3[3].number_input("Exit price", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_exit")
+                take_profit = row3[2].number_input("Take profit (final target)", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_take_profit")
+                exit_price = row3[3].number_input("Exit price (avg)", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_exit")
+
+                with st.expander("Scale out (TP1 / TP2 / TP3 + multiple exits)", expanded=False):
+                    st.caption("Optional. If you scale out, you can record partial exits and targets here. This won't change your stats unless you enable it below.")
+
+                    tp_cols = st.columns(3)
+                    tp1 = tp_cols[0].number_input("TP1", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_tp1")
+                    tp2 = tp_cols[1].number_input("TP2", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_tp2")
+                    tp3 = tp_cols[2].number_input("TP3 (final)", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_tp3")
+
+                    st.markdown("**Exits (prices + qty)**")
+                    ex_cols = st.columns(3)
+                    exit1 = ex_cols[0].number_input("Exit price 1", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_exit1")
+                    exit2 = ex_cols[1].number_input("Exit price 2", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_exit2")
+                    exit3 = ex_cols[2].number_input("Exit price 3", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_exit3")
+
+                    qty_cols = st.columns(3)
+                    qty1 = qty_cols[0].number_input("Qty 1", min_value=0, step=1, value=int(contracts), key=f"{form_key}_qty1")
+                    qty2 = qty_cols[1].number_input("Qty 2", min_value=0, step=1, value=0, key=f"{form_key}_qty2")
+                    qty3 = qty_cols[2].number_input("Qty 3", min_value=0, step=1, value=0, key=f"{form_key}_qty3")
+
+                    def _weighted_avg(pairs):
+                        num = 0.0
+                        den = 0.0
+                        for price, qty in pairs:
+                            if price and qty and qty > 0:
+                                num += float(price) * int(qty)
+                                den += int(qty)
+                        if den <= 0:
+                            return None
+                        return num / den
+
+                    avg_exit = _weighted_avg([(exit1, qty1), (exit2, qty2), (exit3, qty3)])
+                    avg_target = _weighted_avg([(tp1, qty1), (tp2, qty2), (tp3, qty3)])
+
+                    info_cols = st.columns(2)
+                    info_cols[0].metric("Calculated avg exit", f"{avg_exit:,.2f}" if avg_exit is not None else "—")
+                    info_cols[1].metric("Total take profit (avg target)", f"{avg_target:,.2f}" if avg_target is not None else "—")
+
+                    use_scale_avg = st.checkbox(
+                        "Use scale-out exits to set Exit price (avg) on save",
+                        value=False,
+                        key=f"{form_key}_use_scale_avg_exit",
+                        help="If enabled, your saved Exit price will be the weighted average of Exit 1/2/3 (by qty).",
+                    )
+
+                    if avg_exit is not None:
+                        if st.button("Apply calculated avg exit price now", key=f"{form_key}_apply_avg_exit"):
+                            st.session_state[f"{form_key}_exit"] = float(avg_exit)
+                            st.rerun()
     
                 row4 = st.columns(4)
                 emotion = row4[0].slider("Emotion score (1–10)", 1, 10, 5, key=f"{form_key}_emotion")
@@ -3700,8 +3797,17 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
             if not enforce_trade_limit_or_warn(user_id):
                 # Paywall message already shown; keep rendering the rest of the page.
                 submitted = False
-            elif entry <= 0 or stop <= 0 or exit_price <= 0:
-                st.error("Entry, stop loss, and exit price must be greater than 0.")
+
+        if submitted:
+            valid_exit = exit_price > 0
+            try:
+                if not valid_exit and "use_scale_avg" in locals() and use_scale_avg and "avg_exit" in locals() and avg_exit is not None:
+                    valid_exit = True
+            except Exception:
+                valid_exit = exit_price > 0
+
+            if entry <= 0 or stop <= 0 or not valid_exit:
+                st.error("Entry and stop loss must be greater than 0, and you must provide an exit price (or enable scale-out avg exit).")
             else:
                 entry_time_str = entry_time if use_times else None
                 exit_time_str = exit_time if use_times else None
@@ -3719,7 +3825,10 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     if custom_exit:
                         exit_time_str = custom_exit
     
-                tp_value = to_float(take_profit) if take_profit > 0 else None
+                # If TP3 (final) is provided in the scale-out block, prefer it as the "final target"
+                # stored in `take_profit` for consistency with existing calculations/exports.
+                tp_final = tp3 if "tp3" in locals() and tp3 and tp3 > 0 else take_profit
+                tp_value = to_float(tp_final) if tp_final and tp_final > 0 else None
                 max_fav = to_float(max_favorable_price) if max_favorable_price > 0 else None
                 max_adv = to_float(max_adverse_price) if max_adverse_price > 0 else None
                 account_size_val = to_float(account_size) if account_size > 0 else None
@@ -3734,9 +3843,16 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                         except Exception as e:
                             st.warning(f"Image upload failed: {e}")
     
+                exit_for_metrics = float(exit_price)
+                try:
+                    if "use_scale_avg" in locals() and use_scale_avg and "avg_exit" in locals() and avg_exit is not None:
+                        exit_for_metrics = float(avg_exit)
+                except Exception:
+                    exit_for_metrics = float(exit_price)
+
                 metrics = compute_metrics(
                     instrument=instrument, direction=direction,
-                    entry=float(entry), stop=float(stop), exit_price=float(exit_price),
+                    entry=float(entry), stop=float(stop), exit_price=float(exit_for_metrics),
                     take_profit=tp_value, contracts=int(contracts),
                     commission=float(commission), slippage=float(slippage),
                     max_favorable=max_fav, max_adverse=max_adv,
@@ -3744,7 +3860,27 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     date_str=date_val.strftime("%Y-%m-%d"),
                     entry_time_str=entry_time_str, exit_time_str=exit_time_str,
                 )
-    
+
+                scale_payload = {}
+                try:
+                    scale_payload = _build_scale_out_payload(
+                        {
+                            "tp1": tp1 if "tp1" in locals() else None,
+                            "tp2": tp2 if "tp2" in locals() else None,
+                            "tp3": tp3 if "tp3" in locals() else None,
+                            "exit1": exit1 if "exit1" in locals() else None,
+                            "exit2": exit2 if "exit2" in locals() else None,
+                            "exit3": exit3 if "exit3" in locals() else None,
+                            "qty1": qty1 if "qty1" in locals() else None,
+                            "qty2": qty2 if "qty2" in locals() else None,
+                            "qty3": qty3 if "qty3" in locals() else None,
+                        }
+                    )
+                except Exception:
+                    scale_payload = {}
+
+                notes_to_save = _append_scale_out_to_notes(notes, scale_payload)
+
                 row = {
                     "id": uuid.uuid4().hex,
                     "date": date_val.strftime("%Y-%m-%d"),
@@ -3755,7 +3891,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     "entry_price": round(float(entry), 2),
                     "stop_loss": round(float(stop), 2),
                     "take_profit": round(float(tp_value), 2) if tp_value is not None else None,
-                    "exit_price": round(float(exit_price), 2),
+                    "exit_price": round(float(exit_for_metrics), 2),
                     "contracts": int(contracts),
                     "session": session,
                     "emotion_score": int(emotion),
@@ -3778,7 +3914,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     "pnl_override": float(pnl_override) if use_pnl_override else None,
                     "max_favorable_price": round(float(max_fav), 2) if max_fav is not None else None,
                     "max_adverse_price": round(float(max_adv), 2) if max_adv is not None else None,
-                    "notes": notes,
+                    "notes": notes_to_save,
                     "images": ";".join(saved_image_paths),
                 }
                 row.update(metrics)
