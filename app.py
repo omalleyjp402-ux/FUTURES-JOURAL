@@ -410,7 +410,7 @@ COMPUTED_COLUMNS = [
 
 # ── Monetization / entitlements (feature-flagged) ─────────────────────────────
 
-FREE_TRADE_LIMIT = 15
+FREE_TRADE_LIMIT = 5
 
 
 def get_secret(key: str, default=None):
@@ -2063,6 +2063,12 @@ def count_total_trades(user_id: str) -> Optional[int]:
         return len(res.data or [])
     except Exception:
         return None
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def _count_total_trades_cached(user_id: str) -> Optional[int]:
+    # Cache to keep the UI snappy and reduce Supabase reads.
+    return count_total_trades(user_id)
 
 
 def enforce_trade_limit_or_warn(user_id: str) -> bool:
@@ -4970,6 +4976,29 @@ else:
                 """,
                 unsafe_allow_html=True,
             )
+
+            # Show remaining free trades + upgrade CTA (only when paywall is enabled).
+            if PAYWALL_ENABLED and plan_class == "free":
+                ent = ensure_entitlement(user.id) or {}
+                limit = ent.get("trade_limit")
+                try:
+                    limit_i = int(limit) if limit is not None else int(FREE_TRADE_LIMIT)
+                except Exception:
+                    limit_i = int(FREE_TRADE_LIMIT)
+                current = _count_total_trades_cached(user.id)
+                if current is not None and limit_i > 0:
+                    remaining = max(0, int(limit_i) - int(current))
+                    st.caption(f"Free trades left: **{remaining} / {limit_i}**")
+                    if remaining <= 0:
+                        user_email = safe_str(getattr(user, "email", ""))
+                        url = create_stripe_checkout_session(user.id, user_email)
+                        if url:
+                            try:
+                                st.link_button("Upgrade to Pro", url, use_container_width=True)
+                            except Exception:
+                                st.markdown(f"[Upgrade to Pro]({url})")
+                        else:
+                            st.button("Upgrade to Pro", disabled=True, use_container_width=True)
 
     section = st.session_state.get("nav_section", section_options[0])
 

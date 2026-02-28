@@ -26,7 +26,7 @@ create policy "entitlements_insert_free_only"
   with check (
     auth.uid() = user_id
     and plan = 'free'
-    and trade_limit = 15
+    and trade_limit = 5
   );
 
 -- No UPDATE policy on purpose: users can't self-upgrade or change limits.
@@ -56,4 +56,3 @@ for each row execute procedure public.set_updated_at();
 -- where created_at < '2026-03-01T00:00:00Z'
 -- on conflict (user_id) do update
 -- set plan = excluded.plan, trade_limit = excluded.trade_limit, updated_at = now();
-
