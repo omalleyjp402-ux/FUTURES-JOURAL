@@ -1237,11 +1237,11 @@ def render_demo_dashboard() -> None:
         st.altair_chart(style_altair_chart(bars), use_container_width=True)
 
     with c3:
-        st.subheader("Zylo score")
+        st.subheader("Dylo score")
         # compute_zylo_score expects daily_df with 'pnl' field; we already named it,
         # but pnl_col must refer to the column on df_view.
         zylo = compute_zylo_score(df, daily_df, pnl_col)
-        st.markdown(f"**Your Zylo Score:** `{zylo['overall']:.2f}`")
+        st.markdown(f"**Your Dylo Score:** `{zylo['overall']:.2f}`")
         render_zylo_radar(zylo["components"])
 
     st.markdown("---")
@@ -1342,7 +1342,7 @@ def render_tour_page() -> None:
         ses_chart = alt.Chart(ses).mark_bar().encode(x="session:N", y=f"{pnl_col}:Q").properties(height=180)
         st.altair_chart(style_altair_chart(ses_chart), use_container_width=True)
     with b3:
-        st.markdown("**Zylo score**")
+        st.markdown("**Dylo score**")
         daily_df = df.groupby(df["date"].dt.date, as_index=False)[pnl_col].sum().rename(columns={pnl_col: "pnl"})
         zylo = compute_zylo_score(df, daily_df, pnl_col)
         st.markdown(f"**Score:** `{zylo['overall']:.2f}`")
@@ -4306,7 +4306,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
 
         c_score, c_recent = st.columns([1.2, 1])
         with c_score:
-            st.markdown("**Zylo score**")
+            st.markdown("**Dylo score**")
             zylo = compute_zylo_score(df_view, daily_df, pnl_col)
             score = float(zylo["overall"])
             st.markdown(f"**{score:.2f}** / 100")
