@@ -55,6 +55,11 @@ div[data-testid="stAppViewContainer"]{
     radial-gradient(900px 520px at 50% 100%, rgba(124,58,237,0.10) 0%, rgba(14,17,23,0) 55%),
     #0E1117;
 }
+/* Reduce top whitespace so Dashboard + metric grid fit on one screen */
+div[data-testid="stAppViewContainer"] .block-container{
+  padding-top: 1.25rem;
+  padding-bottom: 2rem;
+}
 
 /* Section/card surfaces */
 .metric-card,
@@ -70,12 +75,12 @@ div[data-testid="stDataFrame"]{
 }
 
 /* Metric cards (used in demo + logged-in) */
-.metric-grid {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:10px 0 12px;}
+.metric-grid {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:6px 0 10px;}
 .metric-card {background: rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:14px;
-  padding:12px 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.18); }
-.metric-label {font-size:12px;color:var(--tz-muted);letter-spacing:.06em;text-transform:uppercase}
-.metric-value {font-size:22px;font-weight:700;color:var(--tz-title);margin-top:2px}
-.metric-sub {font-size:12px;color:rgba(148,163,184,0.9);margin-top:6px}
+  padding:10px 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.18); }
+.metric-label {font-size:11px;color:var(--tz-muted);letter-spacing:.06em;text-transform:uppercase}
+.metric-value {font-size:20px;font-weight:700;color:var(--tz-title);margin-top:1px; line-height:1.12}
+.metric-sub {font-size:11px;color:rgba(148,163,184,0.9);margin-top:4px}
 @media (max-width: 1200px) {.metric-grid {grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media (max-width: 768px) {.metric-grid {grid-template-columns:1fr;}}
 
@@ -190,15 +195,15 @@ section[data-testid="stSidebar"] .sidebar-usercard .badge.grandfathered{
 
  .brand-row {display:flex;align-items:center;gap:12px;margin:6px 0 12px;}
  .brand-row.center {justify-content:center;text-align:center;flex-direction:column;}
- .brand-row.hero {gap:16px;margin:10px 0 18px;}
+ .brand-row.hero {gap:12px;margin:6px 0 10px;}
  .brand-logo {width:140px;height:140px;border-radius:26px;object-fit:contain;background:rgba(255,255,255,0.04);
               border:1px solid rgba(255,255,255,0.08);padding:6px;}
  .brand-name {font-size:40px;font-weight:700;color:var(--text-color);margin:0;line-height:1.1;}
  .brand-tagline {font-size:13px;color:rgba(148, 163, 184, 0.9);letter-spacing:.08em;text-transform:uppercase;}
  .brand-row.center .brand-logo {width:220px;height:220px;border-radius:32px;padding:12px;}
  .brand-row.center .brand-name {font-size:56px;}
- .brand-row.hero .brand-logo {width:350px;height:350px;border-radius:40px;padding:14px;}
- .brand-row.hero .brand-name {font-size:48px;}
+ .brand-row.hero .brand-logo {width:220px;height:220px;border-radius:34px;padding:10px;}
+ .brand-row.hero .brand-name {font-size:40px;}
 div[data-testid="stMetric"] {
   background: rgba(255,255,255,0.06);
   padding: 12px 14px;
