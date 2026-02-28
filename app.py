@@ -4961,14 +4961,30 @@ else:
 
     section = st.session_state.get("nav_section", section_options[0])
 
+    def _safe_render(label: str, fn):
+        try:
+            fn()
+        except Exception:
+            tb = traceback.format_exc()
+            st.error(f"{label} ran into an unexpected error. Please refresh and try again.")
+            # Only show details to admins to avoid leaking internal info to public users.
+            if is_admin_email(safe_str(getattr(user, "email", ""))):
+                with st.expander("Error details (admin only)", expanded=False):
+                    st.code(tb)
+            # Still print to server logs for debugging.
+            print(tb)
+
     if section == "Journal":
-        render_journal_page(user.id)
+        _safe_render("Journal", lambda: render_journal_page(user.id))
     elif section == "Strategy/Model Creation":
-        render_strategy_creation_page(user.id)
+        _safe_render("Strategy/Model Creation", lambda: render_strategy_creation_page(user.id))
     elif section == "Affiliates":
-        render_affiliates_page(user.id)
+        _safe_render("Affiliates", lambda: render_affiliates_page(user.id))
     else:
         tabs = st.tabs(ACCOUNT_TYPES)
         for tab, account_type in zip(tabs, ACCOUNT_TYPES):
             with tab:
-                render_section(user.id, account_type, section)
+                _safe_render(
+                    f"{section} ({account_type})",
+                    lambda account_type=account_type: render_section(user.id, account_type, section),
+                )
