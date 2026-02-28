@@ -444,6 +444,59 @@ PRICING_PLANS_USD = {
 }
 
 
+def render_pricing_sidebar() -> None:
+    """
+    Public-facing pricing teaser shown on the auth page + public sidebar.
+    This does not enable payments; it's just informational until you flip switches.
+    """
+    st.markdown("### Pricing")
+    mode = st.radio(
+        "Billing",
+        ["Monthly", "Yearly"],
+        horizontal=True,
+        label_visibility="collapsed",
+        key="pricing_mode_sidebar",
+    )
+    # NOTE: These numbers are informational. Actual billing uses Stripe price IDs.
+    if mode == "Yearly":
+        usd = PRICING_PLANS_USD["yearly"]["usd_per_month"]
+        billed = usd * 12
+        st.markdown(
+            f"""
+            <div class="metric-card" style="padding:12px 14px;">
+              <div class="metric-label">Pro (Yearly)</div>
+              <div class="metric-value">${usd:.0f} <span style="font-size:12px;font-weight:600;color:rgba(148,163,184,0.95);">/ month</span></div>
+              <div class="metric-sub">Billed ${billed:.0f} yearly</div>
+              <div class="metric-sub">Includes 3-day free trial (card required)</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        usd = PRICING_PLANS_USD["monthly"]["usd_per_month"]
+        st.markdown(
+            f"""
+            <div class="metric-card" style="padding:12px 14px;">
+              <div class="metric-label">Pro (Monthly)</div>
+              <div class="metric-value">${usd:.0f} <span style="font-size:12px;font-weight:600;color:rgba(148,163,184,0.95);">/ month</span></div>
+              <div class="metric-sub">Includes 3-day free trial (card required)</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown(
+        f"""
+        <div style="margin-top:10px;font-size:12px;color:rgba(148,163,184,0.92);line-height:1.45;">
+          <b>Free:</b> {int(FREE_TRADE_LIMIT)} trades with no card.<br/>
+          <b>Upgrade:</b> Unlock unlimited trades + full analytics.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.caption("Create an account first, then click Upgrade inside the app.")
+
+
 def is_admin_email(email: str) -> bool:
     email = safe_str(email).strip().lower()
     if not email:
@@ -1279,7 +1332,7 @@ def render_public_sidebar(active: str) -> str:
         if st.button("Log in / Sign up", use_container_width=True, key="public_login_btn"):
             _go_auth()
         st.caption("-> Access is free for life for now - won't last long.")
-        st.caption("Payments not enabled yet.")
+        render_pricing_sidebar()
     return st.session_state.get("public_nav", active)
 
 
@@ -2269,6 +2322,8 @@ def render_journal_page(user_id: str) -> None:
 
 def show_auth():
     render_brand_header(center=True)
+    with st.sidebar:
+        render_pricing_sidebar()
     tab_login, tab_signup = st.tabs(["Log in", "Sign up"])
 
     def _clean_cred(s: str, *, lower: bool = False) -> str:
