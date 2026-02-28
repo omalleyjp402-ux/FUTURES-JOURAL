@@ -6,6 +6,7 @@ import hashlib
 import io
 import json
 import re
+import traceback
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -2736,6 +2737,11 @@ def compute_zylo_score(df_view: pd.DataFrame, daily_df: pd.DataFrame, pnl_col: s
     overall = sum(scores[k] * weights.get(k, 0) for k in scores.keys())
     overall = max(0.0, min(100.0, float(overall)))
 
+    # Small-sample penalty: prevents tiny datasets from showing a "perfect" score.
+    # Approaches 1.0 around ~60 trades.
+    sample_factor = 0.85 + 0.15 * clamp01(total_trades / 60.0)
+    overall = max(0.0, min(100.0, overall * sample_factor))
+
     return {
         "overall": overall,
         "components": scores,
@@ -2759,6 +2765,7 @@ def render_zylo_radar(components: Dict[str, float]) -> None:
 
     # Geometry
     size = 320
+    vb_pad = 64  # extra viewbox padding so axis labels don't get clipped
     cx = cy = size / 2
     outer = 120.0
     rings = 4
@@ -2800,8 +2807,8 @@ def render_zylo_radar(components: Dict[str, float]) -> None:
         label_nodes.append((x, y, anchor, lab))
 
     svg = f"""
-    <svg width="100%" viewBox="0 0 {size} {size}" xmlns="http://www.w3.org/2000/svg">
-      <rect x="0" y="0" width="{size}" height="{size}" fill="rgba(0,0,0,0)"/>
+    <svg width="100%" viewBox="{-vb_pad} {-vb_pad} {size + 2*vb_pad} {size + 2*vb_pad}" xmlns="http://www.w3.org/2000/svg">
+      <rect x="{-vb_pad}" y="{-vb_pad}" width="{size + 2*vb_pad}" height="{size + 2*vb_pad}" fill="rgba(0,0,0,0)"/>
       <g>
         {"".join([f'<path d="{d}" fill="none" stroke="rgba(148,163,184,0.20)" stroke-width="1"/>' for d in grid_paths])}
         {"".join([f'<line x1="{x1}" y1="{y1}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="rgba(148,163,184,0.20)" stroke-width="1"/>' for x1,y1,x2,y2 in axes])}
