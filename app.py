@@ -446,8 +446,7 @@ PRICING_PLANS_USD = {
 
 def render_pricing_sidebar() -> None:
     """
-    Public-facing pricing teaser shown on the auth page + public sidebar.
-    This does not enable payments; it's just informational until you flip switches.
+    Public-facing pricing teaser (deprecated: we now render a full Pricing page).
     """
     st.markdown("### Pricing")
     mode = st.radio(
@@ -495,6 +494,66 @@ def render_pricing_sidebar() -> None:
         unsafe_allow_html=True,
     )
     st.caption("Create an account first, then click Upgrade inside the app.")
+
+
+def render_pricing_page() -> None:
+    render_brand_header(center=True)
+    st.title("Pricing")
+    st.caption("Create an account for free. Upgrade any time inside the app.")
+
+    mode = st.radio("Billing", ["Monthly", "Yearly"], horizontal=True, key="pricing_mode_page")
+    left, right = st.columns(2)
+
+    # Free tier
+    with left:
+        st.markdown(
+            f"""
+            <div class="metric-card" style="padding:18px 18px;">
+              <div class="metric-label">Free</div>
+              <div class="metric-value">$0 <span style="font-size:12px;font-weight:600;color:rgba(148,163,184,0.95);">/ month</span></div>
+              <div class="metric-sub">Includes {int(FREE_TRADE_LIMIT)} trades (no card required)</div>
+              <div class="metric-sub">Full access to the app UI to explore</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    # Pro tier (informational; actual billing uses Stripe price IDs)
+    with right:
+        if mode == "Yearly":
+            usd = PRICING_PLANS_USD["yearly"]["usd_per_month"]
+            billed = usd * 12
+            label = "Pro (Yearly)"
+            sub = f"Billed ${billed:.0f} yearly"
+        else:
+            usd = PRICING_PLANS_USD["monthly"]["usd_per_month"]
+            label = "Pro (Monthly)"
+            sub = "Billed monthly"
+
+        trial_line = ""
+        if int(TRIAL_DAYS or 0) > 0:
+            trial_line = f"Includes {int(TRIAL_DAYS)}-day free trial (card required)"
+
+        st.markdown(
+            f"""
+            <div class="metric-card" style="padding:18px 18px;border-color:rgba(124,58,237,0.26);">
+              <div class="metric-label">{html_lib.escape(label)}</div>
+              <div class="metric-value">${usd:.0f} <span style="font-size:12px;font-weight:600;color:rgba(148,163,184,0.95);">/ month</span></div>
+              <div class="metric-sub">{html_lib.escape(sub)}</div>
+              <div class="metric-sub">{html_lib.escape(trial_line)}</div>
+              <div class="metric-sub">Unlimited trades + full analytics</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("---")
+    st.markdown("**How it works**")
+    st.markdown(
+        "- Create a Tradylo account (free)\n"
+        f"- Log up to {int(FREE_TRADE_LIMIT)} trades without a card\n"
+        "- When you hit the free limit, click Upgrade inside the app to start your trial and unlock unlimited trades"
+    )
 
 
 def is_admin_email(email: str) -> bool:
@@ -1323,7 +1382,7 @@ def render_public_sidebar(active: str) -> str:
         # A compact brand header in the sidebar for the public shell.
         render_brand_header(center=True)
         st.markdown("---")
-        options = ["Home", "Demo", "Terms", "Privacy", "Refunds", "Contact"]
+        options = ["Home", "Pricing", "Demo", "Terms", "Privacy", "Refunds", "Contact"]
         if active not in options:
             active = "Home"
         idx = options.index(active)
@@ -1332,7 +1391,6 @@ def render_public_sidebar(active: str) -> str:
         if st.button("Log in / Sign up", use_container_width=True, key="public_login_btn"):
             _go_auth()
         st.caption("-> Access is free for life for now - won't last long.")
-        render_pricing_sidebar()
     return st.session_state.get("public_nav", active)
 
 
@@ -1520,6 +1578,9 @@ def render_public_router() -> None:
 
     if choice == "Demo":
         render_demo_dashboard()
+        return
+    if choice == "Pricing":
+        render_pricing_page()
         return
     # (Tour removed; Demo is the product preview.)
     if choice == "Terms":
@@ -2322,8 +2383,6 @@ def render_journal_page(user_id: str) -> None:
 
 def show_auth():
     render_brand_header(center=True)
-    with st.sidebar:
-        render_pricing_sidebar()
     tab_login, tab_signup = st.tabs(["Log in", "Sign up"])
 
     def _clean_cred(s: str, *, lower: bool = False) -> str:
