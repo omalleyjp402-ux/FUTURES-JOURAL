@@ -4412,7 +4412,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                         df_stats["Total PnL"] = df_stats["Total PnL"].round(2)
                         df_stats["Avg PnL"] = df_stats["Avg PnL"].round(2)
                         df_stats["Win rate %"] = df_stats["Win rate %"].round(1)
-                        df_stats["Trades"] = df_stats["Trades"].astype(int)
+                        df_stats["Trades"] = df_stats["Trades"].fillna(0).astype(int)
 
                     c_top, c_bot = st.columns(2)
                     with c_top:
@@ -4514,7 +4514,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                 combo_stats["Total PnL"] = combo_stats["Total PnL"].round(2)
                 combo_stats["Avg PnL"] = combo_stats["Avg PnL"].round(2)
                 combo_stats["Win rate %"] = combo_stats["Win rate %"].round(1)
-                combo_stats["Trades"] = combo_stats["Trades"].astype(int)
+                combo_stats["Trades"] = combo_stats["Trades"].fillna(0).astype(int)
 
                 best_win = combo_stats.sort_values(["Win rate %", "Total PnL"], ascending=[False, False]).head(3)
                 worst_win = combo_stats.sort_values(["Win rate %", "Total PnL"], ascending=[True, True]).head(3)
