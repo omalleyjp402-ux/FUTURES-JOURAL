@@ -1838,6 +1838,36 @@ def render_strategy_creation_page(user_id: str) -> None:
         st.info("No strategies saved yet.")
 
 
+# ── Trade Tags (feature-tolerant) ─────────────────────────────────────────────
+
+def load_user_tags(user_id: str) -> list[str]:
+    """
+    Loads saved user-defined tags for trade logging (stored in `public.user_tags`).
+    This is optional; if the table isn't set up, we return an empty list.
+    """
+    try:
+        sb = authed_supabase()
+        res = sb.table("user_tags").select("name").eq("user_id", user_id).order("name").execute()
+        rows = res.data or []
+        return [safe_str(r.get("name")).strip() for r in rows if safe_str(r.get("name")).strip()]
+    except Exception:
+        return []
+
+
+def upsert_user_tag(user_id: str, name: str) -> bool:
+    name = safe_str(name).strip()
+    if not name:
+        return False
+    try:
+        sb = authed_supabase()
+        # `unique (user_id, name)` ensures no duplicates.
+        sb.table("user_tags").insert({"user_id": user_id, "name": name}).execute()
+        return True
+    except Exception:
+        # If already exists (unique violation) or table missing, fail silently.
+        return False
+
+
 # ── Affiliates (feature-tolerant) ─────────────────────────────────────────────
 
 PUBLIC_APP_URL = str(get_secret("PUBLIC_APP_URL", "https://TradyloTradingJournal.streamlit.app") or "").strip()
@@ -3580,6 +3610,62 @@ def explode_tags(df: pd.DataFrame, column: str) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def build_problem_insights(df: pd.DataFrame, pnl_col: str) -> list[str]:
+    """
+    Best-effort 'coach' insights. Keep it simple and robust (never crash).
+    Returns 0-4 short bullets.
+    """
+    out: list[str] = []
+    if df is None or df.empty or pnl_col not in df.columns:
+        return out
+
+    try:
+        dfx = df.copy()
+        dfx[pnl_col] = pd.to_numeric(dfx[pnl_col], errors="coerce").fillna(0.0)
+
+        # Worst day of week by Total PnL
+        if "date" in dfx.columns:
+            dayname = pd.to_datetime(dfx["date"], errors="coerce").dt.day_name()
+            day_perf = dfx.assign(_day=dayname).groupby("_day")[pnl_col].sum()
+            day_perf = day_perf.dropna()
+            if not day_perf.empty:
+                worst_day = day_perf.idxmin()
+                worst_pnl = float(day_perf.loc[worst_day])
+                if worst_day and abs(worst_pnl) > 0:
+                    out.append(f"You lose the most money on **{worst_day}** ({format_money(worst_pnl)}).")
+
+        # Best / worst session
+        if "session" in dfx.columns:
+            ses = dfx.groupby("session")[pnl_col].sum().dropna()
+            if not ses.empty and ses.shape[0] >= 2:
+                best_s = ses.idxmax()
+                worst_s = ses.idxmin()
+                out.append(f"Your best session is **{best_s}** ({format_money(float(ses.loc[best_s]))}).")
+                out.append(f"Your worst session is **{worst_s}** ({format_money(float(ses.loc[worst_s]))}).")
+
+        # Win rate drop after 3 trades in a day
+        if "date" in dfx.columns:
+            # Need an ordering; entry_time is best, else fall back to created_at/id.
+            dfx["_date"] = pd.to_datetime(dfx["date"], errors="coerce").dt.date
+            if "entry_time" in dfx.columns:
+                dfx["_t"] = dfx["entry_time"].astype(str)
+            else:
+                dfx["_t"] = ""
+            dfx = dfx.sort_values(["_date", "_t"])
+            dfx["_trade_num"] = dfx.groupby("_date").cumcount() + 1
+            overall_wr = float((dfx[pnl_col] > 0).mean() * 100.0) if len(dfx) else 0.0
+            after3 = dfx[dfx["_trade_num"] > 3]
+            if len(after3) >= 10:
+                after3_wr = float((after3[pnl_col] > 0).mean() * 100.0)
+                if overall_wr - after3_wr >= 8.0:
+                    out.append(f"Your win rate drops after **3 trades** in a day ({after3_wr:.1f}% vs {overall_wr:.1f}% overall).")
+
+    except Exception:
+        return out[:4]
+
+    return out[:4]
+
+
 def build_confluence_combo_stats(df: pd.DataFrame, pnl_col: str, min_confluences: int = 1) -> pd.DataFrame:
     rows = []
     for _, row in df.iterrows():
@@ -3813,7 +3899,31 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                 else:
                     strategy = strategy_choice
                     row2b[3].markdown("")
-    
+
+                # Saved tags (dropdown + add new)
+                tag_defaults = [
+                    "Session High/Low sweep",
+                    "HTF FVG",
+                    "VWAP reclaim",
+                    "Liquidity sweep",
+                    "Order block",
+                ]
+                saved_tags = load_user_tags(user_id)
+                tag_options = sorted(set([t for t in (saved_tags + tag_defaults) if safe_str(t).strip()]))
+                tags_selected = st.multiselect(
+                    "Tags",
+                    tag_options,
+                    default=[],
+                    key=f"{form_key}_tags_selected",
+                    help="Select existing tags, or add new ones below (comma-separated).",
+                )
+                tags_new_text = st.text_input(
+                    "Add new tag(s)",
+                    placeholder="e.g. Session High/Low sweep, HTF FVG",
+                    key=f"{form_key}_tags_new",
+                )
+                setup_tag = ""  # will be filled on Save
+
                 st.markdown("**Confluences (check all that apply)**")
                 conf_cols = st.columns(4)
                 selected_confluences = []
@@ -3897,7 +4007,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     
                 with st.expander("Advanced (optional)", expanded=False):
                     adv1 = st.columns(4)
-                    setup_tag = adv1[0].text_input("Setup / tag (comma-separated)", key=f"{form_key}_setup")
+                    adv1[0].markdown("Tags are set above.")
                     adv1[1].markdown("Model/strategy is set above.")
                     market_condition = adv1[2].selectbox("Market condition", MARKET_CONDITIONS, key=f"{form_key}_market")
                     account_size = adv1[3].number_input("Account size ($)", min_value=0.0, step=100.0, format="%.2f", key=f"{form_key}_account_size")
@@ -3938,6 +4048,20 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
             if entry <= 0 or stop <= 0 or not valid_exit:
                 st.error("Entry and stop loss must be greater than 0, and you must provide an exit price (or enable scale-out avg exit).")
             else:
+                # Tags: merge selected + newly added, persist new ones for dropdown.
+                tags_final: list[str] = []
+                try:
+                    tags_final.extend([t.strip() for t in (tags_selected or []) if safe_str(t).strip()])
+                except Exception:
+                    pass
+                for t in safe_str(tags_new_text).split(","):
+                    tt = t.strip()
+                    if tt:
+                        tags_final.append(tt)
+                        upsert_user_tag(user_id, tt)
+                tags_final = sorted(set(tags_final))
+                setup_tag = ",".join(tags_final)
+
                 entry_time_str = entry_time if use_times else None
                 exit_time_str = exit_time if use_times else None
                 if use_times:
@@ -4460,6 +4584,17 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
 
     if section == "Analytics":
         st.subheader("Analytics")
+        insights = build_problem_insights(df_view, pnl_col)
+        if insights:
+            st.markdown("**Your biggest problems (auto)**")
+            st.markdown(
+                "<div class='metric-card' style='padding:14px 14px;'>"
+                "<div class='metric-label'>Coach</div>"
+                "<div class='metric-sub' style='font-size:13px;margin-top:8px;line-height:1.55;'>"
+                + "<br/>".join([f"• {html_lib.escape(i)}" for i in insights])
+                + "</div></div>",
+                unsafe_allow_html=True,
+            )
         a_day, a_conf, a_overall = st.tabs(
             ["Day & Time Analysis", "Confluence Analytics", "Overall Performance"]
         )
