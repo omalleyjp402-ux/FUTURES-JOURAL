@@ -1,14 +1,14 @@
 -- User-defined tags for trade logging (saved dropdown suggestions)
 -- Apply this in Supabase SQL editor.
-
-create extension if not exists pgcrypto;
+--
+-- Note: Avoid UUID extensions to keep setup friction low.
+-- Primary key is (user_id, name).
 
 create table if not exists public.user_tags (
-  id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   name text not null,
   created_at timestamptz not null default now(),
-  unique (user_id, name)
+  primary key (user_id, name)
 );
 
 alter table public.user_tags enable row level security;
@@ -26,4 +26,3 @@ create policy "user_tags_insert_own"
   for insert
   to authenticated
   with check (auth.uid() = user_id);
-

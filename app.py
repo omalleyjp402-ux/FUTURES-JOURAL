@@ -2643,7 +2643,11 @@ def compute_duration_minutes(date_str, entry_time_str, exit_time_str):
     exit_dt = datetime.combine(date_val, exit_t)
     if exit_dt < entry_dt:
         exit_dt += timedelta(days=1)
-    return (exit_dt - entry_dt).total_seconds() / 60
+    minutes = (exit_dt - entry_dt).total_seconds() / 60
+    # Guard against bad imports / typoed times creating 23h+ durations.
+    if minutes < 0 or minutes > (12 * 60):
+        return None
+    return minutes
 
 
 def compute_metrics(instrument, direction, entry, stop, exit_price, take_profit,
