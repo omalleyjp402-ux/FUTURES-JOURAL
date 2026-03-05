@@ -1865,6 +1865,7 @@ def upsert_user_tag(user_id: str, name: str) -> bool:
         return True
     except Exception:
         # If already exists (unique violation) or table missing, fail silently.
+        st.session_state["_user_tags_last_error"] = traceback.format_exc()
         return False
 
 
@@ -3913,19 +3914,24 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     "Order block",
                 ]
                 saved_tags = load_user_tags(user_id)
-                tag_options = sorted(set([t for t in (saved_tags + tag_defaults) if safe_str(t).strip()]))
-                tags_selected = st.multiselect(
-                    "Tags",
-                    tag_options,
-                    default=[],
-                    key=f"{form_key}_tags_selected",
-                    help="Select existing tags, or add new ones below (comma-separated).",
-                )
                 tags_new_text = st.text_input(
                     "Add new tag(s)",
                     placeholder="e.g. Session High/Low sweep, HTF FVG",
                     key=f"{form_key}_tags_new",
                 )
+                new_tag_candidates = [t.strip() for t in safe_str(tags_new_text).split(",") if t.strip()]
+                tag_options = sorted(set([t for t in (saved_tags + tag_defaults + new_tag_candidates) if safe_str(t).strip()]))
+                tags_selected = st.multiselect(
+                    "Tags",
+                    tag_options,
+                    default=[t for t in new_tag_candidates if t in tag_options],
+                    key=f"{form_key}_tags_selected",
+                    help="Select tags for this trade. Anything you type above will also be saved when you save the trade.",
+                )
+                if new_tag_candidates:
+                    st.caption("Will add: " + ", ".join([f"`{t}`" for t in new_tag_candidates]))
+                if not saved_tags and st.session_state.get("_user_tags_last_error"):
+                    st.caption("Note: if tags aren't saving to your dropdown yet, run `sql/user_tags.sql` in Supabase.")
                 setup_tag = ""  # will be filled on Save
 
                 st.markdown("**Confluences (check all that apply)**")

@@ -26,3 +26,6 @@ create policy "user_tags_insert_own"
   for insert
   to authenticated
   with check (auth.uid() = user_id);
+
+-- Refresh PostgREST schema cache
+select pg_notify('pgrst', 'reload schema');
