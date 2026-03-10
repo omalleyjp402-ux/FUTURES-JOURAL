@@ -6,6 +6,7 @@ import hashlib
 import io
 import json
 import re
+import time
 import traceback
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -285,6 +286,28 @@ def _extract_ref_from_jwt(jwt_token: str) -> str:
         return ("" if payload.get("ref") is None else str(payload.get("ref"))).strip()
     except Exception:
         return ""
+
+def _jwt_seconds_to_expiry(jwt_token: str) -> Optional[int]:
+    """
+    Parse JWT `exp` (seconds since epoch) without verifying signature.
+    Returns seconds until expiry (negative means already expired), or None if unknown.
+    """
+    tok = ("" if jwt_token is None else str(jwt_token)).strip()
+    parts = tok.split(".")
+    if len(parts) < 2:
+        return None
+    payload_b64 = parts[1]
+    payload_b64 += "=" * (-len(payload_b64) % 4)
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64.encode("utf-8")).decode("utf-8"))
+        exp = payload.get("exp")
+        if exp is None:
+            return None
+        exp_f = float(exp)
+        now = datetime.now(timezone.utc).timestamp()
+        return int(exp_f - now)
+    except Exception:
+        return None
 
 
 # Helpful sanity check: if URL and key belong to different Supabase projects, auth will always fail.
@@ -1869,6 +1892,24 @@ def upsert_user_tag(user_id: str, name: str) -> bool:
         return False
 
 
+@st.cache_data(ttl=120)
+def _load_user_tags_from_trades(user_id: str) -> list[str]:
+    """
+    Fallback tag source: derive tags from existing trades' `setup_tag`.
+    This works even if `public.user_tags` isn't set up yet.
+    """
+    try:
+        sb = authed_supabase()
+        res = sb.table("trades").select("setup_tag").eq("user_id", user_id).execute()
+        rows = res.data or []
+        if not rows:
+            return []
+        df = pd.DataFrame(rows)
+        return collect_tags(df, "setup_tag")
+    except Exception:
+        return []
+
+
 # ── Affiliates (feature-tolerant) ─────────────────────────────────────────────
 
 PUBLIC_APP_URL = str(get_secret("PUBLIC_APP_URL", "https://TradyloTradingJournal.streamlit.app") or "").strip()
@@ -2470,10 +2511,52 @@ def get_token():
     return st.session_state.get("access_token")
 
 
+def _is_jwt_expired_error(err: Exception) -> bool:
+    s = safe_str(err)
+    return ("JWT expired" in s) or ("PGRST303" in s)
+
+
+def _try_refresh_supabase_session() -> bool:
+    """
+    Best-effort session refresh to prevent users seeing intermittent "JWT expired" errors.
+    Uses refresh_token from session_state or remember-me cookie.
+    """
+    try:
+        refresh_token = safe_str(st.session_state.get("refresh_token")).strip()
+        if not refresh_token:
+            cm = _cookie_manager()
+            if cm:
+                refresh_token = safe_str(cm.get("tradylo_refresh_token")).strip()
+        if not refresh_token:
+            return False
+
+        res = supabase.auth.refresh_session(refresh_token)  # type: ignore
+        # supabase-py returns objects with .user and .session (same shape as sign_in_with_password)
+        st.session_state["user"] = getattr(res, "user", None) or st.session_state.get("user")
+        sess = getattr(res, "session", None)
+        if sess:
+            st.session_state["access_token"] = getattr(sess, "access_token", None) or st.session_state.get("access_token")
+            st.session_state["refresh_token"] = getattr(sess, "refresh_token", None) or refresh_token
+
+            cm = _cookie_manager()
+            if cm and safe_str(cm.get("tradylo_remember")).strip().lower() == "true":
+                cm["tradylo_refresh_token"] = st.session_state.get("refresh_token")
+                cm.save()
+        return True
+    except Exception:
+        return False
+
+
 def authed_supabase():
     token = get_token()
     if token:
-        supabase.postgrest.auth(token)
+        # Proactively refresh if token is near-expiry to avoid intermittent "JWT expired" errors.
+        secs = _jwt_seconds_to_expiry(token)
+        if secs is not None and secs <= 30:
+            if _try_refresh_supabase_session():
+                token = get_token()
+        if token:
+            supabase.postgrest.auth(token)
     return supabase
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -3914,13 +3997,22 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     "Order block",
                 ]
                 saved_tags = load_user_tags(user_id)
+                trade_tags = _load_user_tags_from_trades(user_id) if not saved_tags else []
                 tags_new_text = st.text_input(
                     "Add new tag(s)",
                     placeholder="e.g. Session High/Low sweep, HTF FVG",
                     key=f"{form_key}_tags_new",
                 )
                 new_tag_candidates = [t.strip() for t in safe_str(tags_new_text).split(",") if t.strip()]
-                tag_options = sorted(set([t for t in (saved_tags + tag_defaults + new_tag_candidates) if safe_str(t).strip()]))
+                tag_options = sorted(
+                    set(
+                        [
+                            t
+                            for t in (saved_tags + trade_tags + tag_defaults + new_tag_candidates)
+                            if safe_str(t).strip()
+                        ]
+                    )
+                )
                 tags_selected = st.multiselect(
                     "Tags",
                     tag_options,
@@ -3931,7 +4023,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                 if new_tag_candidates:
                     st.caption("Will add: " + ", ".join([f"`{t}`" for t in new_tag_candidates]))
                 if not saved_tags and st.session_state.get("_user_tags_last_error"):
-                    st.caption("Note: if tags aren't saving to your dropdown yet, run `sql/user_tags.sql` in Supabase.")
+                    st.caption("Note: tags will still work and will be pulled from your trade history, but you can also enable a dedicated tags table by running `sql/user_tags.sql` in Supabase.")
                 setup_tag = ""  # will be filled on Save
 
                 st.markdown("**Confluences (check all that apply)**")
@@ -5264,7 +5356,29 @@ else:
     def _safe_render(label: str, fn):
         try:
             fn()
-        except Exception:
+        except Exception as e:
+            # Common transient: access token expired. Try to refresh once automatically.
+            if _is_jwt_expired_error(e):
+                last = float(st.session_state.get("_jwt_refresh_last_ts") or 0)
+                now = time.time()
+                # Avoid infinite rerun loops if refresh isn't possible.
+                if now - last > 15:
+                    st.session_state["_jwt_refresh_last_ts"] = now
+                    if _try_refresh_supabase_session():
+                        st.rerun()
+
+                # If we couldn't refresh, force re-auth to stop the "refresh fixes it" loop.
+                try:
+                    supabase.auth.sign_out()
+                except Exception:
+                    pass
+                _clear_remember_me()
+                st.session_state.pop("user", None)
+                st.session_state.pop("access_token", None)
+                st.session_state.pop("refresh_token", None)
+                st.warning("Your session expired. Please log in again.")
+                st.rerun()
+
             tb = traceback.format_exc()
             st.error(f"{label} ran into an unexpected error. Please refresh and try again.")
             # Only show details to admins to avoid leaking internal info to public users.
