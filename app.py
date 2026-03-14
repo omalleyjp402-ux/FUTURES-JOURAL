@@ -1401,6 +1401,31 @@ def render_public_sidebar(active: str) -> str:
             pass
         st.rerun()
 
+    def _set_public_nav(choice: str) -> None:
+        # Keep URL in sync so refresh/bookmarks work.
+        page_map = {
+            "Home": "",
+            "Pricing": "pricing",
+            "Demo": "demo",
+            "Terms": "terms",
+            "Privacy": "privacy",
+            "Refunds": "refunds",
+            "Contact": "contact",
+        }
+        try:
+            if choice == "Home":
+                # Clear `page` to keep the clean homepage URL.
+                if "page" in st.query_params:
+                    del st.query_params["page"]
+            else:
+                st.query_params["page"] = page_map.get(choice, "")
+            if ref:
+                st.query_params["ref"] = ref
+        except Exception:
+            pass
+        st.session_state["public_nav"] = choice
+        st.rerun()
+
     with st.sidebar:
         # A compact brand header in the sidebar for the public shell.
         render_brand_header(center=True)
@@ -1408,8 +1433,30 @@ def render_public_sidebar(active: str) -> str:
         options = ["Home", "Pricing", "Demo", "Terms", "Privacy", "Refunds", "Contact"]
         if active not in options:
             active = "Home"
-        idx = options.index(active)
-        choice = st.radio("Menu", options, index=idx, label_visibility="collapsed", key="public_nav")
+        if "public_nav" not in st.session_state:
+            st.session_state["public_nav"] = active
+        # If URL deep-link changes, let it override the in-memory selection once.
+        if active and st.session_state.get("public_nav") != active:
+            st.session_state["public_nav"] = active
+        current = st.session_state.get("public_nav", active)
+        if current not in options:
+            current = active
+
+        public_icons = {
+            "Home": "⌂",
+            "Pricing": "$",
+            "Demo": "▣",
+            "Terms": "≡",
+            "Privacy": "⛨",
+            "Refunds": "↺",
+            "Contact": "✉",
+        }
+        st.markdown("### Menu")
+        for opt in options:
+            label = f"{public_icons.get(opt, '•')}  {opt}"
+            btn_type = "primary" if opt == current else "secondary"
+            if st.button(label, use_container_width=True, type=btn_type, key=f"public_nav_btn_{opt}"):
+                _set_public_nav(opt)
         st.markdown("---")
         if st.button("Log in / Sign up", use_container_width=True, key="public_login_btn"):
             _go_auth()
@@ -5061,13 +5108,23 @@ else:
         if add_trade:
             _request_nav("New Trade")
 
-        st.radio(
-            "Go to",
-            section_options,
-            key="sidebar_nav_section",
-            label_visibility="collapsed",
-            on_change=_sync_nav_from_sidebar,
-        )
+        nav_icons = {
+            "Dashboard": "▣",
+            "New Trade": "＋",
+            "Analytics": "⌁",
+            "PnL Calendar": "▦",
+            "Reports": "▤",
+            "Streaks & Milestones": "★",
+            "Journal": "✎",
+            "Strategy/Model Creation": "⧉",
+            "Affiliates": "✦",
+        }
+        current_nav = st.session_state.get("nav_section", section_options[0])
+        for opt in section_options:
+            label = f"{nav_icons.get(opt, '•')}  {opt}"
+            btn_type = "primary" if opt == current_nav else "secondary"
+            if st.button(label, use_container_width=True, type=btn_type, key=f"sidebar_nav_btn_{opt}"):
+                _request_nav(opt)
 
         with st.expander("Settings", expanded=False):
             labels = list(CURRENCY_CHOICES.keys())
