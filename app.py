@@ -2039,13 +2039,42 @@ def render_all_accounts_dashboard(user_id: str) -> None:
     total_trades = int(len(dfx))
     total_pnl = float(dfx[pnl_col].sum())
     win_rate = float((dfx[pnl_col] > 0).mean() * 100.0) if total_trades else 0.0
+    wins = int((dfx[pnl_col] > 0).sum()) if total_trades else 0
+
+    wins_df = dfx[dfx[pnl_col] > 0]
+    losses_df = dfx[dfx[pnl_col] < 0]
+    avg_r = float(pd.to_numeric(dfx.get("r_multiple"), errors="coerce").dropna().mean()) if "r_multiple" in dfx.columns else None
+    avg_win = float(pd.to_numeric(wins_df[pnl_col], errors="coerce").dropna().mean()) if not wins_df.empty else 0.0
+    avg_loss = float(pd.to_numeric(losses_df[pnl_col], errors="coerce").dropna().mean()) if not losses_df.empty else 0.0
+    expectancy = (win_rate / 100.0 * avg_win) + ((1.0 - win_rate / 100.0) * avg_loss) if total_trades else 0.0
+    largest_win = float(pd.to_numeric(dfx[pnl_col], errors="coerce").max()) if total_trades else 0.0
+    largest_loss = float(pd.to_numeric(dfx[pnl_col], errors="coerce").min()) if total_trades else 0.0
+
+    avg_duration = None
+    if "duration_minutes" in dfx.columns:
+        dur = pd.to_numeric(dfx["duration_minutes"], errors="coerce")
+        dur = dur[(dur >= 0) & (dur <= 12 * 60)]
+        if not dur.dropna().empty:
+            avg_duration = float(dur.dropna().mean())
+
+    plan_rate = float((dfx["followed_plan"] == "Yes").mean() * 100.0) if "followed_plan" in dfx.columns else 0.0
+    revenge_rate = float((dfx["revenge_trade"] == "Yes").mean() * 100.0) if "revenge_trade" in dfx.columns else 0.0
     pf_all = _profit_factor(dfx[pnl_col])
 
     cards = [
         ("Total trades", total_trades, None),
+        ("Win rate", f"{win_rate:.1f}%", f"Wins: {wins}"),
+        ("Average R", f"{avg_r:.2f}" if avg_r is not None and pd.notna(avg_r) else "n/a", None),
         ("Total PnL", format_money(total_pnl), None),
-        ("Win rate", f"{win_rate:.1f}%", None),
+        ("Avg win", format_money(avg_win), None),
+        ("Avg loss", format_money(avg_loss), None),
         ("Profit factor", f"{pf_all:.2f}" if pf_all is not None else "n/a", None),
+        ("Expectancy", format_money(expectancy), None),
+        ("Largest win", format_money(largest_win), None),
+        ("Largest loss", format_money(largest_loss), None),
+        ("Avg duration", f"{avg_duration:.1f} min" if avg_duration is not None else "n/a", None),
+        ("Plan adherence", f"{plan_rate:.1f}%", None),
+        ("Revenge", f"{revenge_rate:.1f}%", None),
         ("Most profitable account", safe_str(most_profitable_account), None),
         ("Best day (account)", safe_str(best_day_label), None),
         ("Highest RR account", safe_str(highest_rr_account), None),
@@ -2053,11 +2082,33 @@ def render_all_accounts_dashboard(user_id: str) -> None:
     ]
     render_metric_cards(cards)
 
-    # Equity curve (combined)
-    daily = dfx.groupby("date", as_index=False)[pnl_col].sum().rename(columns={pnl_col: "pnl"}).sort_values("date")
-    daily["equity"] = daily["pnl"].cumsum()
+    # Aggregate (combined) charts
+    daily_df = (
+        dfx.groupby("date", as_index=False)[pnl_col]
+        .agg(pnl="sum", trades="count")
+        .rename(columns={"date": "date"})
+        .sort_values("date")
+    )
+    daily_df["equity"] = daily_df["pnl"].cumsum()
+    daily_df["equity_smooth"] = daily_df["equity"].rolling(5, min_periods=1).mean()
+    daily_df["peak"] = daily_df["equity"].cummax()
+    daily_df["drawdown"] = daily_df["equity"] - daily_df["peak"]
+
+    instrument_df = (
+        dfx.groupby("instrument", as_index=False)[pnl_col]
+        .sum()
+        .rename(columns={pnl_col: "pnl"})
+        .sort_values("pnl", ascending=False)
+    )
+    session_df = (
+        dfx.groupby("session", as_index=False)[pnl_col]
+        .sum()
+        .rename(columns={pnl_col: "pnl"})
+        .sort_values("pnl", ascending=False)
+    )
+
     equity_chart = (
-        alt.Chart(daily)
+        alt.Chart(daily_df)
         .mark_area(
             interpolate="monotone",
             line={"color": "#A78BFA", "width": 2.6},
@@ -2074,15 +2125,129 @@ def render_all_accounts_dashboard(user_id: str) -> None:
             ),
         )
         .encode(
-            x=alt.X("date:T", title=None),
-            y=alt.Y("equity:Q", title=None),
-            tooltip=[alt.Tooltip("date:T", title="Date"), alt.Tooltip("equity:Q", title="Equity", format=",.2f")],
+            x=alt.X("date:T", axis=alt.Axis(title=None, format="%b %d")),
+            y=alt.Y("equity_smooth:Q", axis=alt.Axis(title=None), scale=alt.Scale(zero=False)),
+            tooltip=[
+                alt.Tooltip("date:T", title="Date"),
+                alt.Tooltip("equity:Q", title="Equity", format=",.2f"),
+                alt.Tooltip("pnl:Q", title="Daily PnL", format=",.2f"),
+            ],
         )
         .properties(height=280)
     )
+
+    daily_chart = (
+        alt.Chart(daily_df)
+        .mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3)
+        .encode(
+            x=alt.X("date:T", axis=alt.Axis(title=None, format="%b %d")),
+            y=alt.Y("pnl:Q", axis=alt.Axis(title=None), scale=alt.Scale(zero=False)),
+            color=alt.condition(alt.datum.pnl >= 0, alt.value("#22c55e"), alt.value("#ef4444")),
+            tooltip=[alt.Tooltip("date:T", title="Date"), alt.Tooltip("pnl:Q", title="PnL", format=",.2f")],
+        )
+        .properties(height=280)
+    )
+
+    instr_chart = (
+        alt.Chart(instrument_df)
+        .mark_bar()
+        .encode(
+            y=alt.Y("instrument:N", sort=INSTRUMENT_ORDER, axis=alt.Axis(title=None)),
+            x=alt.X("pnl:Q", axis=alt.Axis(title=None)),
+            color=alt.value("#8FC9FF"),
+            tooltip=[alt.Tooltip("instrument:N", title="Instrument"), alt.Tooltip("pnl:Q", title="PnL", format=",.2f")],
+        )
+        .properties(height=220)
+    )
+
+    session_chart = (
+        alt.Chart(session_df)
+        .mark_bar()
+        .encode(
+            y=alt.Y("session:N", sort=SESSIONS, axis=alt.Axis(title=None)),
+            x=alt.X("pnl:Q", axis=alt.Axis(title=None)),
+            color=alt.value("#8FC9FF"),
+            tooltip=[alt.Tooltip("session:N", title="Session"), alt.Tooltip("pnl:Q", title="PnL", format=",.2f")],
+        )
+        .properties(height=220)
+    )
+
+    drawdown_chart = (
+        alt.Chart(daily_df)
+        .mark_area(
+            line={"color": "#ef4444", "strokeWidth": 1.5},
+            color="rgba(239, 68, 68, 0.18)",
+        )
+        .encode(
+            x=alt.X("date:T", axis=alt.Axis(title=None, format="%b %d")),
+            y=alt.Y("drawdown:Q", axis=alt.Axis(title=None), scale=alt.Scale(zero=False)),
+            tooltip=[alt.Tooltip("date:T", title="Date"), alt.Tooltip("drawdown:Q", title="Drawdown", format=",.2f")],
+        )
+        .properties(height=200)
+    )
+
+    c_score, c_recent = st.columns([1.2, 1])
+    with c_score:
+        st.markdown("**Dylo score**")
+        zylo = compute_zylo_score(dfx, daily_df, pnl_col)
+        score = float(zylo["overall"])
+        st.markdown(f"**{score:.2f}** / 100")
+        try:
+            st.progress(min(1.0, max(0.0, score / 100.0)))
+        except Exception:
+            pass
+        render_zylo_radar(zylo["components"])
+
+    with c_recent:
+        st.markdown("**Recent trades**")
+        recent = (
+            dfx.sort_values(["date", "entry_time"], ascending=[False, False], na_position="last")
+            .head(10)
+            .copy()
+        )
+        if "date" in recent.columns:
+            recent["Date"] = pd.to_datetime(recent["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+        recent["PnL"] = recent[pnl_col].apply(format_money)
+        show_cols = []
+        for col in ("Date", "account_type", "instrument", "direction", "contracts", "session", "trade_grade", "PnL"):
+            if col in recent.columns:
+                show_cols.append(col)
+        if show_cols:
+            st.dataframe(
+                recent[show_cols].rename(
+                    columns={
+                        "account_type": "Account",
+                        "instrument": "Instrument",
+                        "direction": "Dir",
+                        "contracts": "Size",
+                        "session": "Session",
+                        "trade_grade": "Grade",
+                    }
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            st.info("No trades yet.")
+
+    c_eq, c_daily = st.columns([2, 1])
+    with c_eq:
+        st.markdown("**Equity curve**")
+        st.altair_chart(style_altair_chart(equity_chart), use_container_width=True)
+    with c_daily:
+        st.markdown("**Daily P&L**")
+        st.altair_chart(style_altair_chart(daily_chart), use_container_width=True)
+
+    st.markdown("**Performance by instrument & session**")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.altair_chart(style_altair_chart(instr_chart), use_container_width=True)
+    with c2:
+        st.altair_chart(style_altair_chart(session_chart), use_container_width=True)
+
     st.markdown("---")
-    st.subheader("All accounts equity curve")
-    st.altair_chart(style_altair_chart(equity_chart), use_container_width=True)
+    st.subheader("Drawdown")
+    st.altair_chart(style_altair_chart(drawdown_chart), use_container_width=True)
 
     st.markdown("**Performance by account**")
     show = per_df.copy()
