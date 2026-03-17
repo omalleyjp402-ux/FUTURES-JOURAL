@@ -5841,8 +5841,10 @@ else:
     elif section == "Affiliates":
         _safe_render("Affiliates", lambda: render_affiliates_page(user.id))
     else:
-        tabs = st.tabs(["All Accounts"] + ACCOUNT_TYPES)
-        for tab, label in zip(tabs, ["All Accounts"] + ACCOUNT_TYPES):
+        # Default to Funded tab first (better UX). Keep "All Accounts" available as a final tab.
+        tab_labels = [ACCOUNT_TYPES[1], ACCOUNT_TYPES[0], ACCOUNT_TYPES[2], "All Accounts"]
+        tabs = st.tabs(tab_labels)
+        for tab, label in zip(tabs, tab_labels):
             with tab:
                 if label == "All Accounts":
                     _safe_render(
