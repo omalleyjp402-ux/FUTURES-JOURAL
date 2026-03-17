@@ -1908,6 +1908,204 @@ def render_strategy_creation_page(user_id: str) -> None:
         st.info("No strategies saved yet.")
 
 
+# ── All Accounts Dashboard ────────────────────────────────────────────────────
+
+def _profit_factor(series: pd.Series) -> Optional[float]:
+    try:
+        s = pd.to_numeric(series, errors="coerce").fillna(0.0)
+        wins = float(s[s > 0].sum())
+        losses = float(s[s < 0].sum())
+        if losses == 0:
+            return None
+        return wins / abs(losses)
+    except Exception:
+        return None
+
+
+def render_all_accounts_dashboard(user_id: str) -> None:
+    """
+    A single dashboard view that aggregates across all account types.
+    Kept separate so we don't risk breaking the per-account render_section logic.
+    """
+    df_all = load_all_trades(user_id)
+    if df_all is None or df_all.empty:
+        st.info("No trades yet across accounts.")
+        return
+
+    # Filters (match the general style/feel of Dashboard filters)
+    with st.expander("Filters", expanded=False):
+        fp = "all_accounts_filter_"
+        min_date = pd.to_datetime(df_all["date"], errors="coerce").min()
+        max_date = pd.to_datetime(df_all["date"], errors="coerce").max()
+        if pd.isna(min_date) or pd.isna(max_date):
+            st.info("No valid trade dates found yet.")
+            return
+        date_range = st.date_input("Date range", (min_date.date(), max_date.date()), key=f"{fp}date")
+        start_date, end_date = (date_range if isinstance(date_range, (tuple, list)) and len(date_range) == 2 else (date_range, date_range))
+
+        acct_opts = [a for a in ACCOUNT_TYPES if a in set(df_all.get("account_type", []))]
+        if not acct_opts:
+            acct_opts = ACCOUNT_TYPES
+        acct_filter = st.multiselect("Accounts", acct_opts, default=acct_opts, key=f"{fp}acct")
+
+        instr_opts = [i for i in INSTRUMENT_ORDER if i in set(df_all.get("instrument", []))]
+        instr_filter = st.multiselect("Instrument", INSTRUMENT_ORDER, default=(instr_opts or INSTRUMENT_ORDER), key=f"{fp}instrument")
+
+        ses_opts = [s for s in SESSIONS if s in set(df_all.get("session", []))]
+        ses_filter = st.multiselect("Session", SESSIONS, default=(ses_opts or SESSIONS), key=f"{fp}session")
+
+        direction_filter = st.multiselect("Direction", ["Long", "Short"], default=["Long", "Short"], key=f"{fp}direction")
+
+    pnl_view = st.radio("PnL view", ["Net (after fees)", "Gross"], horizontal=True, key="all_accounts_pnl_view")
+    pnl_col = "pnl_net" if pnl_view.startswith("Net") else "pnl_gross"
+    if pnl_col not in df_all.columns:
+        df_all[pnl_col] = 0.0
+    df_all[pnl_col] = pd.to_numeric(df_all[pnl_col], errors="coerce").fillna(0.0)
+
+    if "pnl_override" in df_all.columns:
+        df_all["pnl_override"] = pd.to_numeric(df_all["pnl_override"], errors="coerce")
+        df_all["pnl_effective"] = df_all["pnl_override"].where(df_all["pnl_override"].notna(), df_all[pnl_col])
+        pnl_col = "pnl_effective"
+
+    dfx = df_all.copy()
+    dfx = dfx[
+        (dfx["date"] >= pd.to_datetime(start_date))
+        & (dfx["date"] <= pd.to_datetime(end_date))
+        & (dfx.get("account_type", "").isin(acct_filter))
+        & (dfx.get("instrument", "").isin(instr_filter))
+        & (dfx.get("session", "").isin(ses_filter))
+        & (dfx.get("direction", "").isin(direction_filter))
+    ].copy()
+
+    if dfx.empty:
+        st.info("No trades match your filters.")
+        return
+
+    # Per-account stats
+    per = []
+    for acct, g in dfx.groupby("account_type"):
+        trades = int(len(g))
+        wr = float((g[pnl_col] > 0).mean() * 100.0) if trades else 0.0
+        pf = _profit_factor(g[pnl_col])
+        avg_r = float(pd.to_numeric(g.get("r_multiple"), errors="coerce").dropna().mean()) if "r_multiple" in g.columns else None
+        emo = float(pd.to_numeric(g.get("emotion_score"), errors="coerce").dropna().mean()) if "emotion_score" in g.columns else None
+        per.append(
+            {
+                "account": acct,
+                "trades": trades,
+                "pnl": float(g[pnl_col].sum()),
+                "win_rate": wr,
+                "profit_factor": float(pf) if pf is not None else None,
+                "avg_r": avg_r,
+                "avg_emotion": emo,
+            }
+        )
+    per_df = pd.DataFrame(per).sort_values("pnl", ascending=False)
+
+    # Headline insights
+    most_profitable_account = per_df.iloc[0]["account"] if not per_df.empty else "n/a"
+
+    # Best day + which account
+    best_day_label = "n/a"
+    try:
+        day_acct = (
+            dfx.groupby([dfx["date"].dt.date, "account_type"], as_index=False)[pnl_col]
+            .sum()
+            .rename(columns={"date": "day", pnl_col: "pnl"})
+        )
+        best_row = day_acct.loc[day_acct["pnl"].idxmax()]
+        best_day_label = f"{best_row['day']} ({best_row['account_type']})"
+    except Exception:
+        pass
+
+    # Highest RR account (avg R)
+    highest_rr_account = "n/a"
+    try:
+        tmp = per_df.dropna(subset=["avg_r"]).sort_values("avg_r", ascending=False)
+        if not tmp.empty:
+            highest_rr_account = f"{tmp.iloc[0]['account']} ({float(tmp.iloc[0]['avg_r']):.2f})"
+    except Exception:
+        pass
+
+    # Most emotional account (avg emotion)
+    most_emotional_account = "n/a"
+    try:
+        tmp = per_df.dropna(subset=["avg_emotion"]).sort_values("avg_emotion", ascending=False)
+        if not tmp.empty:
+            most_emotional_account = f"{tmp.iloc[0]['account']} ({float(tmp.iloc[0]['avg_emotion']):.1f})"
+    except Exception:
+        pass
+
+    total_trades = int(len(dfx))
+    total_pnl = float(dfx[pnl_col].sum())
+    win_rate = float((dfx[pnl_col] > 0).mean() * 100.0) if total_trades else 0.0
+    pf_all = _profit_factor(dfx[pnl_col])
+
+    cards = [
+        ("Total trades", total_trades, None),
+        ("Total PnL", format_money(total_pnl), None),
+        ("Win rate", f"{win_rate:.1f}%", None),
+        ("Profit factor", f"{pf_all:.2f}" if pf_all is not None else "n/a", None),
+        ("Most profitable account", safe_str(most_profitable_account), None),
+        ("Best day (account)", safe_str(best_day_label), None),
+        ("Highest RR account", safe_str(highest_rr_account), None),
+        ("Most emotional account", safe_str(most_emotional_account), None),
+    ]
+    render_metric_cards(cards)
+
+    # Equity curve (combined)
+    daily = dfx.groupby("date", as_index=False)[pnl_col].sum().rename(columns={pnl_col: "pnl"}).sort_values("date")
+    daily["equity"] = daily["pnl"].cumsum()
+    equity_chart = (
+        alt.Chart(daily)
+        .mark_area(
+            interpolate="monotone",
+            line={"color": "#A78BFA", "width": 2.6},
+            color=alt.Gradient(
+                gradient="linear",
+                stops=[
+                    alt.GradientStop(color="rgba(124,58,237,0.45)", offset=0),
+                    alt.GradientStop(color="rgba(56,189,248,0.12)", offset=1),
+                ],
+                x1=0,
+                x2=1,
+                y1=0,
+                y2=0,
+            ),
+        )
+        .encode(
+            x=alt.X("date:T", title=None),
+            y=alt.Y("equity:Q", title=None),
+            tooltip=[alt.Tooltip("date:T", title="Date"), alt.Tooltip("equity:Q", title="Equity", format=",.2f")],
+        )
+        .properties(height=280)
+    )
+    st.markdown("---")
+    st.subheader("All accounts equity curve")
+    st.altair_chart(style_altair_chart(equity_chart), use_container_width=True)
+
+    st.markdown("**Performance by account**")
+    show = per_df.copy()
+    show["PnL"] = show["pnl"].apply(lambda v: format_money(float(v)))
+    show["Win %"] = show["win_rate"].apply(lambda v: f"{float(v):.1f}%")
+    show["PF"] = show["profit_factor"].apply(lambda v: f"{float(v):.2f}" if pd.notna(v) else "n/a")
+    show["Avg R"] = show["avg_r"].apply(lambda v: f"{float(v):.2f}" if pd.notna(v) else "n/a")
+    show["Avg Emotion"] = show["avg_emotion"].apply(lambda v: f"{float(v):.1f}" if pd.notna(v) else "n/a")
+    st.dataframe(
+        show[["account", "trades", "PnL", "Win %", "PF", "Avg R", "Avg Emotion"]].rename(columns={"account": "Account", "trades": "Trades"}),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
+def render_all_accounts_section(user_id: str, section: str) -> None:
+    if section == "Dashboard":
+        st.subheader("Dashboard (All accounts)")
+        render_all_accounts_dashboard(user_id)
+    else:
+        st.info("All-accounts view is currently available on **Dashboard**. Pick an account tab for other pages.")
+
+
 # ── Trade Tags (feature-tolerant) ─────────────────────────────────────────────
 
 def load_user_tags(user_id: str) -> list[str]:
@@ -3657,6 +3855,32 @@ def load_trades(user_id: str, account_type: str) -> pd.DataFrame:
         df = df.drop(columns=["user_id", "account_type", "created_at"], errors="ignore")
         return df
     return pd.DataFrame()
+
+@st.cache_data(ttl=45, show_spinner=False)
+def load_all_trades(user_id: str) -> pd.DataFrame:
+    """
+    Load all trades for a user across account types (keeps `account_type`).
+    Cached briefly to keep the All Accounts dashboard snappy.
+    """
+    try:
+        sb = authed_supabase()
+        res = sb.table("trades").select("*").eq("user_id", user_id).execute()
+        rows = res.data or []
+        if not rows:
+            return pd.DataFrame()
+        df = pd.DataFrame(rows)
+        # Normalize basic types (tolerant; missing cols are fine)
+        if "date" in df.columns:
+            df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
+        for c in ("pnl_net", "pnl_gross", "pnl_override", "r_multiple", "emotion_score", "duration_minutes"):
+            if c in df.columns:
+                df[c] = pd.to_numeric(df[c], errors="coerce")
+        for c in ("instrument", "direction", "session", "account_type"):
+            if c in df.columns:
+                df[c] = df[c].astype(str)
+        return df
+    except Exception:
+        return pd.DataFrame()
 
 
 def save_trade(user_id: str, account_type: str, row: dict):
@@ -5452,10 +5676,17 @@ else:
     elif section == "Affiliates":
         _safe_render("Affiliates", lambda: render_affiliates_page(user.id))
     else:
-        tabs = st.tabs(ACCOUNT_TYPES)
-        for tab, account_type in zip(tabs, ACCOUNT_TYPES):
+        tabs = st.tabs(["All Accounts"] + ACCOUNT_TYPES)
+        for tab, label in zip(tabs, ["All Accounts"] + ACCOUNT_TYPES):
             with tab:
-                _safe_render(
-                    f"{section} ({account_type})",
-                    lambda account_type=account_type: render_section(user.id, account_type, section),
-                )
+                if label == "All Accounts":
+                    _safe_render(
+                        f"{section} (All Accounts)",
+                        lambda: render_all_accounts_section(user.id, section),
+                    )
+                else:
+                    account_type = label
+                    _safe_render(
+                        f"{section} ({account_type})",
+                        lambda account_type=account_type: render_section(user.id, account_type, section),
+                    )
