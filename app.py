@@ -2081,6 +2081,7 @@ def render_all_accounts_dashboard(user_id: str) -> None:
         ("Most emotional account", safe_str(most_emotional_account), None),
     ]
     render_metric_cards(cards)
+    render_next_week_focus_panel(user_id)
 
     # Aggregate (combined) charts
     daily_df = (
@@ -2261,6 +2262,27 @@ def render_all_accounts_dashboard(user_id: str) -> None:
         use_container_width=True,
         hide_index=True,
     )
+
+
+def render_next_week_focus_panel(user_id: str) -> None:
+    latest = get_latest_weekly_focus(user_id)
+    if not latest:
+        return
+    items = _parse_focus_items(latest.get("focus_next"))
+    if not items:
+        return
+    week_start = safe_str(latest.get("week_start"))
+    imp = latest.get("improvement_percent")
+    subtitle = week_start or "Latest"
+    st.markdown("**Next week focus**")
+    st.caption(subtitle)
+    if imp is not None and safe_str(imp).strip() != "":
+        try:
+            st.caption(f"Weekly improvement: **{float(imp):.1f}%**")
+        except Exception:
+            pass
+    for it in items[:3]:
+        st.markdown(f"- {it}")
 
 
 def render_all_accounts_section(user_id: str, section: str) -> None:
@@ -2765,6 +2787,155 @@ def apply_settings_to_session(user_id: str) -> None:
 
 JOURNAL_ENABLED = truthy(get_secret("JOURNAL_ENABLED", "false"))
 
+WEEKLY_JOURNAL_ENABLED = truthy(get_secret("WEEKLY_JOURNAL_ENABLED", "true"))
+
+
+def _week_start_monday(d):
+    # Monday as week start (ISO-like).
+    return d - timedelta(days=int(d.weekday()))
+
+
+def _week_label(week_start) -> str:
+    week_end = week_start + timedelta(days=6)
+    iso_year, iso_week, _ = week_start.isocalendar()
+    return f"{iso_year}-W{iso_week:02d} · {week_start.strftime('%b %d')} – {week_end.strftime('%b %d')}"
+
+
+def _parse_focus_items(raw: str) -> list[str]:
+    text = safe_str(raw).strip()
+    if not text:
+        return []
+    lines = [l.strip() for l in text.replace("\r\n", "\n").replace("\r", "\n").split("\n")]
+    items: list[str] = []
+    for l in lines:
+        if not l:
+            continue
+        # Strip common bullets/prefixes
+        l = re.sub(r"^[-*•\u2022]+\s*", "", l).strip()
+        l = re.sub(r"^\d+\)\s*", "", l).strip()
+        l = re.sub(r"^\d+\.\s*", "", l).strip()
+        if l:
+            items.append(l)
+    if len(items) >= 3:
+        return items[:3]
+    # Fallback: comma-separated
+    comma = [p.strip() for p in text.split(",") if p.strip()]
+    if len(comma) >= 3:
+        return comma[:3]
+    return (items or comma)[:3]
+
+
+def load_weekly_journal_entry(user_id: str, week_start: str) -> Optional[Dict[str, Any]]:
+    """
+    Returns a dict for the weekly journal entry, or:
+    - {} when no entry exists yet
+    - None when table isn't set up / errors (caller should show 'run SQL' hint)
+    """
+    try:
+        sb = authed_supabase()
+        res = (
+            sb.table("weekly_journal_entries")
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("week_start", week_start)
+            .limit(1)
+            .execute()
+        )
+        if res.data:
+            return res.data[0]
+        return {}
+    except Exception as e:
+        st.session_state["_weekly_journal_last_error"] = f"{type(e).__name__}: {e}"
+        return None
+
+
+def upsert_weekly_journal_entry(user_id: str, week_start: str, payload: Dict[str, Any]) -> bool:
+    try:
+        sb = authed_supabase()
+        row = {"user_id": user_id, "week_start": week_start}
+        row.update(payload)
+        existing = (
+            sb.table("weekly_journal_entries")
+            .select("week_start")
+            .eq("user_id", user_id)
+            .eq("week_start", week_start)
+            .limit(1)
+            .execute()
+        )
+        if existing.data:
+            sb.table("weekly_journal_entries").update(payload).eq("user_id", user_id).eq("week_start", week_start).execute()
+        else:
+            sb.table("weekly_journal_entries").insert(row).execute()
+        return True
+    except Exception as e:
+        st.session_state["_weekly_journal_last_error"] = f"{type(e).__name__}: {e}"
+        return False
+
+
+def get_latest_weekly_focus(user_id: str) -> Optional[Dict[str, Any]]:
+    try:
+        sb = authed_supabase()
+        res = (
+            sb.table("weekly_journal_entries")
+            .select("week_start,focus_next,improvement_percent")
+            .eq("user_id", user_id)
+            .order("week_start", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if not res.data:
+            return None
+        return res.data[0]
+    except Exception:
+        return None
+
+
+LESSONS_BLOCK_START = "[[TRADYLO_LESSONS]]"
+LESSONS_BLOCK_END = "[[/TRADYLO_LESSONS]]"
+
+
+def _strip_lessons_block(notes: str) -> str:
+    s = safe_str(notes)
+    if LESSONS_BLOCK_START not in s:
+        return s
+    return re.sub(
+        re.escape(LESSONS_BLOCK_START) + r".*?" + re.escape(LESSONS_BLOCK_END),
+        "",
+        s,
+        flags=re.S,
+    ).strip()
+
+
+def _extract_lessons(notes: str) -> tuple[str, list[str]]:
+    s = safe_str(notes)
+    lessons: list[str] = []
+    if LESSONS_BLOCK_START in s and LESSONS_BLOCK_END in s:
+        try:
+            m = re.search(
+                re.escape(LESSONS_BLOCK_START) + r"(.*?)" + re.escape(LESSONS_BLOCK_END),
+                s,
+                flags=re.S,
+            )
+            if m:
+                payload = json.loads(m.group(1).strip() or "{}")
+                raw = payload.get("lessons") if isinstance(payload, dict) else []
+                if isinstance(raw, list):
+                    lessons = [safe_str(x).strip() for x in raw if safe_str(x).strip()]
+        except Exception:
+            lessons = []
+    return (_strip_lessons_block(s), lessons)
+
+
+def _embed_lessons(notes: str, lessons: list[str]) -> str:
+    base = _strip_lessons_block(notes).strip()
+    cleaned = [safe_str(x).strip() for x in (lessons or []) if safe_str(x).strip()]
+    if not cleaned:
+        return base
+    block = LESSONS_BLOCK_START + json.dumps({"lessons": cleaned}, ensure_ascii=True) + LESSONS_BLOCK_END
+    if not base:
+        return block
+    return base + "\n\n" + block
+
 
 def load_journal_entry(user_id: str, entry_date: str) -> Optional[str]:
     try:
@@ -2808,58 +2979,131 @@ def upsert_journal_entry(user_id: str, entry_date: str, content: str) -> bool:
 
 def render_journal_page(user_id: str) -> None:
     st.subheader("Journal")
-    st.caption("Daily notes automatically synced to your selected date.")
+    st.caption("Daily notes + weekly reviews.")
 
-    follow_today = st.toggle("Follow today", value=True, key="journal_follow_today")
-    today = datetime.now().date()
-    if follow_today:
-        selected_date = today
-    else:
-        selected_date = st.date_input("Date", today, key="journal_date")
+    tab_daily, tab_weekly = st.tabs(["Daily", "Weekly"])
 
-    date_str = selected_date.strftime("%Y-%m-%d")
-    state_key = f"journal_content_{date_str}"
-    last_key = f"journal_last_saved_{date_str}"
+    with tab_daily:
+        st.caption("Daily notes automatically synced to your selected date.")
 
-    if state_key not in st.session_state:
-        existing = load_journal_entry(user_id, date_str)
-        if existing is None:
-            st.warning("Journal storage isn't set up yet. Run `sql/journal.sql` in the SAME Supabase project as your app's `SUPABASE_URL` secret.")
-            # Only show debug details to the app owner to avoid leaking backend info publicly.
-            user_obj = st.session_state.get("user")
-            email = ""
-            if isinstance(user_obj, dict):
-                email = safe_str(user_obj.get("email"))
-            else:
-                email = safe_str(getattr(user_obj, "email", ""))
-            if email.lower() == "omalleyjp402@gmail.com":
-                details = safe_str(st.session_state.get("_journal_last_error"))
-                if details:
-                    with st.expander("Debug details (owner only)", expanded=False):
-                        st.code(details)
-                        st.caption(f"Supabase URL in app: {SUPABASE_URL}")
-            existing = ""
-        st.session_state[state_key] = existing
-        st.session_state[last_key] = existing
-
-    content = st.text_area(
-        f"Entry for {date_str}",
-        key=state_key,
-        height=280,
-        placeholder="Plan, emotions, lessons, what worked, what didn’t…",
-    )
-
-    auto = st.toggle("Auto-save", value=True, key="journal_autosave")
-    save_clicked = st.button("Save now", key="journal_save")
-
-    if (auto and content != st.session_state.get(last_key, "")) or save_clicked:
-        ok = upsert_journal_entry(user_id, date_str, content)
-        if ok:
-            st.session_state[last_key] = content
-            if save_clicked:
-                st.success("Saved.")
+        follow_today = st.toggle("Follow today", value=True, key="journal_follow_today")
+        today = datetime.now().date()
+        if follow_today:
+            selected_date = today
         else:
-            st.error("Could not save journal entry yet (database table/policies may not be set up).")
+            selected_date = st.date_input("Date", today, key="journal_date")
+
+        date_str = selected_date.strftime("%Y-%m-%d")
+        state_key = f"journal_content_{date_str}"
+        last_key = f"journal_last_saved_{date_str}"
+
+        if state_key not in st.session_state:
+            existing = load_journal_entry(user_id, date_str)
+            if existing is None:
+                st.warning("Journal storage isn't set up yet. Run `sql/journal.sql` in the SAME Supabase project as your app's `SUPABASE_URL` secret.")
+                # Only show debug details to the app owner to avoid leaking backend info publicly.
+                user_obj = st.session_state.get("user")
+                email = ""
+                if isinstance(user_obj, dict):
+                    email = safe_str(user_obj.get("email"))
+                else:
+                    email = safe_str(getattr(user_obj, "email", ""))
+                if email.lower() == "omalleyjp402@gmail.com":
+                    details = safe_str(st.session_state.get("_journal_last_error"))
+                    if details:
+                        with st.expander("Debug details (owner only)", expanded=False):
+                            st.code(details)
+                            st.caption(f"Supabase URL in app: {SUPABASE_URL}")
+                existing = ""
+            st.session_state[state_key] = existing
+            st.session_state[last_key] = existing
+
+        content = st.text_area(
+            f"Entry for {date_str}",
+            key=state_key,
+            height=280,
+            placeholder="Plan, emotions, lessons, what worked, what didn’t…",
+        )
+
+        auto = st.toggle("Auto-save", value=True, key="journal_autosave")
+        save_clicked = st.button("Save now", key="journal_save")
+
+        if (auto and content != st.session_state.get(last_key, "")) or save_clicked:
+            ok = upsert_journal_entry(user_id, date_str, content)
+            if ok:
+                st.session_state[last_key] = content
+                if save_clicked:
+                    st.success("Saved.")
+            else:
+                st.error("Could not save journal entry yet (database table/policies may not be set up).")
+
+    with tab_weekly:
+        if not WEEKLY_JOURNAL_ENABLED:
+            st.info("Weekly journal is disabled.")
+            return
+
+        st.caption("Weekly review template. Saved per week (Monday → Sunday).")
+
+        follow_week = st.toggle("Follow current week", value=True, key="weekly_follow_week")
+        today = datetime.now().date()
+        if follow_week:
+            picked = today
+        else:
+            picked = st.date_input("Pick any date in the week", today, key="weekly_pick_date")
+        ws = _week_start_monday(picked)
+        week_start_str = ws.strftime("%Y-%m-%d")
+
+        st.markdown(f"**Week:** {_week_label(ws)}")
+
+        w_state = f"weekly_journal_{week_start_str}"
+        w_last = f"weekly_journal_last_{week_start_str}"
+        if w_state not in st.session_state:
+            existing = load_weekly_journal_entry(user_id, week_start_str)
+            if existing is None:
+                st.warning("Weekly journal storage isn't set up yet. Run `sql/weekly_journal.sql` in Supabase (same project as your `SUPABASE_URL`).")
+                existing = {}
+            st.session_state[w_state] = existing or {}
+            st.session_state[w_last] = json.dumps(st.session_state[w_state], sort_keys=True)
+
+        cur = st.session_state.get(w_state) or {}
+        well = st.text_area("WHAT DID YOU DO WELL", value=safe_str(cur.get("did_well")), height=120, key=f"{w_state}_well")
+        improved = st.text_area("WHAT NEEDS IMPROVED", value=safe_str(cur.get("needs_improved")), height=120, key=f"{w_state}_improve")
+        patterns = st.text_area("WHAT PATTERNS ARE APPEARING IN YOUR TRADING", value=safe_str(cur.get("patterns")), height=120, key=f"{w_state}_patterns")
+        focus_next = st.text_area(
+            "WHAT ARE YOU GOING TO FOCUS ON NEXT WEEK",
+            value=safe_str(cur.get("focus_next")),
+            height=120,
+            key=f"{w_state}_focus",
+            placeholder="- One thing\n- Second thing\n- Third thing",
+        )
+        improvement = st.number_input(
+            "OVERALL WEEKLY % IMPROVEMENT FROM THE PREVIOUS WEEK",
+            value=float(cur.get("improvement_percent") or 0.0),
+            step=1.0,
+            format="%.1f",
+            key=f"{w_state}_improvement",
+            help="Manual input. You can use negative values if the week was worse.",
+        )
+
+        auto_w = st.toggle("Auto-save", value=True, key="weekly_autosave")
+        save_w = st.button("Save weekly journal now", key="weekly_save")
+
+        payload = {
+            "did_well": well,
+            "needs_improved": improved,
+            "patterns": patterns,
+            "focus_next": focus_next,
+            "improvement_percent": improvement,
+        }
+        payload_key = json.dumps(payload, sort_keys=True)
+        if (auto_w and payload_key != st.session_state.get(w_last, "")) or save_w:
+            ok = upsert_weekly_journal_entry(user_id, week_start_str, payload)
+            if ok:
+                st.session_state[w_last] = payload_key
+                if save_w:
+                    st.success("Saved weekly journal.")
+            else:
+                st.error("Could not save weekly journal yet (database table/policies may not be set up).")
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -4106,6 +4350,8 @@ def prepare_df(df: pd.DataFrame) -> pd.DataFrame:
     for col in NUMERIC_COLUMNS:
         if col in cleaned.columns:
             cleaned[col] = pd.to_numeric(cleaned[col], errors="coerce")
+    if "notes" in cleaned.columns:
+        cleaned["notes"] = cleaned["notes"].fillna("").astype(str).apply(_strip_lessons_block)
     cleaned["entry_hour"] = cleaned["entry_time"].apply(parse_time_hour) if "entry_time" in cleaned.columns else None
     return cleaned
 
@@ -4558,6 +4804,12 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                 trade_grade = row4[3].selectbox("Trade grade", TRADE_GRADES, key=f"{form_key}_grade")
     
                 notes = st.text_area("Notes", key=f"{form_key}_notes")
+
+                st.markdown("**Lessons / mistakes (3)**")
+                lesson_cols = st.columns(3)
+                lesson_1 = lesson_cols[0].text_input("Lesson 1", placeholder="e.g. Entered too early", key=f"{form_key}_lesson_1")
+                lesson_2 = lesson_cols[1].text_input("Lesson 2", placeholder="e.g. Didn’t follow plan", key=f"{form_key}_lesson_2")
+                lesson_3 = lesson_cols[2].text_input("Lesson 3", placeholder="e.g. Took trade in wrong session", key=f"{form_key}_lesson_3")
     
                 with st.expander("Advanced (optional)", expanded=False):
                     adv1 = st.columns(4)
@@ -4602,6 +4854,10 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
             if entry <= 0 or stop <= 0 or not valid_exit:
                 st.error("Entry and stop loss must be greater than 0, and you must provide an exit price (or enable scale-out avg exit).")
             else:
+                # Embed 3 lessons in notes (hidden JSON block) so we can store without altering DB schema.
+                lessons = [lesson_1, lesson_2, lesson_3]
+                notes = _embed_lessons(notes, lessons)
+
                 # Tags: merge selected + newly added, persist new ones for dropdown.
                 tags_final: list[str] = []
                 try:
@@ -4981,6 +5237,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     if section == "Dashboard":
         st.subheader("Dashboard")
         render_metric_cards(cards)
+        render_next_week_focus_panel(user_id)
 
         c_score, c_recent = st.columns([1.2, 1])
         with c_score:
@@ -5069,6 +5326,39 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                 ]
                 render_metric_cards(cards_w)
 
+                # Weekly journal viewer (same week)
+                if WEEKLY_JOURNAL_ENABLED and week_dates:
+                    try:
+                        dates = [pd.to_datetime(d, errors="coerce").date() for d in week_dates]
+                        dates = [d for d in dates if d is not None and not pd.isna(d)]
+                        week_start = min(dates) if dates else None
+                    except Exception:
+                        week_start = None
+                    if week_start is not None:
+                        week_start_str = week_start.strftime("%Y-%m-%d")
+                        with st.expander("Weekly journal", expanded=False):
+                            entry = load_weekly_journal_entry(user_id, week_start_str)
+                            if entry is None:
+                                st.warning("Weekly journal storage isn't set up yet. Run `sql/weekly_journal.sql` in Supabase.")
+                            elif not entry:
+                                st.info("No weekly journal saved for this week yet.")
+                            else:
+                                st.markdown(f"**Week:** {_week_label(_week_start_monday(pd.to_datetime(week_start_str).date()))}")
+                                st.markdown("**WHAT DID YOU DO WELL**")
+                                st.write(safe_str(entry.get("did_well")))
+                                st.markdown("**WHAT NEEDS IMPROVED**")
+                                st.write(safe_str(entry.get("needs_improved")))
+                                st.markdown("**WHAT PATTERNS ARE APPEARING IN YOUR TRADING**")
+                                st.write(safe_str(entry.get("patterns")))
+                                st.markdown("**WHAT ARE YOU GOING TO FOCUS ON NEXT WEEK**")
+                                st.write(safe_str(entry.get("focus_next")))
+                                imp = entry.get("improvement_percent")
+                                if imp is not None and safe_str(imp).strip() != "":
+                                    try:
+                                        st.caption(f"Weekly improvement: **{float(imp):.1f}%**")
+                                    except Exception:
+                                        pass
+
         # Day details (click a day on the calendar or pick below)
         st.markdown("---")
         st.markdown("**Day details**")
@@ -5093,12 +5383,27 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     with st.expander("Journal notes", expanded=False):
                         st.write(j)
 
+                # Lessons / mistakes from the day's trades (if any)
+                lesson_rows: list[str] = []
+                for _, r in day_trades.iterrows():
+                    _, lessons = _extract_lessons(r.get("notes", ""))
+                    if not lessons:
+                        continue
+                    head = f"{safe_str(r.get('instrument'))} {safe_str(r.get('direction'))} {safe_str(r.get('entry_time'))}".strip()
+                    for l in lessons[:3]:
+                        lesson_rows.append(f"• {head}: {l}")
+                if lesson_rows:
+                    with st.expander("Lessons / mistakes (from trades)", expanded=False):
+                        st.write("\n".join(lesson_rows))
+
                 # Trade cards / table
                 cols = ["entry_time", "instrument", "direction", "contracts", "session", "trade_grade", "r_multiple", pnl_col, "notes"]
                 show = [c for c in cols if c in day_trades.columns]
                 view = day_trades.sort_values(["entry_time"], ascending=True, na_position="last").copy()
                 if "r_multiple" in view.columns:
                     view["r_multiple"] = pd.to_numeric(view["r_multiple"], errors="coerce").round(2)
+                if "notes" in view.columns:
+                    view["notes"] = view["notes"].fillna("").astype(str).apply(_strip_lessons_block)
                 view["PnL"] = view[pnl_col].apply(format_money)
                 rename = {
                     "entry_time": "Time",
