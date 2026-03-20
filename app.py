@@ -3066,18 +3066,18 @@ def render_journal_page(user_id: str) -> None:
             st.session_state[w_last] = json.dumps(st.session_state[w_state], sort_keys=True)
 
         cur = st.session_state.get(w_state) or {}
-        well = st.text_area("WHAT DID YOU DO WELL", value=safe_str(cur.get("did_well")), height=120, key=f"{w_state}_well")
-        improved = st.text_area("WHAT NEEDS IMPROVED", value=safe_str(cur.get("needs_improved")), height=120, key=f"{w_state}_improve")
-        patterns = st.text_area("WHAT PATTERNS ARE APPEARING IN YOUR TRADING", value=safe_str(cur.get("patterns")), height=120, key=f"{w_state}_patterns")
+        well = st.text_area("What did you do well?", value=safe_str(cur.get("did_well")), height=120, key=f"{w_state}_well")
+        improved = st.text_area("What needs improved?", value=safe_str(cur.get("needs_improved")), height=120, key=f"{w_state}_improve")
+        patterns = st.text_area("What patterns are appearing in your trading?", value=safe_str(cur.get("patterns")), height=120, key=f"{w_state}_patterns")
         focus_next = st.text_area(
-            "WHAT ARE YOU GOING TO FOCUS ON NEXT WEEK",
+            "What are you going to focus on next week?",
             value=safe_str(cur.get("focus_next")),
             height=120,
             key=f"{w_state}_focus",
             placeholder="- One thing\n- Second thing\n- Third thing",
         )
         improvement = st.number_input(
-            "OVERALL WEEKLY % IMPROVEMENT FROM THE PREVIOUS WEEK",
+            "Overall weekly % improvement vs previous week",
             value=float(cur.get("improvement_percent") or 0.0),
             step=1.0,
             format="%.1f",
@@ -5344,13 +5344,13 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                                 st.info("No weekly journal saved for this week yet.")
                             else:
                                 st.markdown(f"**Week:** {_week_label(_week_start_monday(pd.to_datetime(week_start_str).date()))}")
-                                st.markdown("**WHAT DID YOU DO WELL**")
+                                st.markdown("**What did you do well?**")
                                 st.write(safe_str(entry.get("did_well")))
-                                st.markdown("**WHAT NEEDS IMPROVED**")
+                                st.markdown("**What needs improved?**")
                                 st.write(safe_str(entry.get("needs_improved")))
-                                st.markdown("**WHAT PATTERNS ARE APPEARING IN YOUR TRADING**")
+                                st.markdown("**What patterns are appearing in your trading?**")
                                 st.write(safe_str(entry.get("patterns")))
-                                st.markdown("**WHAT ARE YOU GOING TO FOCUS ON NEXT WEEK**")
+                                st.markdown("**What are you going to focus on next week?**")
                                 st.write(safe_str(entry.get("focus_next")))
                                 imp = entry.get("improvement_percent")
                                 if imp is not None and safe_str(imp).strip() != "":
@@ -5657,6 +5657,9 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                 st.markdown("**Top PnL combos**")
                 st.dataframe(top_pnl, use_container_width=True)
 
+    if section != "New Trade":
+        return
+
     if section == "New Trade":
         # ── Trade images ──────────────────────────────────────────────────────────
         st.markdown("---")
@@ -5739,7 +5742,6 @@ else:
 
     section_options = [
         "Dashboard",
-        "New Trade",
         "Analytics",
         "PnL Calendar",
         "Reports",
@@ -5820,7 +5822,6 @@ else:
 
         nav_icons = {
             "Dashboard": "▣",
-            "New Trade": "＋",
             "Analytics": "⌁",
             "PnL Calendar": "▦",
             "Reports": "▤",
