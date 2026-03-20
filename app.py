@@ -4241,7 +4241,7 @@ def render_calendar_heatmap(df: pd.DataFrame, pnl_col: str) -> None:
 
 # ── A4 trade sheet ────────────────────────────────────────────────────────────
 
-def build_a4_trade_sheet_html(row: pd.Series) -> str:
+def build_a4_trade_sheet_html(row: pd.Series, *, account_type: Optional[str] = None) -> str:
     date_val = row.get("date")
     date_text = date_val.strftime("%Y-%m-%d") if hasattr(date_val, "strftime") else safe_str(date_val)
     date = html_lib.escape(date_text)
@@ -4283,6 +4283,19 @@ def build_a4_trade_sheet_html(row: pd.Series) -> str:
         )
     confluence_html = "\n".join(confluence_items)
     reason = html_lib.escape(safe_str(row.get("setup_tag")))
+    acct_label = ""
+    if account_type:
+        # Compact label for the printable header.
+        s = safe_str(account_type)
+        if "fund" in s.lower():
+            acct_label = "Funded"
+        elif "eval" in s.lower():
+            acct_label = "Evaluation"
+        elif "live" in s.lower():
+            acct_label = "Live"
+        else:
+            acct_label = s
+    acct_html = html_lib.escape(acct_label)
 
     return f"""<!doctype html>
 <html><head><meta charset="utf-8"/>
@@ -4327,6 +4340,9 @@ body{{font-family:Arial,Helvetica,sans-serif;margin:0;padding:0;color:#000}}
 <div class="sheet grid">
 <div class="box"><div class="topline">
 <div><b>DATE:</b> {date}</div><div><b>SYMBOL:</b> {instrument}</div>
+</div></div>
+<div class="box"><div class="topline">
+<div><b>ACCOUNT:</b> {acct_html}</div><div><b>DIRECTION:</b> {direction}</div>
 </div></div>
 <div class="row">
 <div class="box"><div class="box-title">TRADING SETUP</div>
@@ -4742,7 +4758,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         selected_id = st.selectbox("Select trade to print", trade_ids, index=default_idx,
                                     format_func=lambda x: label_map.get(x, x), key=f"{form_key}_a4_id")
         selected_row = sheet_df[sheet_df["id"] == selected_id].iloc[0]
-        sheet_html = build_a4_trade_sheet_html(selected_row)
+        sheet_html = build_a4_trade_sheet_html(selected_row, account_type=account_type)
         st.download_button("Download trade sheet HTML (A4)", sheet_html.encode("utf-8"),
                             file_name="trade_sheet.html", mime="text/html", key=f"{form_key}_a4_dl")
         with st.expander("Preview (optional)", expanded=False):
