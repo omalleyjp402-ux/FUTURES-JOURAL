@@ -5740,8 +5740,10 @@ else:
     apply_settings_to_session(user.id)
     render_brand_header(center=False, hero=True)
 
+    # Full section set (routing). Keep "New Trade" here so +Add Trade can navigate to it.
     section_options = [
         "Dashboard",
+        "New Trade",
         "Analytics",
         "PnL Calendar",
         "Reports",
@@ -5750,6 +5752,8 @@ else:
         "Strategy/Model Creation",
         "Affiliates",
     ]
+    # Menu items shown in the sidebar (hide "New Trade" to avoid duplicate with +Add Trade button).
+    section_menu_options = [s for s in section_options if s != "New Trade"]
 
     # Keep a single source of truth for navigation to avoid "jumping" between widgets.
     def _sync_nav_from_top() -> None:
@@ -5832,6 +5836,8 @@ else:
         }
         current_nav = st.session_state.get("nav_section", section_options[0])
         for opt in section_options:
+            if opt == "New Trade":
+                continue
             label = f"{nav_icons.get(opt, '•')}  {opt}"
             btn_type = "primary" if opt == current_nav else "secondary"
             if st.button(label, use_container_width=True, type=btn_type, key=f"sidebar_nav_btn_{opt}"):
