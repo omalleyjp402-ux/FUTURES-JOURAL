@@ -9,7 +9,7 @@ import re
 import time
 import traceback
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, date, timedelta, timezone
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from urllib.parse import quote_plus
@@ -1795,6 +1795,27 @@ def get_query_param(name: str) -> str:
             return ""
 
 
+def _clear_query_param(name: str) -> None:
+    """
+    Best-effort helper to remove a query param.
+    We use this so Stripe deep-links like `?section=Dashboard` don't permanently pin navigation.
+    """
+    try:
+        if name in st.query_params:
+            del st.query_params[name]
+            return
+    except Exception:
+        pass
+
+    try:
+        qp = st.experimental_get_query_params()
+        if name in qp:
+            qp.pop(name, None)
+            st.experimental_set_query_params(**qp)
+    except Exception:
+        pass
+
+
 def resolve_affiliate(code: str) -> Optional[str]:
     if not code:
         return None
@@ -3076,6 +3097,13 @@ def render_journal_page(user_id: str) -> None:
             key=f"{w_state}_focus",
             placeholder="- One thing\n- Second thing\n- Third thing",
         )
+        other_notes = st.text_area(
+            "Other notes on the market",
+            value=safe_str(cur.get("other_notes")),
+            height=120,
+            key=f"{w_state}_other_notes",
+            placeholder="Anything else worth noting this week (macro, catalysts, what you noticed, etc.)",
+        )
         improvement = st.number_input(
             "Overall weekly % improvement vs previous week",
             value=float(cur.get("improvement_percent") or 0.0),
@@ -3093,6 +3121,7 @@ def render_journal_page(user_id: str) -> None:
             "needs_improved": improved,
             "patterns": patterns,
             "focus_next": focus_next,
+            "other_notes": other_notes,
             "improvement_percent": improvement,
         }
         payload_key = json.dumps(payload, sort_keys=True)
@@ -3104,6 +3133,29 @@ def render_journal_page(user_id: str) -> None:
                     st.success("Saved weekly journal.")
             else:
                 st.error("Could not save weekly journal yet (database table/policies may not be set up).")
+
+        st.markdown("---")
+        st.subheader("Weekly journal sheet (printable)")
+        sheet_html = build_a4_weekly_journal_sheet_html(
+            {
+                "did_well": well,
+                "needs_improved": improved,
+                "patterns": patterns,
+                "focus_next": focus_next,
+                "other_notes": other_notes,
+                "improvement_percent": improvement,
+            },
+            week_start=ws,
+        )
+        st.download_button(
+            "Download weekly journal HTML (A4)",
+            sheet_html.encode("utf-8"),
+            file_name=f"tradylo_weekly_journal_{week_start_str}.html",
+            mime="text/html",
+            use_container_width=True,
+        )
+        with st.expander("Preview (A4)", expanded=False):
+            st.components.v1.html(sheet_html, height=820, scrolling=True)
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -4624,6 +4676,90 @@ body{{font-family:Arial,Helvetica,sans-serif;margin:0;padding:0;color:#000}}
 </div>
 </div></body></html>"""
 
+# ── A4 weekly journal sheet ────────────────────────────────────────────────────
+
+def build_a4_weekly_journal_sheet_html(entry: Dict[str, Any], *, week_start: date) -> str:
+    """
+    Returns a standalone HTML file that prints nicely on A4.
+    We keep the same "white page + black outline" look as the trade sheet so print contrast is reliable.
+    """
+    ws = week_start
+    we = ws + timedelta(days=6)
+    week_label = f"{ws.strftime('%Y-%m-%d')} → {we.strftime('%Y-%m-%d')}"
+
+    def _b(name: str) -> str:
+        return html_lib.escape(safe_str(entry.get(name)))
+
+    did_well = _b("did_well")
+    needs_improved = _b("needs_improved")
+    patterns = _b("patterns")
+    focus_next = _b("focus_next")
+    other_notes = _b("other_notes")
+
+    imp_raw = entry.get("improvement_percent")
+    imp_text = ""
+    try:
+        if imp_raw is not None and safe_str(imp_raw).strip() != "":
+            imp_text = f"{float(imp_raw):.1f}%"
+    except Exception:
+        imp_text = ""
+
+    imp_html = html_lib.escape(imp_text)
+
+    def _section(title: str, body: str) -> str:
+        return f"""
+        <div class="box">
+          <div class="box-title">{html_lib.escape(title)}</div>
+          <div class="box-body"><pre>{body}</pre></div>
+        </div>
+        """
+
+    return f"""<!doctype html>
+<html><head><meta charset="utf-8"/>
+<style>
+@page{{size:A4;margin:12mm}}
+html,body{{background:#fff}}
+body{{font-family:Arial,Helvetica,sans-serif;margin:0;padding:0;color:#000}}
+.toolbar{{display:flex;gap:10px;align-items:center;padding:6px 0;margin:0 0 6px 0}}
+.toolbar .toolbar-inner{{display:flex;gap:10px;align-items:center;background:#fff;border:2px solid #000;border-radius:10px;padding:8px 10px}}
+.toolbar button{{padding:6px 10px;border:2px solid #000;background:#fff;color:#000;cursor:pointer;border-radius:10px;font-weight:700}}
+@media print{{.toolbar{{display:none}}}}
+.sheet{{width:210mm;min-height:297mm;box-sizing:border-box;padding:0;background:#fff}}
+.box{{border:2px solid #000;box-sizing:border-box;background:#fff;margin:0 0 6mm 0}}
+.box-title{{font-weight:700;text-align:left;padding:3mm 3mm;border-bottom:2px solid #000;letter-spacing:.2px}}
+.box-body{{padding:3mm}}
+.box-body pre{{margin:0;white-space:pre-wrap;word-break:break-word;font-family:Arial,Helvetica,sans-serif;font-size:12.5px;line-height:1.35}}
+.header{{border:2px solid #000;margin:0 0 6mm 0}}
+.header-row{{display:grid;grid-template-columns:1fr 1fr}}
+.header-row>div{{padding:4mm}}
+.header-row>div:first-child{{border-right:2px solid #000}}
+.brand{{font-size:18px;font-weight:800;letter-spacing:.3px}}
+.sub{{font-size:12px;margin-top:1mm;opacity:.9}}
+.k{{font-weight:700}}
+</style></head><body>
+<div class="toolbar"><div class="toolbar-inner"><button onclick="window.print()">Print (A4)</button></div></div>
+<div class="sheet">
+  <div class="header">
+    <div class="header-row">
+      <div>
+        <div class="brand">Tradylo</div>
+        <div class="sub">Weekly journal</div>
+      </div>
+      <div>
+        <div><span class="k">Week:</span> {html_lib.escape(week_label)}</div>
+        <div><span class="k">Weekly improvement:</span> {imp_html}</div>
+      </div>
+    </div>
+  </div>
+
+  {_section("What did you do well?", did_well)}
+  {_section("What needs improved?", needs_improved)}
+  {_section("What patterns are appearing in your trading?", patterns)}
+  {_section("What are you going to focus on next week?", focus_next)}
+  {_section("Other notes on the market", other_notes)}
+</div>
+</body></html>"""
+
 # ── Main section renderer ─────────────────────────────────────────────────────
 
 def render_section(user_id: str, account_type: str, section: str) -> None:
@@ -4986,6 +5122,13 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     save_trade(user_id, account_type, row)
                     st.success("Trade saved!")
                     st.session_state[f"{form_key}_last_saved_id"] = row["id"]
+                    # Tags UI is dynamic (and can be backed by a cache). Clear + rerun so newly added tags
+                    # immediately appear in the dropdown without the user needing to refresh manually.
+                    try:
+                        _load_user_tags_from_trades.clear()  # type: ignore[attr-defined]
+                    except Exception:
+                        pass
+                    st.rerun()
                     df_raw = load_trades(user_id, account_type)
                 except Exception as e:
                     st.error(f"Failed to save trade: {e}")
@@ -5352,6 +5495,9 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                                 st.write(safe_str(entry.get("patterns")))
                                 st.markdown("**What are you going to focus on next week?**")
                                 st.write(safe_str(entry.get("focus_next")))
+                                if safe_str(entry.get("other_notes")).strip():
+                                    st.markdown("**Other notes on the market**")
+                                    st.write(safe_str(entry.get("other_notes")))
                                 imp = entry.get("improvement_percent")
                                 if imp is not None and safe_str(imp).strip() != "":
                                     try:
@@ -5771,6 +5917,8 @@ else:
         in the same run, otherwise Streamlit raises StreamlitAPIException.
         """
         st.session_state["_nav_request"] = section_name
+        # If the URL has a Stripe deep-link like `?section=Dashboard`, remove it so it won't pin navigation.
+        _clear_query_param("section")
         st.rerun()
 
     # Query param can deep-link to a section (used by some Stripe URLs).

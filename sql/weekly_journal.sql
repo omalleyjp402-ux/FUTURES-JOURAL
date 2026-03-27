@@ -8,11 +8,16 @@ create table if not exists public.weekly_journal_entries (
   needs_improved text,
   patterns text,
   focus_next text,
+  other_notes text,
   improvement_percent numeric,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   primary key (user_id, week_start)
 );
+
+-- Forward-compatible: add new columns safely if the table already exists
+alter table public.weekly_journal_entries
+  add column if not exists other_notes text;
 
 alter table public.weekly_journal_entries enable row level security;
 
@@ -52,4 +57,3 @@ before update on public.weekly_journal_entries
 for each row execute procedure public.set_updated_at();
 
 select pg_notify('pgrst', 'reload schema');
-
