@@ -193,6 +193,10 @@ section[data-testid="stSidebar"] .sidebar-usercard .badge.grandfathered{
   border-color: rgba(34,197,94,0.26);
   background: rgba(34,197,94,0.10);
 }
+section[data-testid="stSidebar"] .sidebar-usercard .badge.owner{
+  border-color: rgba(250,204,21,0.30);
+  background: rgba(250,204,21,0.10);
+}
 
  .brand-row {display:flex;align-items:center;gap:12px;margin:6px 0 12px;}
  .brand-row.center {justify-content:center;text-align:center;flex-direction:column;}
@@ -4719,7 +4723,7 @@ def build_a4_weekly_journal_sheet_html(entry: Dict[str, Any], *, week_start: dat
 <style>
 @page{{size:A4;margin:12mm}}
 html,body{{background:#fff}}
-body{{font-family:Arial,Helvetica,sans-serif;margin:0;padding:0;color:#000}}
+body{{font-family:Arial,Helvetica,sans-serif;margin:0;padding:0;color:#000; --wj-font: 14.5px; --wj-line: 1.38;}}
 .toolbar{{display:flex;gap:10px;align-items:center;padding:6px 0;margin:0 0 6px 0}}
 .toolbar .toolbar-inner{{display:flex;gap:10px;align-items:center;background:#fff;border:2px solid #000;border-radius:10px;padding:8px 10px}}
 .toolbar button{{padding:6px 10px;border:2px solid #000;background:#fff;color:#000;cursor:pointer;border-radius:10px;font-weight:700}}
@@ -4728,12 +4732,12 @@ body{{font-family:Arial,Helvetica,sans-serif;margin:0;padding:0;color:#000}}
 .box{{border:2px solid #000;box-sizing:border-box;background:#fff;margin:0 0 6mm 0}}
 .box-title{{font-weight:700;text-align:left;padding:3mm 3mm;border-bottom:2px solid #000;letter-spacing:.2px}}
 .box-body{{padding:3mm}}
-.box-body pre{{margin:0;white-space:pre-wrap;word-break:break-word;font-family:Arial,Helvetica,sans-serif;font-size:12.5px;line-height:1.35}}
+.box-body pre{{margin:0;white-space:pre-wrap;word-break:break-word;font-family:Arial,Helvetica,sans-serif;font-size:var(--wj-font);line-height:var(--wj-line)}}
 .header{{border:2px solid #000;margin:0 0 6mm 0}}
 .header-row{{display:grid;grid-template-columns:1fr 1fr}}
 .header-row>div{{padding:4mm}}
 .header-row>div:first-child{{border-right:2px solid #000}}
-.brand{{font-size:18px;font-weight:800;letter-spacing:.3px}}
+.brand{{font-size:20px;font-weight:800;letter-spacing:.3px}}
 .sub{{font-size:12px;margin-top:1mm;opacity:.9}}
 .k{{font-weight:700}}
 </style></head><body>
@@ -4758,6 +4762,22 @@ body{{font-family:Arial,Helvetica,sans-serif;margin:0;padding:0;color:#000}}
   {_section("What are you going to focus on next week?", focus_next)}
   {_section("Other notes on the market", other_notes)}
 </div>
+<script>
+// If someone writes loads, gently shrink text so it still prints nicely on one A4 page.
+(() => {{
+  try {{
+    const total = document.body.innerText.length || 0;
+    // Defaults are already ~15% bigger than before.
+    let font = 14.5;
+    let line = 1.38;
+    if (total > 4200) {{ font = 12.2; line = 1.28; }}
+    else if (total > 3200) {{ font = 13.0; line = 1.32; }}
+    else if (total > 2400) {{ font = 13.6; line = 1.34; }}
+    document.body.style.setProperty('--wj-font', font + 'px');
+    document.body.style.setProperty('--wj-line', String(line));
+  }} catch (e) {{}}
+}})();
+</script>
 </body></html>"""
 
 # ── Main section renderer ─────────────────────────────────────────────────────
@@ -6217,38 +6237,49 @@ else:
             email = safe_str(user_obj.get("email"))
         else:
             email = safe_str(getattr(user_obj, "email", ""))
-        if email:
-            # Plan badge (best-effort; doesn't create entitlements unless you enabled paywall elsewhere)
-            ent = get_entitlement(user.id)
-            plan_raw = safe_str((ent or {}).get("plan")).strip().lower()
-            sub_status = safe_str((ent or {}).get("subscription_status")).strip().lower()
-            if plan_raw in ("grandfathered", "lifetime"):
-                plan_label = "Lifetime"
-                plan_class = "grandfathered"
-            elif plan_raw == "pro":
-                if sub_status == "trialing":
-                    plan_label = "Pro Trial"
-                    plan_class = "trial"
+            if email:
+                # Plan badge (best-effort; doesn't create entitlements unless you enabled paywall elsewhere)
+                ent = get_entitlement(user.id)
+                plan_raw = safe_str((ent or {}).get("plan")).strip().lower()
+                sub_status = safe_str((ent or {}).get("subscription_status")).strip().lower()
+                is_owner = is_admin_email(email)
+                if plan_raw in ("grandfathered", "lifetime"):
+                    plan_label = "Lifetime"
+                    plan_class = "grandfathered"
+                elif plan_raw == "pro":
+                    if sub_status == "trialing":
+                        plan_label = "Pro Trial"
+                        plan_class = "trial"
+                    else:
+                        plan_label = "Pro"
+                        plan_class = "pro"
                 else:
-                    plan_label = "Pro"
-                    plan_class = "pro"
-            else:
-                plan_label = "Free"
-                plan_class = "free"
+                    plan_label = "Free"
+                    plan_class = "free"
 
-            st.markdown(
-                f"""
-                <div class="sidebar-usercard">
-                  <div class="small">Signed in as</div>
-                  <div class="value">{html_lib.escape(email)}</div>
-                  <div class="plan-row">
-                    <div class="small">Plan</div>
-                    <div class="badge {plan_class}">{html_lib.escape(plan_label)}</div>
-                  </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+                owner_row = ""
+                if is_owner:
+                    owner_row = """
+                      <div class="plan-row">
+                        <div class="small">Role</div>
+                        <div class="badge owner">Owner</div>
+                      </div>
+                    """
+
+                st.markdown(
+                    f"""
+                    <div class="sidebar-usercard">
+                      <div class="small">Signed in as</div>
+                      <div class="value">{html_lib.escape(email)}</div>
+                      <div class="plan-row">
+                        <div class="small">Plan</div>
+                        <div class="badge {plan_class}">{html_lib.escape(plan_label)}</div>
+                      </div>
+                      {owner_row}
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
 
             # Show remaining free trades + upgrade CTA (only when paywall is enabled).
             if PAYWALL_ENABLED and plan_class == "free":
