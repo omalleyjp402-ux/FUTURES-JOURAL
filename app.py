@@ -3856,26 +3856,33 @@ def build_report_card_png(
         return None
 
     W, H = 1400, 800
+    # Dark base (matches app) with brighter Tradylo purple/blue glow (no warm/orange tones).
     img = Image.new("RGBA", (W, H), (14, 17, 23, 255))
     draw = ImageDraw.Draw(img)
 
-    # Background gradient
+    # Background gradient (cool + higher contrast)
+    top = (8, 10, 20)
+    bot = (14, 17, 23)
     for y in range(H):
         t = y / max(1, H - 1)
-        # Purple -> deep -> blue
-        r = int(14 + (124 - 14) * max(0.0, 1.0 - t * 1.3))
-        g = int(17 + (58 - 17) * max(0.0, 1.0 - t * 1.3))
-        b = int(23 + (237 - 23) * max(0.0, 1.0 - (1.0 - t) * 1.1) * 0.22)
+        r = int(top[0] + (bot[0] - top[0]) * t)
+        g = int(top[1] + (bot[1] - top[1]) * t)
+        b = int(top[2] + (bot[2] - top[2]) * t)
         draw.line([(0, y), (W, y)], fill=(r, g, b, 255))
-    # Accent glow blobs
-    draw.ellipse((-120, -160, 560, 520), fill=(124, 58, 237, 55))
-    draw.ellipse((840, -220, 1560, 520), fill=(56, 189, 248, 35))
-    draw.ellipse((260, 420, 1140, 1180), fill=(124, 58, 237, 25))
+
+    # Brighter accent glow blobs (purple + blue only)
+    draw.ellipse((-160, -220, 700, 610), fill=(124, 58, 237, 95))
+    draw.ellipse((760, -300, 1640, 640), fill=(56, 189, 248, 75))
+    draw.ellipse((140, 380, 1260, 1220), fill=(124, 58, 237, 55))
+    draw.ellipse((520, 460, 1580, 1180), fill=(56, 189, 248, 35))
 
     # Panel
     pad = 64
     panel = (pad, pad, W - pad, H - pad)
-    draw.rounded_rectangle(panel, radius=34, fill=(16, 20, 30, 210), outline=(255, 255, 255, 30), width=2)
+    # Slightly brighter panel + colored border for "clean + smooth" look.
+    draw.rounded_rectangle(panel, radius=34, fill=(16, 20, 30, 228), outline=(167, 139, 250, 70), width=3)
+    # Inner border for depth
+    draw.rounded_rectangle((panel[0] + 6, panel[1] + 6, panel[2] - 6, panel[3] - 6), radius=30, outline=(56, 189, 248, 40), width=2)
 
     # Fonts (fallback to default if truetype not available)
     def fnt(size: int):
@@ -3909,9 +3916,14 @@ def build_report_card_png(
     else:
         x_text = x0
 
-    # Header text
-    draw.text((x_text, y0 + 6), title, font=font_title, fill=(230, 237, 243, 245))
-    draw.text((x_text, y0 + 78), subtitle, font=font_sub, fill=(148, 163, 184, 235))
+    # Header text (brighter)
+    draw.text((x_text, y0 + 6), title, font=font_title, fill=(241, 245, 249, 252))
+    draw.text((x_text, y0 + 78), subtitle, font=font_sub, fill=(203, 213, 225, 245))
+
+    # Accent underline
+    line_y = y0 + 122
+    draw.rounded_rectangle((x_text, line_y, x_text + 520, line_y + 8), radius=6, fill=(124, 58, 237, 180))
+    draw.rounded_rectangle((x_text + 310, line_y, x_text + 660, line_y + 8), radius=6, fill=(56, 189, 248, 160))
 
     # Metric grid (2 rows x 4 cols)
     grid_top = panel[1] + 190
@@ -3928,15 +3940,17 @@ def build_report_card_png(
         x = grid_left + c * (card_w + 18)
         y = grid_top + r * (card_h + 18)
         rect = (x, y, x + card_w, y + card_h)
-        draw.rounded_rectangle(rect, radius=24, fill=(255, 255, 255, 10), outline=(255, 255, 255, 26), width=2)
+        draw.rounded_rectangle(rect, radius=24, fill=(255, 255, 255, 16), outline=(167, 139, 250, 55), width=2)
+        # A subtle top sheen for "smooth" feel
+        draw.rounded_rectangle((x + 2, y + 2, x + card_w - 2, y + 44), radius=22, fill=(56, 189, 248, 18))
         # Key
-        draw.text((x + 18, y + 16), k.upper(), font=font_k, fill=(148, 163, 184, 235))
+        draw.text((x + 18, y + 16), k.upper(), font=font_k, fill=(226, 232, 240, 245))
         # Value
-        draw.text((x + 18, y + 58), v, font=font_v, fill=(230, 237, 243, 245))
+        draw.text((x + 18, y + 58), v, font=font_v, fill=(248, 250, 252, 252))
 
     # Footer
     if footer:
-        draw.text((panel[0] + 38, panel[3] - 44), footer, font=font_footer, fill=(148, 163, 184, 220))
+        draw.text((panel[0] + 38, panel[3] - 44), footer, font=font_footer, fill=(203, 213, 225, 235))
 
     out = io.BytesIO()
     img.save(out, format="PNG")
