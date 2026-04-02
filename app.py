@@ -4585,6 +4585,15 @@ def build_a4_trade_sheet_html(row: pd.Series, *, account_type: Optional[str] = N
         )
     confluence_html = "\n".join(confluence_items)
     reason = html_lib.escape(safe_str(row.get("setup_tag")))
+
+    # Lessons / mistakes (stored as a hidden JSON block inside notes)
+    try:
+        _, lessons = _extract_lessons(safe_str(row.get("notes") or ""))
+    except Exception:
+        lessons = []
+    lessons = [safe_str(x).strip() for x in (lessons or []) if safe_str(x).strip()][:3]
+    lessons_html = "<br/>".join([html_lib.escape(x) for x in lessons])
+    lessons_kv = f'<div class="kv"><div class="k">LESSONS:</div><div class="v">{lessons_html}</div></div>'
     acct_label = ""
     if account_type:
         # Compact label for the printable header.
@@ -4650,13 +4659,14 @@ body{{font-family:Arial,Helvetica,sans-serif;margin:0;padding:0;color:#000}}
 <div class="box"><div class="box-title">TRADING SETUP</div>
 <div class="kv"><div class="k">POSITION:</div><div class="v">{direction}</div></div>
 <div class="kv"><div class="k">TIME:</div><div class="v">{entry_time}</div></div>
-<div class="kv"><div class="k">LOT SIZE:</div><div class="v">{contracts_str} {size_label}</div></div>
-<div class="kv"><div class="k">TYPE:</div><div class="v">{trade_type}</div></div>
-<div class="kv"><div class="k">STRATEGY:</div><div class="v">{strategy}</div></div>
-</div>
-<div class="box"><div class="box-title">CONFLUENCES</div>
-<div class="conf-list">{confluence_html}</div></div>
-</div>
+	<div class="kv"><div class="k">LOT SIZE:</div><div class="v">{contracts_str} {size_label}</div></div>
+	<div class="kv"><div class="k">TYPE:</div><div class="v">{trade_type}</div></div>
+	<div class="kv"><div class="k">STRATEGY:</div><div class="v">{strategy}</div></div>
+	{lessons_kv}
+	</div>
+	<div class="box"><div class="box-title">CONFLUENCES</div>
+	<div class="conf-list">{confluence_html}</div></div>
+	</div>
 <div class="box"><div class="box-title">TRADE MANAGEMENT</div>
 <div class="trade-mgmt">
 <div class="k">ENTRY:</div><div class="v">{entry}</div>
