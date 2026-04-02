@@ -3855,7 +3855,8 @@ def build_report_card_png(
     except Exception:
         return None
 
-    W, H = 1400, 800
+    # Slightly higher resolution so text is more readable when shared.
+    W, H = 1600, 920
     # Dark base (matches app) with brighter Tradylo purple/blue glow (no warm/orange tones).
     img = Image.new("RGBA", (W, H), (14, 17, 23, 255))
     draw = ImageDraw.Draw(img)
@@ -3879,10 +3880,10 @@ def build_report_card_png(
     # Panel
     pad = 64
     panel = (pad, pad, W - pad, H - pad)
-    # Slightly brighter panel + colored border for "clean + smooth" look.
-    draw.rounded_rectangle(panel, radius=34, fill=(16, 20, 30, 228), outline=(167, 139, 250, 70), width=3)
+    # Brighter panel + colored border for "clean + smooth" look.
+    draw.rounded_rectangle(panel, radius=34, fill=(20, 26, 38, 238), outline=(167, 139, 250, 85), width=3)
     # Inner border for depth
-    draw.rounded_rectangle((panel[0] + 6, panel[1] + 6, panel[2] - 6, panel[3] - 6), radius=30, outline=(56, 189, 248, 40), width=2)
+    draw.rounded_rectangle((panel[0] + 6, panel[1] + 6, panel[2] - 6, panel[3] - 6), radius=30, outline=(56, 189, 248, 55), width=2)
 
     # Fonts (fallback to default if truetype not available)
     def fnt(size: int):
@@ -3891,24 +3892,25 @@ def build_report_card_png(
         except Exception:
             return ImageFont.load_default()
 
-    font_title = fnt(58)
-    font_sub = fnt(26)
-    font_k = fnt(22)
-    font_v = fnt(34)
-    font_footer = fnt(18)
+    # Larger typography (readable on mobile shares)
+    font_title = fnt(70)
+    font_sub = fnt(32)
+    font_k = fnt(24)
+    font_v = fnt(44)
+    font_footer = fnt(20)
 
     # Logo
-    x0, y0 = panel[0] + 38, panel[1] + 34
+    x0, y0 = panel[0] + 44, panel[1] + 40
     if logo_path.exists():
         try:
             logo = Image.open(logo_path).convert("RGBA")
-            logo.thumbnail((110, 110))
+            logo.thumbnail((124, 124))
             lx, ly = logo.size
             # logo tile with border
-            tile = Image.new("RGBA", (lx + 32, ly + 32), (255, 255, 255, 0))
+            tile = Image.new("RGBA", (lx + 34, ly + 34), (255, 255, 255, 0))
             td = ImageDraw.Draw(tile)
-            td.rounded_rectangle((0, 0, lx + 32, ly + 32), radius=20, fill=(255, 255, 255, 18), outline=(255, 255, 255, 40), width=2)
-            tile.paste(logo, (16, 16), logo)
+            td.rounded_rectangle((0, 0, lx + 34, ly + 34), radius=22, fill=(255, 255, 255, 22), outline=(167, 139, 250, 80), width=2)
+            tile.paste(logo, (17, 17), logo)
             img.alpha_composite(tile, (x0, y0))
             x_text = x0 + lx + 64
         except Exception:
@@ -3917,22 +3919,22 @@ def build_report_card_png(
         x_text = x0
 
     # Header text (brighter)
-    draw.text((x_text, y0 + 6), title, font=font_title, fill=(241, 245, 249, 252))
-    draw.text((x_text, y0 + 78), subtitle, font=font_sub, fill=(203, 213, 225, 245))
+    draw.text((x_text, y0 + 6), title, font=font_title, fill=(248, 250, 252, 255))
+    draw.text((x_text, y0 + 90), subtitle, font=font_sub, fill=(226, 232, 240, 250))
 
     # Accent underline
-    line_y = y0 + 122
-    draw.rounded_rectangle((x_text, line_y, x_text + 520, line_y + 8), radius=6, fill=(124, 58, 237, 180))
-    draw.rounded_rectangle((x_text + 310, line_y, x_text + 660, line_y + 8), radius=6, fill=(56, 189, 248, 160))
+    line_y = y0 + 146
+    draw.rounded_rectangle((x_text, line_y, x_text + 620, line_y + 10), radius=7, fill=(124, 58, 237, 210))
+    draw.rounded_rectangle((x_text + 360, line_y, x_text + 780, line_y + 10), radius=7, fill=(56, 189, 248, 195))
 
     # Metric grid (2 rows x 4 cols)
-    grid_top = panel[1] + 190
-    grid_left = panel[0] + 38
-    grid_right = panel[2] - 38
+    grid_top = panel[1] + 230
+    grid_left = panel[0] + 44
+    grid_right = panel[2] - 44
     cols = 4
     rows = int((len(metrics) + cols - 1) / cols)
     card_w = int((grid_right - grid_left - (cols - 1) * 18) / cols)
-    card_h = 140
+    card_h = 154
 
     for idx, (k, v) in enumerate(metrics):
         r = idx // cols
@@ -3940,17 +3942,18 @@ def build_report_card_png(
         x = grid_left + c * (card_w + 18)
         y = grid_top + r * (card_h + 18)
         rect = (x, y, x + card_w, y + card_h)
-        draw.rounded_rectangle(rect, radius=24, fill=(255, 255, 255, 16), outline=(167, 139, 250, 55), width=2)
+        # Brighter cards with more vibrant border.
+        draw.rounded_rectangle(rect, radius=26, fill=(255, 255, 255, 22), outline=(167, 139, 250, 75), width=2)
         # A subtle top sheen for "smooth" feel
-        draw.rounded_rectangle((x + 2, y + 2, x + card_w - 2, y + 44), radius=22, fill=(56, 189, 248, 18))
+        draw.rounded_rectangle((x + 2, y + 2, x + card_w - 2, y + 48), radius=24, fill=(56, 189, 248, 26))
         # Key
-        draw.text((x + 18, y + 16), k.upper(), font=font_k, fill=(226, 232, 240, 245))
+        draw.text((x + 18, y + 16), k.upper(), font=font_k, fill=(241, 245, 249, 255))
         # Value
-        draw.text((x + 18, y + 58), v, font=font_v, fill=(248, 250, 252, 252))
+        draw.text((x + 18, y + 62), v, font=font_v, fill=(248, 250, 252, 255))
 
     # Footer
     if footer:
-        draw.text((panel[0] + 38, panel[3] - 44), footer, font=font_footer, fill=(203, 213, 225, 235))
+        draw.text((panel[0] + 44, panel[3] - 48), footer, font=font_footer, fill=(226, 232, 240, 245))
 
     out = io.BytesIO()
     img.save(out, format="PNG")
