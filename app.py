@@ -4733,23 +4733,72 @@ def build_a4_weekly_journal_sheet_html(entry: Dict[str, Any], *, week_start: dat
 <style>
 @page{{size:A4;margin:12mm}}
 html,body{{background:#fff}}
-body{{font-family:Arial,Helvetica,sans-serif;margin:0;padding:0;color:#000; --wj-font: 14.5px; --wj-line: 1.38;}}
-.toolbar{{display:flex;gap:10px;align-items:center;padding:6px 0;margin:0 0 6px 0}}
-.toolbar .toolbar-inner{{display:flex;gap:10px;align-items:center;background:#fff;border:2px solid #000;border-radius:10px;padding:8px 10px}}
-.toolbar button{{padding:6px 10px;border:2px solid #000;background:#fff;color:#000;cursor:pointer;border-radius:10px;font-weight:700}}
+body{{
+  font-family: Arial,Helvetica,sans-serif;
+  margin:0;padding:0;
+  /* Brighter, cleaner print style with brand accents */
+  --ink: #0b1220;
+  --muted: #334155;
+  --border: rgba(15,23,42,0.95);
+  --panel: #f7f7ff;
+  --panel2: #eef2ff;
+  --accent: #6d28d9;
+  --accent2: #0ea5e9;
+  --wj-font: 15.5px;
+  --wj-line: 1.42;
+  color: var(--ink);
+}}
+.toolbar{{display:flex;gap:10px;align-items:center;padding:6px 0;margin:0 0 8px 0}}
+.toolbar .toolbar-inner{{
+  display:flex;gap:10px;align-items:center;
+  background:#fff;border:2px solid var(--border);
+  border-radius:12px;padding:8px 10px
+}}
+.toolbar button{{
+  padding:7px 12px;border:2px solid var(--border);
+  background: linear-gradient(135deg, rgba(109,40,217,0.12), rgba(14,165,233,0.10));
+  color: var(--ink);cursor:pointer;border-radius:12px;font-weight:800
+}}
 @media print{{.toolbar{{display:none}}}}
 .sheet{{width:210mm;min-height:297mm;box-sizing:border-box;padding:0;background:#fff}}
-.box{{border:2px solid #000;box-sizing:border-box;background:#fff;margin:0 0 6mm 0}}
-.box-title{{font-weight:700;text-align:left;padding:3mm 3mm;border-bottom:2px solid #000;letter-spacing:.2px}}
+.box{{
+  border:2px solid var(--border);
+  box-sizing:border-box;
+  background: var(--panel);
+  margin:0 0 6mm 0;
+}}
+.box-title{{
+  font-weight:900;
+  text-align:left;
+  padding:3.2mm 3.4mm;
+  border-bottom:2px solid rgba(15,23,42,0.75);
+  letter-spacing:.15px;
+  background: var(--panel2);
+  color: var(--accent);
+}}
 .box-body{{padding:3mm}}
-.box-body pre{{margin:0;white-space:pre-wrap;word-break:break-word;font-family:Arial,Helvetica,sans-serif;font-size:var(--wj-font);line-height:var(--wj-line)}}
-.header{{border:2px solid #000;margin:0 0 6mm 0}}
+.box-body pre{{
+  margin:0;
+  white-space:pre-wrap;
+  word-break:break-word;
+  font-family: Arial,Helvetica,sans-serif;
+  font-size: var(--wj-font);
+  line-height: var(--wj-line);
+  color: var(--ink);
+}}
+.header{{
+  border:2px solid var(--border);
+  margin:0 0 6mm 0;
+  background: linear-gradient(135deg, rgba(109,40,217,0.14), rgba(14,165,233,0.10));
+}}
 .header-row{{display:grid;grid-template-columns:1fr 1fr}}
 .header-row>div{{padding:4mm}}
-.header-row>div:first-child{{border-right:2px solid #000}}
-.brand{{font-size:20px;font-weight:800;letter-spacing:.3px}}
-.sub{{font-size:12px;margin-top:1mm;opacity:.9}}
-.k{{font-weight:700}}
+.header-row>div:first-child{{border-right:2px solid rgba(15,23,42,0.75)}}
+.brand{{font-size:22px;font-weight:950;letter-spacing:.35px;color: var(--ink)}}
+.sub{{font-size:12.5px;margin-top:1mm;color: var(--muted)}}
+.k{{font-weight:900}}
+.meta{{font-size:13.5px;color: var(--ink)}}
+.meta div{{margin:0 0 1.4mm 0}}
 </style></head><body>
 <div class="toolbar"><div class="toolbar-inner"><button onclick="window.print()">Print (A4)</button></div></div>
 <div class="sheet">
@@ -4760,8 +4809,8 @@ body{{font-family:Arial,Helvetica,sans-serif;margin:0;padding:0;color:#000; --wj
         <div class="sub">Weekly journal</div>
       </div>
       <div>
-        <div><span class="k">Week:</span> {html_lib.escape(week_label)}</div>
-        <div><span class="k">Weekly improvement:</span> {imp_html}</div>
+        <div class="meta"><div><span class="k">Week:</span> {html_lib.escape(week_label)}</div>
+        <div><span class="k">Weekly improvement:</span> {imp_html}</div></div>
       </div>
     </div>
   </div>
@@ -4777,12 +4826,12 @@ body{{font-family:Arial,Helvetica,sans-serif;margin:0;padding:0;color:#000; --wj
 (() => {{
   try {{
     const total = document.body.innerText.length || 0;
-    // Defaults are already ~15% bigger than before.
-    let font = 14.5;
-    let line = 1.38;
-    if (total > 4200) {{ font = 12.2; line = 1.28; }}
-    else if (total > 3200) {{ font = 13.0; line = 1.32; }}
-    else if (total > 2400) {{ font = 13.6; line = 1.34; }}
+    // Default is intentionally larger + clearer; only shrink for *very* long weeks.
+    let font = 15.5;
+    let line = 1.42;
+    if (total > 5400) {{ font = 12.6; line = 1.30; }}
+    else if (total > 4400) {{ font = 13.4; line = 1.34; }}
+    else if (total > 3400) {{ font = 14.4; line = 1.38; }}
     document.body.style.setProperty('--wj-font', font + 'px');
     document.body.style.setProperty('--wj-line', String(line));
   }} catch (e) {{}}
