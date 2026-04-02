@@ -3855,8 +3855,9 @@ def build_report_card_png(
     except Exception:
         return None
 
-    # Higher resolution so text is crisp + readable even when the app scales it.
-    W, H = 2400, 1350
+    # Keep the original card aspect so Streamlit preview sizing stays predictable.
+    # (Bigger pixel dimensions don't make the text appear bigger in the UI; Streamlit scales to container width.)
+    W, H = 1400, 800
     # Dark base (matches app) with brighter Tradylo purple/blue glow (no warm/orange tones).
     img = Image.new("RGBA", (W, H), (14, 17, 23, 255))
     draw = ImageDraw.Draw(img)
@@ -3924,44 +3925,45 @@ def build_report_card_png(
         except Exception:
             return ImageFont.load_default()
 
-    # Much larger typography (user requested: "a lot bigger").
-    font_title = fnt(92, bold=True)
-    font_sub = fnt(44)
-    font_k = fnt(34, bold=True)
-    font_v = fnt(60, bold=True)
-    font_footer = fnt(28)
+    # Larger typography (without blowing up the layout)
+    font_title = fnt(66, bold=True)
+    font_sub = fnt(30)
+    font_k = fnt(22, bold=True)
+    font_v = fnt(40, bold=True)
+    font_footer = fnt(18)
 
     # Logo
-    x0, y0 = panel[0] + 56, panel[1] + 52
+    x0, y0 = panel[0] + 38, panel[1] + 34
     if logo_path.exists():
         try:
             logo = Image.open(logo_path).convert("RGBA")
-            logo.thumbnail((180, 180))
+            # Make the logo more prominent without dominating the header.
+            logo.thumbnail((132, 132))
             lx, ly = logo.size
             # logo tile with border
-            tile = Image.new("RGBA", (lx + 44, ly + 44), (255, 255, 255, 0))
+            tile = Image.new("RGBA", (lx + 32, ly + 32), (255, 255, 255, 0))
             td = ImageDraw.Draw(tile)
-            td.rounded_rectangle((0, 0, lx + 44, ly + 44), radius=26, fill=(255, 255, 255, 26), outline=(167, 139, 250, 95), width=3)
-            tile.paste(logo, (22, 22), logo)
+            td.rounded_rectangle((0, 0, lx + 32, ly + 32), radius=20, fill=(255, 255, 255, 22), outline=(167, 139, 250, 90), width=2)
+            tile.paste(logo, (16, 16), logo)
             img.alpha_composite(tile, (x0, y0))
-            x_text = x0 + lx + 86
+            x_text = x0 + lx + 64
         except Exception:
             x_text = x0
     else:
         x_text = x0
 
     # Header text (brighter)
-    draw.text((x_text, y0 + 10), title, font=font_title, fill=(248, 250, 252, 255))
-    draw.text((x_text, y0 + 118), subtitle, font=font_sub, fill=(226, 232, 240, 252))
+    draw.text((x_text, y0 + 6), title, font=font_title, fill=(248, 250, 252, 255))
+    draw.text((x_text, y0 + 78), subtitle, font=font_sub, fill=(226, 232, 240, 252))
 
     # Metric grid (2 rows x 4 cols)
-    grid_top = panel[1] + 320
-    grid_left = panel[0] + 56
-    grid_right = panel[2] - 56
+    grid_top = panel[1] + 190
+    grid_left = panel[0] + 38
+    grid_right = panel[2] - 38
     cols = 4
     rows = int((len(metrics) + cols - 1) / cols)
     card_w = int((grid_right - grid_left - (cols - 1) * 18) / cols)
-    card_h = 220
+    card_h = 140
 
     for idx, (k, v) in enumerate(metrics):
         r = idx // cols
@@ -3970,17 +3972,17 @@ def build_report_card_png(
         y = grid_top + r * (card_h + 18)
         rect = (x, y, x + card_w, y + card_h)
         # Brighter cards with more vibrant border.
-        draw.rounded_rectangle(rect, radius=32, fill=(255, 255, 255, 26), outline=(167, 139, 250, 85), width=3)
+        draw.rounded_rectangle(rect, radius=24, fill=(255, 255, 255, 22), outline=(167, 139, 250, 80), width=2)
         # A subtle top sheen for "smooth" feel
-        draw.rounded_rectangle((x + 3, y + 3, x + card_w - 3, y + 64), radius=30, fill=(56, 189, 248, 30))
+        draw.rounded_rectangle((x + 2, y + 2, x + card_w - 2, y + 46), radius=22, fill=(56, 189, 248, 26))
         # Key
         draw.text((x + 18, y + 16), k.upper(), font=font_k, fill=(241, 245, 249, 255))
         # Value
-        draw.text((x + 18, y + 86), v, font=font_v, fill=(248, 250, 252, 255))
+        draw.text((x + 18, y + 56), v, font=font_v, fill=(248, 250, 252, 255))
 
     # Footer
     if footer:
-        draw.text((panel[0] + 56, panel[3] - 60), footer, font=font_footer, fill=(226, 232, 240, 252))
+        draw.text((panel[0] + 38, panel[3] - 44), footer, font=font_footer, fill=(226, 232, 240, 252))
 
     out = io.BytesIO()
     img.save(out, format="PNG")
