@@ -3855,8 +3855,8 @@ def build_report_card_png(
     except Exception:
         return None
 
-    # Slightly higher resolution so text is more readable when shared.
-    W, H = 1600, 920
+    # Higher resolution so text is crisp + readable even when the app scales it.
+    W, H = 2400, 1350
     # Dark base (matches app) with brighter Tradylo purple/blue glow (no warm/orange tones).
     img = Image.new("RGBA", (W, H), (14, 17, 23, 255))
     draw = ImageDraw.Draw(img)
@@ -3885,56 +3885,83 @@ def build_report_card_png(
     # Inner border for depth
     draw.rounded_rectangle((panel[0] + 6, panel[1] + 6, panel[2] - 6, panel[3] - 6), radius=30, outline=(56, 189, 248, 55), width=2)
 
-    # Fonts (fallback to default if truetype not available)
-    def fnt(size: int):
+    # Fonts (fallback to default if truetype not available).
+    # IMPORTANT: `ImageFont.load_default()` can look blurry when Streamlit scales the PNG.
+    # We try common font paths in Streamlit Cloud.
+    def _font_path(candidates: list[str]) -> Optional[str]:
+        for p in candidates:
+            try:
+                if p and Path(p).exists():
+                    return p
+            except Exception:
+                continue
+        return None
+
+    def fnt(size: int, *, bold: bool = False):
+        candidates = []
+        if bold:
+            candidates = [
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "DejaVuSans-Bold.ttf",
+                "DejaVuSans.ttf",
+            ]
+        else:
+            candidates = [
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                "DejaVuSans.ttf",
+                "DejaVuSans-Bold.ttf",
+            ]
+        fp = _font_path(candidates)
+        try:
+            if fp:
+                return ImageFont.truetype(fp, size=size)
+        except Exception:
+            pass
         try:
             return ImageFont.truetype("DejaVuSans.ttf", size=size)
         except Exception:
             return ImageFont.load_default()
 
-    # Larger typography (readable on mobile shares)
-    font_title = fnt(70)
-    font_sub = fnt(32)
-    font_k = fnt(24)
-    font_v = fnt(44)
-    font_footer = fnt(20)
+    # Much larger typography (user requested: "a lot bigger").
+    font_title = fnt(92, bold=True)
+    font_sub = fnt(44)
+    font_k = fnt(34, bold=True)
+    font_v = fnt(60, bold=True)
+    font_footer = fnt(28)
 
     # Logo
-    x0, y0 = panel[0] + 44, panel[1] + 40
+    x0, y0 = panel[0] + 56, panel[1] + 52
     if logo_path.exists():
         try:
             logo = Image.open(logo_path).convert("RGBA")
-            logo.thumbnail((124, 124))
+            logo.thumbnail((180, 180))
             lx, ly = logo.size
             # logo tile with border
-            tile = Image.new("RGBA", (lx + 34, ly + 34), (255, 255, 255, 0))
+            tile = Image.new("RGBA", (lx + 44, ly + 44), (255, 255, 255, 0))
             td = ImageDraw.Draw(tile)
-            td.rounded_rectangle((0, 0, lx + 34, ly + 34), radius=22, fill=(255, 255, 255, 22), outline=(167, 139, 250, 80), width=2)
-            tile.paste(logo, (17, 17), logo)
+            td.rounded_rectangle((0, 0, lx + 44, ly + 44), radius=26, fill=(255, 255, 255, 26), outline=(167, 139, 250, 95), width=3)
+            tile.paste(logo, (22, 22), logo)
             img.alpha_composite(tile, (x0, y0))
-            x_text = x0 + lx + 64
+            x_text = x0 + lx + 86
         except Exception:
             x_text = x0
     else:
         x_text = x0
 
     # Header text (brighter)
-    draw.text((x_text, y0 + 6), title, font=font_title, fill=(248, 250, 252, 255))
-    draw.text((x_text, y0 + 90), subtitle, font=font_sub, fill=(226, 232, 240, 250))
-
-    # Accent underline
-    line_y = y0 + 146
-    draw.rounded_rectangle((x_text, line_y, x_text + 620, line_y + 10), radius=7, fill=(124, 58, 237, 210))
-    draw.rounded_rectangle((x_text + 360, line_y, x_text + 780, line_y + 10), radius=7, fill=(56, 189, 248, 195))
+    draw.text((x_text, y0 + 10), title, font=font_title, fill=(248, 250, 252, 255))
+    draw.text((x_text, y0 + 118), subtitle, font=font_sub, fill=(226, 232, 240, 252))
 
     # Metric grid (2 rows x 4 cols)
-    grid_top = panel[1] + 230
-    grid_left = panel[0] + 44
-    grid_right = panel[2] - 44
+    grid_top = panel[1] + 320
+    grid_left = panel[0] + 56
+    grid_right = panel[2] - 56
     cols = 4
     rows = int((len(metrics) + cols - 1) / cols)
     card_w = int((grid_right - grid_left - (cols - 1) * 18) / cols)
-    card_h = 154
+    card_h = 220
 
     for idx, (k, v) in enumerate(metrics):
         r = idx // cols
@@ -3943,17 +3970,17 @@ def build_report_card_png(
         y = grid_top + r * (card_h + 18)
         rect = (x, y, x + card_w, y + card_h)
         # Brighter cards with more vibrant border.
-        draw.rounded_rectangle(rect, radius=26, fill=(255, 255, 255, 22), outline=(167, 139, 250, 75), width=2)
+        draw.rounded_rectangle(rect, radius=32, fill=(255, 255, 255, 26), outline=(167, 139, 250, 85), width=3)
         # A subtle top sheen for "smooth" feel
-        draw.rounded_rectangle((x + 2, y + 2, x + card_w - 2, y + 48), radius=24, fill=(56, 189, 248, 26))
+        draw.rounded_rectangle((x + 3, y + 3, x + card_w - 3, y + 64), radius=30, fill=(56, 189, 248, 30))
         # Key
         draw.text((x + 18, y + 16), k.upper(), font=font_k, fill=(241, 245, 249, 255))
         # Value
-        draw.text((x + 18, y + 62), v, font=font_v, fill=(248, 250, 252, 255))
+        draw.text((x + 18, y + 86), v, font=font_v, fill=(248, 250, 252, 255))
 
     # Footer
     if footer:
-        draw.text((panel[0] + 44, panel[3] - 48), footer, font=font_footer, fill=(226, 232, 240, 245))
+        draw.text((panel[0] + 56, panel[3] - 60), footer, font=font_footer, fill=(226, 232, 240, 252))
 
     out = io.BytesIO()
     img.save(out, format="PNG")
