@@ -1963,7 +1963,7 @@ def render_all_accounts_dashboard(user_id: str) -> None:
         return
 
     # Filters (match the general style/feel of Dashboard filters)
-    with st.expander("Filters", expanded=True):
+    with st.expander("Filters", expanded=False):
         fp = "all_accounts_filter_"
         min_date = pd.to_datetime(df_all["date"], errors="coerce").min()
         max_date = pd.to_datetime(df_all["date"], errors="coerce").max()
@@ -3891,9 +3891,9 @@ def build_report_card_png(
     img = Image.new("RGBA", (W, H), (14, 17, 23, 255))
     draw = ImageDraw.Draw(img)
 
-    # Background gradient (cool + higher contrast)
-    top = (8, 10, 20)
-    bot = (14, 17, 23)
+    # Background gradient — slightly lighter dark base for better contrast
+    top = (12, 14, 28)
+    bot = (18, 20, 32)
     for y in range(H):
         t = y / max(1, H - 1)
         r = int(top[0] + (bot[0] - top[0]) * t)
@@ -3901,19 +3901,18 @@ def build_report_card_png(
         b = int(top[2] + (bot[2] - top[2]) * t)
         draw.line([(0, y), (W, y)], fill=(r, g, b, 255))
 
-    # Brighter accent glow blobs (purple + blue only)
-    draw.ellipse((-160, -220, 700, 610), fill=(124, 58, 237, 95))
-    draw.ellipse((760, -300, 1640, 640), fill=(56, 189, 248, 75))
-    draw.ellipse((140, 380, 1260, 1220), fill=(124, 58, 237, 55))
-    draw.ellipse((520, 460, 1580, 1180), fill=(56, 189, 248, 35))
+    # Vivid accent glow blobs (much higher alpha for pop)
+    draw.ellipse((-160, -220, 700, 610), fill=(124, 58, 237, 145))
+    draw.ellipse((760, -300, 1640, 640), fill=(56, 189, 248, 120))
+    draw.ellipse((140, 380, 1260, 1220), fill=(124, 58, 237, 90))
+    draw.ellipse((520, 460, 1580, 1180), fill=(56, 189, 248, 65))
 
-    # Panel
+    # Panel — brighter fill and more vivid borders
     pad = 64
     panel = (pad, pad, W - pad, H - pad)
-    # Brighter panel + colored border for "clean + smooth" look.
-    draw.rounded_rectangle(panel, radius=34, fill=(20, 26, 38, 238), outline=(167, 139, 250, 85), width=3)
+    draw.rounded_rectangle(panel, radius=34, fill=(26, 32, 50, 245), outline=(167, 139, 250, 160), width=3)
     # Inner border for depth
-    draw.rounded_rectangle((panel[0] + 6, panel[1] + 6, panel[2] - 6, panel[3] - 6), radius=30, outline=(56, 189, 248, 55), width=2)
+    draw.rounded_rectangle((panel[0] + 6, panel[1] + 6, panel[2] - 6, panel[3] - 6), radius=30, outline=(56, 189, 248, 100), width=2)
 
     # Fonts (fallback to default if truetype not available).
     # IMPORTANT: `ImageFont.load_default()` can look blurry when Streamlit scales the PNG.
@@ -3981,9 +3980,9 @@ def build_report_card_png(
     else:
         x_text = x0
 
-    # Header text (brighter)
-    draw.text((x_text, y0 + 6), title, font=font_title, fill=(248, 250, 252, 255))
-    draw.text((x_text, y0 + 78), subtitle, font=font_sub, fill=(226, 232, 240, 252))
+    # Header text — fully white for max clarity
+    draw.text((x_text, y0 + 6), title, font=font_title, fill=(255, 255, 255, 255))
+    draw.text((x_text, y0 + 78), subtitle, font=font_sub, fill=(209, 219, 255, 255))
 
     # Metric grid (2 rows x 4 cols)
     grid_top = panel[1] + 190
@@ -4000,18 +3999,18 @@ def build_report_card_png(
         x = grid_left + c * (card_w + 18)
         y = grid_top + r * (card_h + 18)
         rect = (x, y, x + card_w, y + card_h)
-        # Brighter cards with more vibrant border.
-        draw.rounded_rectangle(rect, radius=24, fill=(255, 255, 255, 22), outline=(167, 139, 250, 80), width=2)
-        # A subtle top sheen for "smooth" feel
-        draw.rounded_rectangle((x + 2, y + 2, x + card_w - 2, y + 46), radius=22, fill=(56, 189, 248, 26))
-        # Key
-        draw.text((x + 18, y + 16), k.upper(), font=font_k, fill=(241, 245, 249, 255))
-        # Value
-        draw.text((x + 18, y + 56), v, font=font_v, fill=(248, 250, 252, 255))
+        # Bright cards with vivid border
+        draw.rounded_rectangle(rect, radius=24, fill=(40, 48, 72, 255), outline=(167, 139, 250, 160), width=2)
+        # Top sheen
+        draw.rounded_rectangle((x + 2, y + 2, x + card_w - 2, y + 46), radius=22, fill=(56, 189, 248, 45))
+        # Key label — light purple-white
+        draw.text((x + 18, y + 16), k.upper(), font=font_k, fill=(196, 181, 253, 255))
+        # Value — pure white
+        draw.text((x + 18, y + 56), v, font=font_v, fill=(255, 255, 255, 255))
 
     # Footer
     if footer:
-        draw.text((panel[0] + 38, panel[3] - 44), footer, font=font_footer, fill=(226, 232, 240, 252))
+        draw.text((panel[0] + 38, panel[3] - 44), footer, font=font_footer, fill=(196, 207, 255, 255))
 
     out = io.BytesIO()
     img.save(out, format="PNG")
@@ -4221,6 +4220,97 @@ def render_streaks_page(df_view: pd.DataFrame, pnl_col: str) -> None:
         .properties(height=260)
     )
     st.altair_chart(style_altair_chart(chart), use_container_width=True)
+
+def _rc_metric_card(label: str, value: str, color: str = "rgba(248,250,252,0.95)") -> str:
+    """Small HTML metric card for use inside the week report dialog."""
+    return (
+        f'<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(124,58,237,0.28);'
+        f'border-radius:10px;padding:12px 14px;">'
+        f'<div style="font-size:11px;color:rgba(148,163,184,0.85);text-transform:uppercase;'
+        f'letter-spacing:.05em;margin-bottom:4px;">{html_lib.escape(label)}</div>'
+        f'<div style="font-size:22px;font-weight:700;color:{color};">{html_lib.escape(value)}</div>'
+        f'</div>'
+    )
+
+
+@st.dialog("Weekly Report", width="large")
+def _show_week_dialog(week_label: str, week_trades: pd.DataFrame, pnl_col: str) -> None:
+    """Modal popup showing a styled weekly trade summary."""
+    if week_trades.empty:
+        st.info("No trades logged this week.")
+        return
+
+    total_pnl = float(week_trades[pnl_col].sum())
+    total = len(week_trades)
+    wins = int((week_trades[pnl_col] > 0).sum())
+    losses = int((week_trades[pnl_col] < 0).sum())
+    breakeven = total - wins - losses
+    win_rate = (wins / total * 100) if total > 0 else 0
+    wins_sum = week_trades[week_trades[pnl_col] > 0][pnl_col].sum()
+    losses_sum = week_trades[week_trades[pnl_col] < 0][pnl_col].sum()
+    pf = (wins_sum / abs(losses_sum)) if losses_sum != 0 else None
+    avg_rr_val = week_trades["r_multiple"].dropna().mean() if "r_multiple" in week_trades.columns else None
+    best_trade = float(week_trades[pnl_col].max())
+    worst_trade = float(week_trades[pnl_col].min())
+
+    pnl_color = "#22c55e" if total_pnl >= 0 else "#ef4444"
+    pf_str = f"{pf:.2f}" if pf is not None else "n/a"
+    rr_str = f"{avg_rr_val:.2f}" if avg_rr_val is not None and pd.notna(avg_rr_val) else "n/a"
+
+    st.markdown(
+        f"""
+        <div style="background:linear-gradient(135deg,rgba(124,58,237,0.22) 0%,rgba(56,189,248,0.12) 100%);
+                    border:1px solid rgba(124,58,237,0.40);border-radius:14px;
+                    padding:18px 22px;margin-bottom:18px;">
+          <div style="font-size:12px;color:rgba(148,163,184,0.85);letter-spacing:.07em;
+                      text-transform:uppercase;margin-bottom:6px;">Weekly Summary</div>
+          <div style="font-size:32px;font-weight:800;color:{pnl_color};line-height:1.1;">
+            {format_money(total_pnl)}</div>
+          <div style="font-size:13px;color:rgba(148,163,184,0.75);margin-top:4px;">{html_lib.escape(week_label)}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    cards_row1 = "".join([
+        _rc_metric_card("Trades", str(total)),
+        _rc_metric_card("Win Rate", f"{win_rate:.1f}%"),
+        _rc_metric_card("Profit Factor", pf_str),
+        _rc_metric_card("Avg R/R", rr_str),
+    ])
+    cards_row2 = "".join([
+        _rc_metric_card("Wins", str(wins), "#22c55e"),
+        _rc_metric_card("Losses", str(losses), "#ef4444"),
+        _rc_metric_card("Best Trade", format_money(best_trade), "#22c55e"),
+        _rc_metric_card("Worst Trade", format_money(worst_trade), "#ef4444"),
+    ])
+    st.markdown(
+        f'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px;">'
+        f'{cards_row1}</div>'
+        f'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;">'
+        f'{cards_row2}</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("**Trades this week**")
+    show = week_trades.copy()
+    if "date" in show.columns:
+        show["Date"] = pd.to_datetime(show["date"], errors="coerce").dt.strftime("%b %d")
+    show["PnL"] = show[pnl_col].apply(format_money)
+    display_cols = [c for c in ("Date", "instrument", "direction", "session", "trade_grade", "r_multiple", "PnL")
+                    if c in show.columns]
+    st.dataframe(
+        show[display_cols].rename(columns={
+            "instrument": "Instrument", "direction": "Dir",
+            "session": "Session", "trade_grade": "Grade", "r_multiple": "R",
+        }),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    if breakeven > 0:
+        st.caption(f"Breakeven trades: {breakeven}")
+
 
 def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
     if df.empty:
@@ -5350,7 +5440,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     df_view.columns = [str(c).strip() for c in df_view.columns]
     show_filters = section in ("Dashboard", "Analytics", "PnL Calendar", "Reports", "Streaks & Milestones")
     if show_filters:
-        with st.expander("Filters", expanded=True):
+        with st.expander("Filters", expanded=False):
             fp = f"{form_key}_filter_"
             min_date = df_view["date"].min().date()
             max_date = df_view["date"].max().date()
@@ -5631,64 +5721,26 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
             st.markdown(f"**Biggest losing day:** {worst_date} — {format_money(worst_row['pnl'])}")
         render_pnl_calendar(chart_df, pnl_col)
 
-        # Weekly details (click a week on the right)
+        # Weekly report popup — one button per week, opens a modal dialog.
         week_map = st.session_state.get("calendar_week_date_map") or {}
-        week_clicked = get_query_param("week").strip()
         week_keys = list(week_map.keys())
         if week_keys:
-            default_week = week_clicked if week_clicked in week_keys else week_keys[0]
-            selected_week = st.selectbox("Select week", week_keys, index=week_keys.index(default_week), key=f"{form_key}_week_select")
-            week_dates = week_map.get(selected_week, [])
-            week_trades_df = chart_df[chart_df["date"].dt.strftime("%Y-%m-%d").isin(week_dates)].copy()
-            if week_trades_df.empty:
-                st.info("No trades in this week.")
-            else:
-                avg_rr = week_trades_df["r_multiple"].dropna().mean() if "r_multiple" in week_trades_df.columns else None
-                wins_w = week_trades_df[week_trades_df[pnl_col] > 0][pnl_col].sum()
-                losses_w = week_trades_df[week_trades_df[pnl_col] < 0][pnl_col].sum()
-                pf_w = (wins_w / abs(losses_w)) if losses_w != 0 else None
-                cards_w = [
-                    ("Week PnL", format_money(float(week_trades_df[pnl_col].sum())), None),
-                    ("Avg RR", f"{float(avg_rr):.2f}" if avg_rr is not None and pd.notna(avg_rr) else "n/a", None),
-                    ("Profit factor", f"{float(pf_w):.2f}" if pf_w is not None else "n/a", None),
-                ]
-                render_metric_cards(cards_w)
+            st.markdown("**Weekly reports** — click a week to view:")
+            cols_per_row = 5
+            for row_start in range(0, len(week_keys), cols_per_row):
+                row_wks = week_keys[row_start:row_start + cols_per_row]
+                btn_cols = st.columns(len(row_wks))
+                for col, (idx, wk) in zip(btn_cols, enumerate(row_wks, start=row_start + 1)):
+                    with col:
+                        if st.button(f"Week {idx}", key=f"wk_btn_{form_key}_{idx}", use_container_width=True):
+                            st.session_state[f"_week_dialog_{form_key}"] = wk
 
-                # Weekly journal viewer (same week)
-                if WEEKLY_JOURNAL_ENABLED and week_dates:
-                    try:
-                        dates = [pd.to_datetime(d, errors="coerce").date() for d in week_dates]
-                        dates = [d for d in dates if d is not None and not pd.isna(d)]
-                        week_start = min(dates) if dates else None
-                    except Exception:
-                        week_start = None
-                    if week_start is not None:
-                        week_start_str = week_start.strftime("%Y-%m-%d")
-                        with st.expander("Weekly journal", expanded=False):
-                            entry = load_weekly_journal_entry(user_id, week_start_str)
-                            if entry is None:
-                                st.warning("Weekly journal storage isn't set up yet. Run `sql/weekly_journal.sql` in Supabase.")
-                            elif not entry:
-                                st.info("No weekly journal saved for this week yet.")
-                            else:
-                                st.markdown(f"**Week:** {_week_label(_week_start_monday(pd.to_datetime(week_start_str).date()))}")
-                                st.markdown("**What did you do well?**")
-                                st.write(safe_str(entry.get("did_well")))
-                                st.markdown("**What needs improved?**")
-                                st.write(safe_str(entry.get("needs_improved")))
-                                st.markdown("**What patterns are appearing in your trading?**")
-                                st.write(safe_str(entry.get("patterns")))
-                                st.markdown("**What are you going to focus on next week?**")
-                                st.write(safe_str(entry.get("focus_next")))
-                                if safe_str(entry.get("other_notes")).strip():
-                                    st.markdown("**Other notes on the market**")
-                                    st.write(safe_str(entry.get("other_notes")))
-                                imp = entry.get("improvement_percent")
-                                if imp is not None and safe_str(imp).strip() != "":
-                                    try:
-                                        st.caption(f"Weekly improvement: **{float(imp):.1f}%**")
-                                    except Exception:
-                                        pass
+            # Open dialog (consume the key so closing the dialog doesn't reopen it).
+            pending_wk = st.session_state.pop(f"_week_dialog_{form_key}", None)
+            if pending_wk and pending_wk in week_map:
+                wk_dates = week_map[pending_wk]
+                wk_trades = chart_df[chart_df["date"].dt.strftime("%Y-%m-%d").isin(wk_dates)].copy()
+                _show_week_dialog(pending_wk, wk_trades, pnl_col)
 
         # Day details (click a day on the calendar or pick below)
         st.markdown("---")
@@ -6140,14 +6192,14 @@ else:
             _request_nav("New Trade")
 
         nav_icons = {
-            "Dashboard": "📊",
-            "Analytics": "📈",
-            "PnL Calendar": "📅",
-            "Reports": "📋",
-            "Streaks & Milestones": "⭐",
-            "Journal": "📓",
-            "Strategy/Model Creation": "🧩",
-            "Affiliates": "👥",
+            "Dashboard": "▣",
+            "Analytics": "⌁",
+            "PnL Calendar": "▦",
+            "Reports": "▤",
+            "Streaks & Milestones": "★",
+            "Journal": "✎",
+            "Strategy/Model Creation": "⧉",
+            "Affiliates": "✦",
         }
         current_nav = st.session_state.get("nav_section", section_options[0])
         for opt in section_options:
