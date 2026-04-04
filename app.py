@@ -37,6 +37,11 @@ st.set_page_config(
 )
 st.markdown("""
 <style>
+/* Hide Streamlit chrome (header bar, hamburger, footer) */
+header[data-testid="stHeader"] { display: none !important; }
+#MainMenu { visibility: hidden !important; }
+footer { visibility: hidden !important; }
+
 /* Brand accents */
 :root{
   --accent-purple: rgba(124,58,237,1);
@@ -167,35 +172,35 @@ section[data-testid="stSidebar"] .sidebar-usercard .plan-row{
 section[data-testid="stSidebar"] .sidebar-usercard .badge{
   display:inline-block;
   font-size: 11px;
-  font-weight: 700;
-  letter-spacing: .06em;
+  font-weight: 600;
+  letter-spacing: .04em;
   text-transform: uppercase;
-  padding: 4px 8px;
-  border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.06);
-  color: rgba(230,237,243,0.95);
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid #7c3aed;
+  background: transparent;
+  color: #a78bfa;
   white-space: nowrap;
 }
 section[data-testid="stSidebar"] .sidebar-usercard .badge.pro{
-  border-color: rgba(56,189,248,0.28);
-  background: rgba(56,189,248,0.10);
+  border-color: #7c3aed;
+  color: #a78bfa;
 }
 section[data-testid="stSidebar"] .sidebar-usercard .badge.trial{
-  border-color: rgba(124,58,237,0.30);
-  background: rgba(124,58,237,0.14);
+  border-color: #7c3aed;
+  color: #a78bfa;
 }
 section[data-testid="stSidebar"] .sidebar-usercard .badge.free{
-  border-color: rgba(148,163,184,0.22);
-  background: rgba(148,163,184,0.08);
+  border-color: #7c3aed;
+  color: #a78bfa;
 }
 section[data-testid="stSidebar"] .sidebar-usercard .badge.grandfathered{
-  border-color: rgba(34,197,94,0.26);
-  background: rgba(34,197,94,0.10);
+  border-color: #7c3aed;
+  color: #a78bfa;
 }
 section[data-testid="stSidebar"] .sidebar-usercard .badge.owner{
-  border-color: rgba(250,204,21,0.30);
-  background: rgba(250,204,21,0.10);
+  border-color: #7c3aed;
+  color: #a78bfa;
 }
 
  .brand-row {display:flex;align-items:center;gap:12px;margin:6px 0 12px;}
@@ -1958,7 +1963,7 @@ def render_all_accounts_dashboard(user_id: str) -> None:
         return
 
     # Filters (match the general style/feel of Dashboard filters)
-    with st.expander("Filters", expanded=False):
+    with st.expander("Filters", expanded=True):
         fp = "all_accounts_filter_"
         min_date = pd.to_datetime(df_all["date"], errors="coerce").min()
         max_date = pd.to_datetime(df_all["date"], errors="coerce").max()
@@ -1981,7 +1986,8 @@ def render_all_accounts_dashboard(user_id: str) -> None:
 
         direction_filter = st.multiselect("Direction", ["Long", "Short"], default=["Long", "Short"], key=f"{fp}direction")
 
-    pnl_view = st.radio("PnL view", ["Net (after fees)", "Gross"], horizontal=True, key="all_accounts_pnl_view")
+    st.caption("PnL view")
+    pnl_view = st.radio("PnL view", ["Net (after fees)", "Gross"], horizontal=True, key="all_accounts_pnl_view", label_visibility="collapsed")
     pnl_col = "pnl_net" if pnl_view.startswith("Net") else "pnl_gross"
     if pnl_col not in df_all.columns:
         df_all[pnl_col] = 0.0
@@ -2152,7 +2158,7 @@ def render_all_accounts_dashboard(user_id: str) -> None:
         )
         .encode(
             x=alt.X("date:T", axis=alt.Axis(title=None, format="%b %d")),
-            y=alt.Y("equity_smooth:Q", axis=alt.Axis(title=None), scale=alt.Scale(zero=False)),
+            y=alt.Y("equity_smooth:Q", axis=alt.Axis(title="Cumulative P&L ($)"), scale=alt.Scale(zero=False)),
             tooltip=[
                 alt.Tooltip("date:T", title="Date"),
                 alt.Tooltip("equity:Q", title="Equity", format=",.2f"),
@@ -2180,7 +2186,7 @@ def render_all_accounts_dashboard(user_id: str) -> None:
         .encode(
             y=alt.Y("instrument:N", sort=INSTRUMENT_ORDER, axis=alt.Axis(title=None)),
             x=alt.X("pnl:Q", axis=alt.Axis(title=None)),
-            color=alt.value("#8FC9FF"),
+            color=alt.value("#7c3aed"),
             tooltip=[alt.Tooltip("instrument:N", title="Instrument"), alt.Tooltip("pnl:Q", title="PnL", format=",.2f")],
         )
         .properties(height=220)
@@ -2192,25 +2198,51 @@ def render_all_accounts_dashboard(user_id: str) -> None:
         .encode(
             y=alt.Y("session:N", sort=SESSIONS, axis=alt.Axis(title=None)),
             x=alt.X("pnl:Q", axis=alt.Axis(title=None)),
-            color=alt.value("#8FC9FF"),
+            color=alt.value("#7c3aed"),
             tooltip=[alt.Tooltip("session:N", title="Session"), alt.Tooltip("pnl:Q", title="PnL", format=",.2f")],
         )
         .properties(height=220)
     )
 
-    drawdown_chart = (
-        alt.Chart(daily_df)
-        .mark_area(
-            line={"color": "#ef4444", "strokeWidth": 1.5},
-            color="rgba(239, 68, 68, 0.18)",
-        )
-        .encode(
-            x=alt.X("date:T", axis=alt.Axis(title=None, format="%b %d")),
-            y=alt.Y("drawdown:Q", axis=alt.Axis(title=None), scale=alt.Scale(zero=False)),
-            tooltip=[alt.Tooltip("date:T", title="Date"), alt.Tooltip("drawdown:Q", title="Drawdown", format=",.2f")],
-        )
-        .properties(height=200)
+    _dd_zero_rule = (
+        alt.Chart(pd.DataFrame({"y": [0]}))
+        .mark_rule(color="rgba(255,255,255,0.3)", strokeDash=[4, 4])
+        .encode(y=alt.Y("y:Q"))
     )
+    _dd_min_idx = daily_df["drawdown"].idxmin() if not daily_df.empty else None
+    if _dd_min_idx is not None:
+        _dd_min_row = daily_df.loc[[_dd_min_idx]][["date", "drawdown"]].copy()
+        _dd_min_row["label"] = _dd_min_row["drawdown"].apply(lambda v: f"Max DD: ${v:,.0f}")
+        _dd_annotation = (
+            alt.Chart(_dd_min_row)
+            .mark_text(color="#ff4444", align="center", dy=-10, fontSize=11)
+            .encode(x=alt.X("date:T"), y=alt.Y("drawdown:Q"), text="label:N")
+        )
+        drawdown_chart = (
+            alt.layer(
+                alt.Chart(daily_df)
+                .mark_area(line={"color": "#ef4444", "strokeWidth": 1.5}, color="rgba(239, 68, 68, 0.18)")
+                .encode(
+                    x=alt.X("date:T", axis=alt.Axis(title=None, format="%b %d")),
+                    y=alt.Y("drawdown:Q", axis=alt.Axis(title=None), scale=alt.Scale(zero=False)),
+                    tooltip=[alt.Tooltip("date:T", title="Date"), alt.Tooltip("drawdown:Q", title="Drawdown", format=",.2f")],
+                ),
+                _dd_zero_rule,
+                _dd_annotation,
+            )
+            .properties(height=200)
+        )
+    else:
+        drawdown_chart = (
+            alt.Chart(daily_df)
+            .mark_area(line={"color": "#ef4444", "strokeWidth": 1.5}, color="rgba(239, 68, 68, 0.18)")
+            .encode(
+                x=alt.X("date:T", axis=alt.Axis(title=None, format="%b %d")),
+                y=alt.Y("drawdown:Q", axis=alt.Axis(title=None), scale=alt.Scale(zero=False)),
+                tooltip=[alt.Tooltip("date:T", title="Date"), alt.Tooltip("drawdown:Q", title="Drawdown", format=",.2f")],
+            )
+            .properties(height=200)
+        )
 
     c_score, c_recent = st.columns([1.2, 1])
     with c_score:
@@ -2256,13 +2288,10 @@ def render_all_accounts_dashboard(user_id: str) -> None:
         else:
             st.info("No trades yet.")
 
-    c_eq, c_daily = st.columns([2, 1])
-    with c_eq:
-        st.markdown("**Equity curve**")
-        st.altair_chart(style_altair_chart(equity_chart), use_container_width=True)
-    with c_daily:
-        st.markdown("**Daily P&L**")
-        st.altair_chart(style_altair_chart(daily_chart), use_container_width=True)
+    st.markdown("**Equity curve**")
+    st.altair_chart(style_altair_chart(equity_chart), use_container_width=True)
+    st.markdown("**Daily P&L**")
+    st.altair_chart(style_altair_chart(daily_chart), use_container_width=True)
 
     st.markdown("**Performance by instrument & session**")
     c1, c2 = st.columns(2)
@@ -3718,9 +3747,9 @@ def render_zylo_radar(components: Dict[str, float]) -> None:
 
     # Geometry
     size = 320
-    vb_pad = 64  # extra viewbox padding so axis labels don't get clipped
+    vb_pad = 80  # extra viewbox padding so axis labels don't get clipped
     cx = cy = size / 2
-    outer = 120.0
+    outer = 110.0
     rings = 4
     import math
 
@@ -3750,7 +3779,7 @@ def render_zylo_radar(components: Dict[str, float]) -> None:
     # Label positions
     label_nodes = []
     for i, lab in enumerate(labels):
-        x, y = pt(i, outer + 28)
+        x, y = pt(i, outer + 34)
         anchor = "middle"
         # slight tweak for left/right
         if x < cx - 30:
@@ -3768,7 +3797,7 @@ def render_zylo_radar(components: Dict[str, float]) -> None:
       </g>
       <path d="{poly_d}" fill="rgba(124,58,237,0.35)" stroke="#A78BFA" stroke-width="2"/>
       {"".join([f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.2" fill="#C4B5FD"/>' for x,y in poly])}
-      <g font-family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" font-size="12" fill="rgba(230,237,243,0.95)">
+      <g font-family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" font-size="13" fill="rgba(230,237,243,0.95)">
         {"".join([f'<text x="{x:.1f}" y="{y:.1f}" text-anchor="{a}" dominant-baseline="middle">{html_lib.escape(t)}</text>' for x,y,a,t in label_nodes])}
       </g>
     </svg>
@@ -5259,7 +5288,14 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     st.error(f"Failed to save trade: {e}")
     
     if df_raw.empty:
-        if section in ("Dashboard", "Analytics", "PnL Calendar"):
+        if section == "Dashboard":
+            st.markdown("---")
+            st.markdown("### 📭 No trades yet for this account")
+            st.markdown("Start logging trades to see your dashboard analytics here.")
+            if st.button("+ Log Your First Trade", key=f"empty_cta_{form_key}"):
+                st.session_state["_nav_request"] = "New Trade"
+                st.rerun()
+        elif section in ("Analytics", "PnL Calendar"):
             st.info("No trades yet. Add your first trade above.")
         return
 
@@ -5314,7 +5350,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     df_view.columns = [str(c).strip() for c in df_view.columns]
     show_filters = section in ("Dashboard", "Analytics", "PnL Calendar", "Reports", "Streaks & Milestones")
     if show_filters:
-        with st.expander("Filters", expanded=False):
+        with st.expander("Filters", expanded=True):
             fp = f"{form_key}_filter_"
             min_date = df_view["date"].min().date()
             max_date = df_view["date"].max().date()
@@ -5325,7 +5361,8 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
             session_filter = st.multiselect("Session", SESSIONS, default=SESSIONS, key=f"{fp}session")
             direction_filter = st.multiselect("Direction", ["Long", "Short"], default=["Long", "Short"], key=f"{fp}direction")
 
-        pnl_view = st.radio("PnL view", ["Net (after fees)", "Gross"], horizontal=True, key=f"{form_key}_pnl_view")
+        st.caption("PnL view")
+        pnl_view = st.radio("PnL view", ["Net (after fees)", "Gross"], horizontal=True, key=f"{form_key}_pnl_view", label_visibility="collapsed")
     else:
         min_date = df_view["date"].min().date()
         max_date = df_view["date"].max().date()
@@ -5442,7 +5479,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         )
         .encode(
             x=alt.X("date:T", axis=alt.Axis(title=None, format="%b %d")),
-            y=alt.Y("equity_smooth:Q", axis=alt.Axis(title=None), scale=alt.Scale(zero=False)),
+            y=alt.Y("equity_smooth:Q", axis=alt.Axis(title="Cumulative P&L ($)"), scale=alt.Scale(zero=False)),
             tooltip=[
                 alt.Tooltip("date:T", title="Date"),
                 alt.Tooltip("equity:Q", title="Equity", format=",.2f"),
@@ -5470,7 +5507,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         .encode(
             y=alt.Y("instrument:N", sort=INSTRUMENT_ORDER, axis=alt.Axis(title=None)),
             x=alt.X("pnl:Q", axis=alt.Axis(title=None)),
-            color=alt.value("#8FC9FF"),
+            color=alt.value("#7c3aed"),
             tooltip=[alt.Tooltip("instrument:N", title="Instrument"), alt.Tooltip("pnl:Q", title="PnL", format=",.2f")],
         )
         .properties(height=220)
@@ -5482,25 +5519,51 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         .encode(
             y=alt.Y("session:N", sort=SESSIONS, axis=alt.Axis(title=None)),
             x=alt.X("pnl:Q", axis=alt.Axis(title=None)),
-            color=alt.value("#8FC9FF"),
+            color=alt.value("#7c3aed"),
             tooltip=[alt.Tooltip("session:N", title="Session"), alt.Tooltip("pnl:Q", title="PnL", format=",.2f")],
         )
         .properties(height=220)
     )
 
-    drawdown_chart = (
-        alt.Chart(daily_df)
-        .mark_area(
-            line={"color": "#ef4444", "strokeWidth": 1.5},
-            color="rgba(239, 68, 68, 0.18)",
-        )
-        .encode(
-            x=alt.X("date:T", axis=alt.Axis(title=None, format="%b %d")),
-            y=alt.Y("drawdown:Q", axis=alt.Axis(title=None), scale=alt.Scale(zero=False)),
-            tooltip=[alt.Tooltip("date:T", title="Date"), alt.Tooltip("drawdown:Q", title="Drawdown", format=",.2f")],
-        )
-        .properties(height=200)
+    _dd_zero_rule2 = (
+        alt.Chart(pd.DataFrame({"y": [0]}))
+        .mark_rule(color="rgba(255,255,255,0.3)", strokeDash=[4, 4])
+        .encode(y=alt.Y("y:Q"))
     )
+    _dd_min_idx2 = daily_df["drawdown"].idxmin() if not daily_df.empty else None
+    if _dd_min_idx2 is not None:
+        _dd_min_row2 = daily_df.loc[[_dd_min_idx2]][["date", "drawdown"]].copy()
+        _dd_min_row2["label"] = _dd_min_row2["drawdown"].apply(lambda v: f"Max DD: ${v:,.0f}")
+        _dd_annotation2 = (
+            alt.Chart(_dd_min_row2)
+            .mark_text(color="#ff4444", align="center", dy=-10, fontSize=11)
+            .encode(x=alt.X("date:T"), y=alt.Y("drawdown:Q"), text="label:N")
+        )
+        drawdown_chart = (
+            alt.layer(
+                alt.Chart(daily_df)
+                .mark_area(line={"color": "#ef4444", "strokeWidth": 1.5}, color="rgba(239, 68, 68, 0.18)")
+                .encode(
+                    x=alt.X("date:T", axis=alt.Axis(title=None, format="%b %d")),
+                    y=alt.Y("drawdown:Q", axis=alt.Axis(title=None), scale=alt.Scale(zero=False)),
+                    tooltip=[alt.Tooltip("date:T", title="Date"), alt.Tooltip("drawdown:Q", title="Drawdown", format=",.2f")],
+                ),
+                _dd_zero_rule2,
+                _dd_annotation2,
+            )
+            .properties(height=200)
+        )
+    else:
+        drawdown_chart = (
+            alt.Chart(daily_df)
+            .mark_area(line={"color": "#ef4444", "strokeWidth": 1.5}, color="rgba(239, 68, 68, 0.18)")
+            .encode(
+                x=alt.X("date:T", axis=alt.Axis(title=None, format="%b %d")),
+                y=alt.Y("drawdown:Q", axis=alt.Axis(title=None), scale=alt.Scale(zero=False)),
+                tooltip=[alt.Tooltip("date:T", title="Date"), alt.Tooltip("drawdown:Q", title="Drawdown", format=",.2f")],
+            )
+            .properties(height=200)
+        )
 
     if section == "Dashboard":
         st.subheader("Dashboard")
@@ -5541,13 +5604,10 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
             else:
                 st.info("No trades yet.")
 
-        c_eq, c_daily = st.columns([2, 1])
-        with c_eq:
-            st.markdown("**Equity curve**")
-            st.altair_chart(style_altair_chart(equity_chart), use_container_width=True)
-        with c_daily:
-            st.markdown("**Daily P&L**")
-            st.altair_chart(style_altair_chart(daily_chart), use_container_width=True)
+        st.markdown("**Equity curve**")
+        st.altair_chart(style_altair_chart(equity_chart), use_container_width=True)
+        st.markdown("**Daily P&L**")
+        st.altair_chart(style_altair_chart(daily_chart), use_container_width=True)
 
         st.markdown("**Performance by instrument & session**")
         c1, c2 = st.columns(2)
@@ -6009,7 +6069,6 @@ if not user:
 else:
     maybe_record_referral(user.id)
     apply_settings_to_session(user.id)
-    render_brand_header(center=False, hero=True)
 
     # Full section set (routing). Keep "New Trade" here so +Add Trade can navigate to it.
     section_options = [
@@ -6074,23 +6133,6 @@ else:
     if "sidebar_nav_section" not in st.session_state:
         st.session_state["sidebar_nav_section"] = st.session_state["nav_section"]
 
-    # Mobile-friendly navigation fallback (sidebar can be hidden/collapsed on small screens).
-    nav_cols = st.columns([3, 2, 2])
-    with nav_cols[0]:
-        st.caption("Navigation")
-    with nav_cols[1]:
-        top_add = st.button("+ Add Trade", type="primary", use_container_width=True, key="top_add_trade")
-    with nav_cols[2]:
-        st.selectbox(
-            "Go to",
-            section_options,
-            label_visibility="collapsed",
-            key="top_nav_section",
-            on_change=_sync_nav_from_top,
-        )
-    if top_add:
-        _request_nav("New Trade")
-
     with st.sidebar:
         st.markdown("### Navigation")
         add_trade = st.button("+ Add Trade", type="primary", use_container_width=True, key="sidebar_add_trade")
@@ -6098,14 +6140,14 @@ else:
             _request_nav("New Trade")
 
         nav_icons = {
-            "Dashboard": "▣",
-            "Analytics": "⌁",
-            "PnL Calendar": "▦",
-            "Reports": "▤",
-            "Streaks & Milestones": "★",
-            "Journal": "✎",
-            "Strategy/Model Creation": "⧉",
-            "Affiliates": "✦",
+            "Dashboard": "📊",
+            "Analytics": "📈",
+            "PnL Calendar": "📅",
+            "Reports": "📋",
+            "Streaks & Milestones": "⭐",
+            "Journal": "📓",
+            "Strategy/Model Creation": "🧩",
+            "Affiliates": "👥",
         }
         current_nav = st.session_state.get("nav_section", section_options[0])
         for opt in section_options:
@@ -6454,17 +6496,22 @@ else:
         _safe_render("Affiliates", lambda: render_affiliates_page(user.id))
     else:
         # Default to Funded tab first (better UX). Keep "All Accounts" available as a final tab.
-        tab_labels = [ACCOUNT_TYPES[1], ACCOUNT_TYPES[0], ACCOUNT_TYPES[2], "All Accounts"]
-        tabs = st.tabs(tab_labels)
-        for tab, label in zip(tabs, tab_labels):
+        # Short display labels → actual account_type strings stored in DB.
+        tab_config = [
+            ("Funded", ACCOUNT_TYPES[1]),
+            ("Evaluation", ACCOUNT_TYPES[0]),
+            ("Live", ACCOUNT_TYPES[2]),
+            ("All Accounts", None),
+        ]
+        tabs = st.tabs([t[0] for t in tab_config])
+        for tab, (display_label, account_type) in zip(tabs, tab_config):
             with tab:
-                if label == "All Accounts":
+                if account_type is None:
                     _safe_render(
                         f"{section} (All Accounts)",
                         lambda: render_all_accounts_section(user.id, section),
                     )
                 else:
-                    account_type = label
                     _safe_render(
                         f"{section} ({account_type})",
                         lambda account_type=account_type: render_section(user.id, account_type, section),
