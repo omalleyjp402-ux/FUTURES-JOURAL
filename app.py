@@ -2155,7 +2155,7 @@ def render_all_accounts_dashboard(user_id: str) -> None:
     equity_chart = (
         alt.Chart(daily_df)
         .mark_area(
-            interpolate="monotone",
+            interpolate="step-after",
             line={"color": "#A78BFA", "width": 2.6},
             color=alt.Gradient(
                 gradient="linear",
@@ -2171,10 +2171,10 @@ def render_all_accounts_dashboard(user_id: str) -> None:
         )
         .encode(
             x=alt.X("date:T", axis=alt.Axis(title=None, format="%b %d")),
-            y=alt.Y("equity_smooth:Q", axis=alt.Axis(title="Cumulative P&L ($)"), scale=alt.Scale(zero=False)),
+            y=alt.Y("equity:Q", axis=alt.Axis(title="Cumulative P&L ($)"), scale=alt.Scale(zero=False)),
             tooltip=[
                 alt.Tooltip("date:T", title="Date"),
-                alt.Tooltip("equity:Q", title="Equity", format=",.2f"),
+                alt.Tooltip("equity:Q", title="Cumulative P&L", format=",.2f"),
                 alt.Tooltip("pnl:Q", title="Daily PnL", format=",.2f"),
             ],
         )
@@ -5578,7 +5578,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     equity_chart = (
         alt.Chart(daily_df)
         .mark_area(
-            interpolate="monotone",
+            interpolate="step-after",
             line={"color": "#7C3AED", "strokeWidth": 2},
             color=alt.Gradient(
                 gradient="linear",
@@ -5594,10 +5594,10 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         )
         .encode(
             x=alt.X("date:T", axis=alt.Axis(title=None, format="%b %d")),
-            y=alt.Y("equity_smooth:Q", axis=alt.Axis(title="Cumulative P&L ($)"), scale=alt.Scale(zero=False)),
+            y=alt.Y("equity:Q", axis=alt.Axis(title="Cumulative P&L ($)"), scale=alt.Scale(zero=False)),
             tooltip=[
                 alt.Tooltip("date:T", title="Date"),
-                alt.Tooltip("equity:Q", title="Equity", format=",.2f"),
+                alt.Tooltip("equity:Q", title="Cumulative P&L", format=",.2f"),
                 alt.Tooltip("pnl:Q", title="Daily PnL", format=",.2f"),
             ],
         )
