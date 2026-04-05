@@ -1964,7 +1964,7 @@ def render_all_accounts_dashboard(user_id: str) -> None:
         return
 
     # Filters (match the general style/feel of Dashboard filters)
-    with st.expander("Filters", expanded=True):
+    with st.expander("Filters", expanded=False):
         fp = "all_accounts_filter_"
         min_date = pd.to_datetime(df_all["date"], errors="coerce").min()
         max_date = pd.to_datetime(df_all["date"], errors="coerce").max()
@@ -5445,7 +5445,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     df_view.columns = [str(c).strip() for c in df_view.columns]
     show_filters = section in ("Dashboard", "Analytics", "PnL Calendar", "Reports", "Streaks & Milestones")
     if show_filters:
-        with st.expander("Filters", expanded=True):
+        with st.expander("Filters", expanded=False):
             fp = f"{form_key}_filter_"
             min_date = df_view["date"].min().date()
             max_date = df_view["date"].max().date()
