@@ -37,8 +37,9 @@ st.set_page_config(
 )
 st.markdown("""
 <style>
-/* Hide Streamlit chrome (header bar, hamburger, footer) */
-header[data-testid="stHeader"] { display: none !important; }
+/* Hide Streamlit chrome (header bar, toolbar, hamburger, footer) */
+header, [data-testid="stHeader"], [data-testid="stToolbar"],
+[data-testid="stDecoration"] { display: none !important; }
 #MainMenu { visibility: hidden !important; }
 footer { visibility: hidden !important; }
 
@@ -175,7 +176,7 @@ section[data-testid="stSidebar"] .sidebar-usercard .badge{
   font-weight: 600;
   letter-spacing: .04em;
   text-transform: uppercase;
-  padding: 1px 6px;
+  padding: 1px 8px;
   border-radius: 4px;
   border: 1px solid #7c3aed;
   background: transparent;
@@ -1963,7 +1964,7 @@ def render_all_accounts_dashboard(user_id: str) -> None:
         return
 
     # Filters (match the general style/feel of Dashboard filters)
-    with st.expander("Filters", expanded=False):
+    with st.expander("Filters", expanded=True):
         fp = "all_accounts_filter_"
         min_date = pd.to_datetime(df_all["date"], errors="coerce").min()
         max_date = pd.to_datetime(df_all["date"], errors="coerce").max()
@@ -2115,10 +2116,11 @@ def render_all_accounts_dashboard(user_id: str) -> None:
     render_next_week_focus_panel(user_id)
 
     # Aggregate (combined) charts
+    _dfx_dd = dfx.copy()
+    _dfx_dd["date"] = pd.to_datetime(_dfx_dd["date"]).dt.normalize()
     daily_df = (
-        dfx.groupby("date", as_index=False)[pnl_col]
+        _dfx_dd.groupby("date", as_index=False)[pnl_col]
         .agg(pnl="sum", trades="count")
-        .rename(columns={"date": "date"})
         .sort_values("date")
     )
     daily_df["equity"] = daily_df["pnl"].cumsum()
@@ -2327,7 +2329,10 @@ def render_next_week_focus_panel(user_id: str) -> None:
         return
     week_start = safe_str(latest.get("week_start"))
     imp = latest.get("improvement_percent")
-    subtitle = week_start or "Latest"
+    try:
+        subtitle = datetime.strptime(week_start, "%Y-%m-%d").strftime("Week of %B %d") if week_start else "Latest"
+    except Exception:
+        subtitle = week_start or "Latest"
     st.markdown("**Next week focus**")
     st.caption(subtitle)
     if imp is not None and safe_str(imp).strip() != "":
@@ -3747,9 +3752,9 @@ def render_zylo_radar(components: Dict[str, float]) -> None:
 
     # Geometry
     size = 320
-    vb_pad = 80  # extra viewbox padding so axis labels don't get clipped
+    vb_pad = 100  # extra viewbox padding so axis labels don't get clipped
     cx = cy = size / 2
-    outer = 110.0
+    outer = 100.0
     rings = 4
     import math
 
@@ -5440,7 +5445,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     df_view.columns = [str(c).strip() for c in df_view.columns]
     show_filters = section in ("Dashboard", "Analytics", "PnL Calendar", "Reports", "Streaks & Milestones")
     if show_filters:
-        with st.expander("Filters", expanded=False):
+        with st.expander("Filters", expanded=True):
             fp = f"{form_key}_filter_"
             min_date = df_view["date"].min().date()
             max_date = df_view["date"].max().date()
@@ -5529,7 +5534,9 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     chart_df["day"] = chart_df["date"].dt.day_name()
     chart_df["month"] = chart_df["date"].dt.to_period("M").astype(str)
 
-    daily_df = chart_df.groupby("date", as_index=False)[pnl_col].sum().rename(columns={pnl_col: "pnl"})
+    _chart_df_dd = chart_df.copy()
+    _chart_df_dd["date"] = pd.to_datetime(_chart_df_dd["date"]).dt.normalize()
+    daily_df = _chart_df_dd.groupby("date", as_index=False)[pnl_col].sum().rename(columns={pnl_col: "pnl"})
     daily_df = daily_df.sort_values("date").copy()
     daily_df["equity"] = daily_df["pnl"].cumsum()
     daily_df["equity_smooth"] = daily_df["equity"].rolling(5, min_periods=1).mean()
@@ -6192,14 +6199,14 @@ else:
             _request_nav("New Trade")
 
         nav_icons = {
-            "Dashboard": "▣",
-            "Analytics": "⌁",
-            "PnL Calendar": "▦",
-            "Reports": "▤",
-            "Streaks & Milestones": "★",
-            "Journal": "✎",
-            "Strategy/Model Creation": "⧉",
-            "Affiliates": "✦",
+            "Dashboard": "📊",
+            "Analytics": "📈",
+            "PnL Calendar": "📅",
+            "Reports": "📋",
+            "Streaks & Milestones": "⭐",
+            "Journal": "📓",
+            "Strategy/Model Creation": "🧩",
+            "Affiliates": "👥",
         }
         current_nav = st.session_state.get("nav_section", section_options[0])
         for opt in section_options:
