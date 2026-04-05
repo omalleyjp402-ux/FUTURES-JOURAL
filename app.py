@@ -6199,14 +6199,14 @@ else:
             _request_nav("New Trade")
 
         nav_icons = {
-            "Dashboard": "📊",
-            "Analytics": "📈",
-            "PnL Calendar": "📅",
-            "Reports": "📋",
-            "Streaks & Milestones": "⭐",
-            "Journal": "📓",
-            "Strategy/Model Creation": "🧩",
-            "Affiliates": "👥",
+            "Dashboard": "▣",
+            "Analytics": "⌁",
+            "PnL Calendar": "▦",
+            "Reports": "▤",
+            "Streaks & Milestones": "★",
+            "Journal": "✎",
+            "Strategy/Model Creation": "⧉",
+            "Affiliates": "✦",
         }
         current_nav = st.session_state.get("nav_section", section_options[0])
         for opt in section_options:
