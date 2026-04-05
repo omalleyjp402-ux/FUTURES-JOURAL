@@ -2155,7 +2155,7 @@ def render_all_accounts_dashboard(user_id: str) -> None:
     equity_chart = (
         alt.Chart(daily_df)
         .mark_area(
-            interpolate="step-after",
+            interpolate="monotone",
             line={"color": "#A78BFA", "width": 2.6},
             color=alt.Gradient(
                 gradient="linear",
@@ -5578,7 +5578,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     equity_chart = (
         alt.Chart(daily_df)
         .mark_area(
-            interpolate="step-after",
+            interpolate="monotone",
             line={"color": "#7C3AED", "strokeWidth": 2},
             color=alt.Gradient(
                 gradient="linear",
