@@ -38,10 +38,18 @@ st.set_page_config(
 st.markdown("""
 <style>
 /* Hide Streamlit chrome (header bar, toolbar, hamburger, footer) */
-header, [data-testid="stHeader"], [data-testid="stToolbar"],
+header[data-testid="stHeader"] { display: none !important; }
+[data-testid="stToolbar"] { display: none !important; }
 [data-testid="stDecoration"] { display: none !important; }
+[data-testid="stStatusWidget"] { display: none !important; }
 #MainMenu { visibility: hidden !important; }
 footer { visibility: hidden !important; }
+.stDeployButton { display: none !important; }
+
+/* Sidebar: thin purple top accent */
+section[data-testid="stSidebar"] > div:first-child {
+    border-top: 3px solid #7c3aed;
+}
 
 /* Brand accents */
 :root{
@@ -84,7 +92,8 @@ div[data-testid="stDataFrame"]{
 /* Metric cards (used in demo + logged-in) */
 .metric-grid {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:6px 0 10px;}
 .metric-card {background: rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:14px;
-  padding:10px 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.18); }
+  padding:10px 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+  border-left: 3px solid #7c3aed !important; padding-left: 14px !important; }
 .metric-label {font-size:11px;color:var(--tz-muted);letter-spacing:.06em;text-transform:uppercase}
 .metric-value {font-size:20px;font-weight:700;color:var(--tz-title);margin-top:1px; line-height:1.12}
 .metric-sub {font-size:11px;color:rgba(148,163,184,0.9);margin-top:4px}
@@ -211,8 +220,9 @@ section[data-testid="stSidebar"] .sidebar-usercard .badge.owner{
               border:1px solid rgba(255,255,255,0.08);padding:6px;}
  .brand-name {font-size:40px;font-weight:700;color:var(--text-color);margin:0;line-height:1.1;}
  .brand-tagline {font-size:13px;color:rgba(148, 163, 184, 0.9);letter-spacing:.08em;text-transform:uppercase;}
- .brand-row.center .brand-logo {width:220px;height:220px;border-radius:32px;padding:12px;}
- .brand-row.center .brand-name {font-size:56px;}
+ .brand-row.center .brand-logo {width:80px;height:80px;border-radius:16px;padding:6px;}
+ .brand-row.center .brand-name {font-size:1.4rem;}
+ .brand-row.center .brand-tagline {font-size:0.7rem;}
  .brand-row.hero .brand-logo {width:220px;height:220px;border-radius:34px;padding:10px;}
  .brand-row.hero .brand-name {font-size:40px;}
 div[data-testid="stMetric"] {
@@ -2093,11 +2103,12 @@ def render_all_accounts_dashboard(user_id: str) -> None:
     revenge_rate = float((dfx["revenge_trade"] == "Yes").mean() * 100.0) if "revenge_trade" in dfx.columns else 0.0
     pf_all = _profit_factor(dfx[pnl_col])
 
+    _all_pnl_color = "#22c55e" if total_pnl > 0 else ("#ef4444" if total_pnl < 0 else None)
     cards = [
         ("Total trades", total_trades, None),
         ("Win rate", f"{win_rate:.1f}%", f"Wins: {wins}"),
         ("Average R", f"{avg_r:.2f}" if avg_r is not None and pd.notna(avg_r) else "n/a", None),
-        ("Total PnL", format_money(total_pnl), None),
+        ("Total PnL", format_money(total_pnl), None, _all_pnl_color),
         ("Avg win", format_money(avg_win), None),
         ("Avg loss", format_money(avg_loss), None),
         ("Profit factor", f"{pf_all:.2f}" if pf_all is not None else "n/a", None),
@@ -3624,15 +3635,21 @@ def parse_custom_confluences(raw: str) -> list:
 
 def render_metric_cards(cards: list) -> None:
     blocks = []
-    for label, value, sub in cards:
+    for item in cards:
+        label, value, sub = item[0], item[1], item[2]
+        value_color = item[3] if len(item) > 3 else None
         label_html = html_lib.escape(str(label))
         value_html = html_lib.escape(str(value))
         sub_html = html_lib.escape(str(sub)) if sub else ""
         sub_block = f"<div class='metric-sub'>{sub_html}</div>" if sub_html else ""
+        if value_color:
+            value_node = f"<div class='metric-value' style='color:{value_color};'>{value_html}</div>"
+        else:
+            value_node = f"<div class='metric-value'>{value_html}</div>"
         blocks.append(
             "<div class='metric-card'>"
             f"<div class='metric-label'>{label_html}</div>"
-            f"<div class='metric-value'>{value_html}</div>"
+            f"{value_node}"
             f"{sub_block}"
             "</div>"
         )
@@ -3800,7 +3817,7 @@ def render_zylo_radar(components: Dict[str, float]) -> None:
         {"".join([f'<path d="{d}" fill="none" stroke="rgba(148,163,184,0.20)" stroke-width="1"/>' for d in grid_paths])}
         {"".join([f'<line x1="{x1}" y1="{y1}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="rgba(148,163,184,0.20)" stroke-width="1"/>' for x1,y1,x2,y2 in axes])}
       </g>
-      <path d="{poly_d}" fill="rgba(124,58,237,0.35)" stroke="#A78BFA" stroke-width="2"/>
+      <path d="{poly_d}" fill="rgba(124,58,237,0.45)" stroke="#A78BFA" stroke-width="2.5"/>
       {"".join([f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.2" fill="#C4B5FD"/>' for x,y in poly])}
       <g font-family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" font-size="13" fill="rgba(230,237,243,0.95)">
         {"".join([f'<text x="{x:.1f}" y="{y:.1f}" text-anchor="{a}" dominant-baseline="middle">{html_lib.escape(t)}</text>' for x,y,a,t in label_nodes])}
@@ -5510,11 +5527,12 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     plan_rate = (df_view["followed_plan"] == "Yes").mean() * 100 if "followed_plan" in df_view.columns else 0
     revenge_rate = (df_view["revenge_trade"] == "Yes").mean() * 100 if "revenge_trade" in df_view.columns else 0
 
+    _pnl_color = "#22c55e" if total_pnl > 0 else ("#ef4444" if total_pnl < 0 else None)
     cards = [
         ("Total trades", total_trades, None),
         ("Win rate", f"{win_rate:.1f}%", f"Wins: {wins}"),
         ("Average R", f"{avg_r:.2f}" if avg_r is not None else "n/a", None),
-        ("Total PnL", format_money(total_pnl), pnl_view),
+        ("Total PnL", format_money(total_pnl), pnl_view, _pnl_color),
         ("Avg win", format_money(avg_win), None),
         ("Avg loss", format_money(avg_loss), None),
         ("Profit factor", f"{profit_factor:.2f}" if profit_factor is not None else "n/a", None),
@@ -5663,7 +5681,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         )
 
     if section == "Dashboard":
-        st.subheader("Dashboard")
+        st.markdown("<h1 style='font-size:2rem;font-weight:700;margin-bottom:0.25rem;margin-top:0.5rem;'>Dashboard</h1>", unsafe_allow_html=True)
         render_metric_cards(cards)
         render_next_week_focus_panel(user_id)
 
@@ -6193,26 +6211,18 @@ else:
         st.session_state["sidebar_nav_section"] = st.session_state["nav_section"]
 
     with st.sidebar:
-        st.markdown("### Navigation")
         add_trade = st.button("+ Add Trade", type="primary", use_container_width=True, key="sidebar_add_trade")
         if add_trade:
             _request_nav("New Trade")
 
-        nav_icons = {
-            "Dashboard": "▣",
-            "Analytics": "⌁",
-            "PnL Calendar": "▦",
-            "Reports": "▤",
-            "Streaks & Milestones": "★",
-            "Journal": "✎",
-            "Strategy/Model Creation": "⧉",
-            "Affiliates": "✦",
+        nav_labels = {
+            "Strategy/Model Creation": "Strategy / Models",
         }
         current_nav = st.session_state.get("nav_section", section_options[0])
         for opt in section_options:
             if opt == "New Trade":
                 continue
-            label = f"{nav_icons.get(opt, '•')}  {opt}"
+            label = nav_labels.get(opt, opt)
             btn_type = "primary" if opt == current_nav else "secondary"
             if st.button(label, use_container_width=True, type=btn_type, key=f"sidebar_nav_btn_{opt}"):
                 _request_nav(opt)
