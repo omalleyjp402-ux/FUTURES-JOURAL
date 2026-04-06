@@ -240,10 +240,29 @@ div[data-testid="stExpander"] > div {
 }
 
 .stTextInput input, 
-.stTextArea textarea, 
+.stTextArea textarea,
 .stNumberInput input,
 .stSelectbox div {
   color: inherit !important;
+}
+
+/* Tab styling — account tabs + analytics sub-tabs */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 8px;
+    border-bottom: 2px solid #2d2d4e;
+}
+.stTabs [data-baseweb="tab"] {
+    background: transparent;
+    border-radius: 6px 6px 0 0;
+    color: #9ca3af;
+    font-weight: 500;
+    padding: 8px 16px;
+}
+.stTabs [aria-selected="true"] {
+    background: transparent !important;
+    color: #a78bfa !important;
+    border-bottom: 2px solid #7c3aed !important;
+    font-weight: 600 !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -1329,6 +1348,8 @@ def render_demo_dashboard() -> None:
     st.subheader("Recent trades")
     recent = df.sort_values(["date", "entry_time"], ascending=False).head(10).copy()
     recent["PnL"] = recent[pnl_col].apply(format_money)
+    if "trade_grade" in recent.columns:
+        recent["trade_grade"] = recent["trade_grade"].fillna("—").replace("None", "—")
     st.dataframe(
         recent[["date", "entry_time", "instrument", "direction", "session", "trade_grade", "r_multiple", "PnL"]],
         use_container_width=True,
@@ -3045,9 +3066,9 @@ def upsert_journal_entry(user_id: str, entry_date: str, content: str) -> bool:
 
 
 def render_journal_page(user_id: str) -> None:
-    _lc, _tc = st.columns([1, 10])
+    _lc, _tc = st.columns([1, 8])
     with _lc:
-        st.image("assets/tradylo-logo.png", width=46)
+        st.image("assets/tradylo-logo.png", width=72)
     with _tc:
         st.markdown("<h1 style='font-size:1.8rem;font-weight:700;margin:4px 0 0 0;'>Journal</h1>", unsafe_allow_html=True)
     st.caption("Daily notes + weekly reviews.")
@@ -4104,9 +4125,9 @@ def compute_streaks(daily_pnl: pd.DataFrame) -> Dict[str, Any]:
 
 
 def render_reports_page(df_view: pd.DataFrame, pnl_col: str, account_type: str) -> None:
-    _lc, _tc = st.columns([1, 10])
+    _lc, _tc = st.columns([1, 8])
     with _lc:
-        st.image("assets/tradylo-logo.png", width=46)
+        st.image("assets/tradylo-logo.png", width=72)
     with _tc:
         st.markdown("<h1 style='font-size:1.8rem;font-weight:700;margin:4px 0 0 0;'>Reports</h1>", unsafe_allow_html=True)
     st.caption("Shareable weekly + monthly summaries. (You can download as PNG.)")
@@ -4127,7 +4148,7 @@ def render_reports_page(df_view: pd.DataFrame, pnl_col: str, account_type: str) 
     def render_period(title: str, period_df: pd.DataFrame, subtitle: str) -> None:
         stats = summarize_performance(period_df, pnl_col)
         pf = stats["profit_factor"]
-        pf_txt = "∞" if pf == float("inf") else (f"{pf:.2f}" if isinstance(pf, (int, float)) else "n/a")
+        pf_txt = "Perfect" if pf == float("inf") else (f"{pf:.2f}" if isinstance(pf, (int, float)) else "n/a")
 
         metrics = [
             ("Total PnL", format_money(stats["total_pnl"])),
@@ -5695,9 +5716,9 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         )
 
     if section == "Dashboard":
-        _lc, _tc = st.columns([1, 10])
+        _lc, _tc = st.columns([1, 8])
         with _lc:
-            st.image("assets/tradylo-logo.png", width=46)
+            st.image("assets/tradylo-logo.png", width=72)
         with _tc:
             st.markdown("<h1 style='font-size:1.8rem;font-weight:700;margin:4px 0 0 0;'>Dashboard</h1>", unsafe_allow_html=True)
         render_metric_cards(cards)
@@ -5724,6 +5745,8 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
             )
             recent["Date"] = recent["date"].dt.strftime("%Y-%m-%d")
             recent["PnL"] = recent[pnl_col].apply(format_money)
+            if "trade_grade" in recent.columns:
+                recent["trade_grade"] = recent["trade_grade"].fillna("—").replace("None", "—")
             show_cols = []
             for col in ("Date", "instrument", "direction", "contracts", "session", "trade_grade", "PnL"):
                 if col in recent.columns:
@@ -5754,9 +5777,9 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         st.altair_chart(style_altair_chart(drawdown_chart), use_container_width=True)
 
     if section == "PnL Calendar":
-        _lc, _tc = st.columns([1, 10])
+        _lc, _tc = st.columns([1, 8])
         with _lc:
-            st.image("assets/tradylo-logo.png", width=46)
+            st.image("assets/tradylo-logo.png", width=72)
         with _tc:
             st.markdown("<h1 style='font-size:1.8rem;font-weight:700;margin:4px 0 0 0;'>PnL Calendar</h1>", unsafe_allow_html=True)
         if not daily_df.empty:
@@ -5872,9 +5895,9 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                             img_cols[i % 3].warning("Could not load image")
 
     if section == "Analytics":
-        _lc, _tc = st.columns([1, 10])
+        _lc, _tc = st.columns([1, 8])
         with _lc:
-            st.image("assets/tradylo-logo.png", width=46)
+            st.image("assets/tradylo-logo.png", width=72)
         with _tc:
             st.markdown("<h1 style='font-size:1.8rem;font-weight:700;margin:4px 0 0 0;'>Analytics</h1>", unsafe_allow_html=True)
         insights = build_problem_insights(df_view, pnl_col)
