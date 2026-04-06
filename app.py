@@ -16,6 +16,7 @@ from urllib.parse import quote_plus
 
 import altair as alt
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 import streamlit.components.v1 as components
 from supabase import create_client, Client
@@ -5061,6 +5062,411 @@ body{{
 </script>
 </body></html>"""
 
+# ── Prop Firm Simulator ───────────────────────────────────────────────────────
+
+def render_prop_sim_page(user_id: str) -> None:
+    """Prop Firm Challenge Simulator — track progress against challenge rules."""
+    _lc, _tc = st.columns([1, 8])
+    with _lc:
+        st.image("assets/tradylo-logo.png", width=72)
+    with _tc:
+        st.markdown(
+            "<h1 style='font-size:1.8rem;font-weight:700;margin:4px 0 0 0;'>"
+            "Prop Firm Simulator</h1>",
+            unsafe_allow_html=True,
+        )
+    st.caption(
+        "Simulate a prop firm challenge. Set your rules, track your progress, "
+        "and see if you'd pass."
+    )
+
+    st.markdown("---")
+    st.markdown("### Challenge Setup")
+
+    defaults = {
+        "psim_firm": "Custom",
+        "psim_balance": 100000.0,
+        "psim_profit_target": 10.0,
+        "psim_max_daily_loss": 5.0,
+        "psim_max_total_dd": 10.0,
+        "psim_min_days": 5,
+        "psim_pnl_source": "Manual entry",
+    }
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
+
+    FIRM_PRESETS = {
+        "Custom": None,
+        "FTMO ($100k)":     dict(balance=100000, profit_target=10.0,
+                                  max_daily_loss=5.0, max_total_dd=10.0,
+                                  min_days=4),
+        "Apex ($100k)":     dict(balance=100000, profit_target=9.0,
+                                  max_daily_loss=5.0, max_total_dd=6.0,
+                                  min_days=0),
+        "MyFundedFutures ($50k)": dict(balance=50000, profit_target=8.0,
+                                        max_daily_loss=4.0, max_total_dd=6.0,
+                                        min_days=0),
+        "The Funded Trader ($100k)": dict(balance=100000, profit_target=10.0,
+                                           max_daily_loss=5.0, max_total_dd=8.0,
+                                           min_days=5),
+    }
+
+    col_firm, col_bal = st.columns(2)
+    firm = col_firm.selectbox("Firm preset", list(FIRM_PRESETS.keys()), key="psim_firm")
+
+    if FIRM_PRESETS.get(firm):
+        p = FIRM_PRESETS[firm]
+        starting_balance   = p["balance"]
+        profit_target_pct  = p["profit_target"]
+        max_daily_loss_pct = p["max_daily_loss"]
+        max_total_dd_pct   = p["max_total_dd"]
+        min_trading_days   = p["min_days"]
+    else:
+        starting_balance = col_bal.number_input(
+            "Starting balance ($)", min_value=1000.0, value=100000.0,
+            step=5000.0, format="%.0f", key="psim_balance")
+        c1, c2, c3, c4 = st.columns(4)
+        profit_target_pct  = c1.number_input("Profit target %",   min_value=0.1, max_value=50.0, value=10.0, step=0.5, key="psim_profit_target")
+        max_daily_loss_pct = c2.number_input("Max daily loss %",   min_value=0.1, max_value=20.0, value=5.0,  step=0.5, key="psim_max_daily_loss")
+        max_total_dd_pct   = c3.number_input("Max total drawdown %", min_value=0.1, max_value=30.0, value=10.0, step=0.5, key="psim_max_total_dd")
+        min_trading_days   = c4.number_input("Min trading days",   min_value=0,   max_value=60,   value=5,    step=1,   key="psim_min_days")
+
+    profit_target_amt  = starting_balance * profit_target_pct  / 100
+    max_daily_loss_amt = starting_balance * max_daily_loss_pct / 100
+    max_total_dd_amt   = starting_balance * max_total_dd_pct   / 100
+
+    st.markdown("### Trade Data Source")
+    st.caption("Use trades from")
+    pnl_source = st.radio(
+        "Use trades from",
+        ["Manual entry", "Funded account", "Evaluation account", "Live account"],
+        horizontal=True, key="psim_pnl_source", label_visibility="collapsed",
+    )
+
+    if pnl_source == "Manual entry":
+        st.info("Enter your P&L manually below, or switch to an account above to pull from your logged trades.")
+        manual_pnl_text = st.text_area(
+            "Daily P&L entries (one per line, e.g. +250.00 or -180.50)",
+            placeholder="+340.00\n-120.00\n+80.00",
+            height=140, key="psim_manual_pnl",
+        )
+        daily_pnls = []
+        for line in manual_pnl_text.strip().splitlines():
+            try:
+                daily_pnls.append(float(line.replace(",", "").replace("$", "")))
+            except ValueError:
+                pass
+        sim_df = pd.DataFrame({"pnl": daily_pnls}) if daily_pnls else pd.DataFrame({"pnl": []})
+    else:
+        acct_map = {
+            "Funded account":     ACCOUNT_TYPES[1],
+            "Evaluation account": ACCOUNT_TYPES[0],
+            "Live account":       ACCOUNT_TYPES[2],
+        }
+        acct = acct_map.get(pnl_source, ACCOUNT_TYPES[1])
+        sim_df_raw = load_trades(user_id, acct)
+        if sim_df_raw.empty:
+            st.warning(f"No trades found in your {pnl_source}. Log some trades or switch to Manual entry.")
+            return
+        pnl_col_sim = "pnl_net" if "pnl_net" in sim_df_raw.columns else "pnl_gross"
+        sim_df_raw["_date"] = pd.to_datetime(sim_df_raw["date"], errors="coerce").dt.date
+        sim_df = (
+            sim_df_raw.groupby("_date", as_index=False)[pnl_col_sim]
+            .sum()
+            .rename(columns={pnl_col_sim: "pnl"})
+        )
+
+    st.markdown("---")
+    st.markdown("### Challenge Progress")
+
+    if sim_df.empty or sim_df["pnl"].abs().sum() == 0:
+        st.info("No P&L data yet. Enter trades above or log trades in an account.")
+        return
+
+    total_pnl    = float(sim_df["pnl"].sum())
+    cumulative   = sim_df["pnl"].cumsum()
+    peak         = cumulative.cummax()
+    drawdown     = cumulative - peak
+    max_dd       = float(drawdown.min())
+    worst_day    = float(sim_df["pnl"].min())
+    trading_days = int((sim_df["pnl"] != 0).sum())
+
+    profit_ok   = total_pnl >= profit_target_amt
+    daily_ok    = worst_day >= -max_daily_loss_amt
+    total_dd_ok = max_dd >= -max_total_dd_amt
+    days_ok     = trading_days >= min_trading_days
+    overall_pass = profit_ok and daily_ok and total_dd_ok and days_ok
+
+    if overall_pass:
+        st.success("CHALLENGE PASSED — All rules met!")
+    elif not daily_ok or not total_dd_ok:
+        st.error("CHALLENGE FAILED — A loss rule was breached.")
+    else:
+        st.warning("Challenge in progress — keep going.")
+
+    r1, r2, r3, r4 = st.columns(4)
+
+    def _prog_card(col, label, current, target, is_loss=False):
+        pct = min(abs(current) / abs(target) * 100, 100) if target else 0
+        ok  = current >= target
+        col.metric(label, f"${current:,.2f}", f"Target: ${target:,.2f}",
+                   delta_color="normal" if ok else "inverse")
+        col.progress(min(int(pct), 100))
+
+    _prog_card(r1, "Profit Progress", total_pnl, profit_target_amt)
+    _prog_card(r2, "Worst Day Loss",  worst_day, -max_daily_loss_amt, is_loss=True)
+    _prog_card(r3, "Max Drawdown",    max_dd,    -max_total_dd_amt,   is_loss=True)
+    r4.metric("Trading Days", f"{trading_days} / {min_trading_days}",
+              "Met" if days_ok else f"{min_trading_days - trading_days} more needed")
+    r4.progress(min(int(trading_days / max(min_trading_days, 1) * 100), 100))
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=list(range(len(cumulative))),
+        y=[starting_balance + v for v in cumulative],
+        mode="lines",
+        line=dict(color="#7c3aed", width=2.5, shape="spline", smoothing=0.7),
+        fill="tozeroy", fillcolor="rgba(124,58,237,0.12)",
+        name="Balance",
+    ))
+    fig.add_hline(y=starting_balance + profit_target_amt,
+                  line_dash="dash", line_color="#22c55e",
+                  annotation_text=f"Profit target ${starting_balance+profit_target_amt:,.0f}",
+                  annotation_font_color="#22c55e")
+    fig.add_hline(y=starting_balance - max_total_dd_amt,
+                  line_dash="dash", line_color="#ef4444",
+                  annotation_text=f"Max DD ${starting_balance-max_total_dd_amt:,.0f}",
+                  annotation_font_color="#ef4444")
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font_color="#e2e8f0", height=320,
+        margin=dict(t=30, b=40, l=60, r=20),
+        yaxis_title="Account Balance ($)", xaxis_title="Trading Day",
+        showlegend=False,
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    with st.expander("Daily breakdown", expanded=False):
+        display_df = sim_df.copy()
+        display_df["Day #"] = range(1, len(display_df) + 1)
+        display_df["Daily P&L"] = display_df["pnl"].apply(
+            lambda x: f"+${x:,.2f}" if x >= 0 else f"-${abs(x):,.2f}")
+        display_df["Running Total"] = cumulative.apply(
+            lambda x: f"+${x:,.2f}" if x >= 0 else f"-${abs(x):,.2f}")
+        display_df["Status"] = display_df["pnl"].apply(
+            lambda x: "OK" if x >= -max_daily_loss_amt else "Daily limit breached")
+        st.dataframe(display_df[["Day #", "Daily P&L", "Running Total", "Status"]],
+                     use_container_width=True, hide_index=True)
+
+
+# ── CSV Import ────────────────────────────────────────────────────────────────
+
+def render_import_page(user_id: str) -> None:
+    """CSV trade import — supports Tradovate, NinjaTrader, Rithmic, manual."""
+    _lc, _tc = st.columns([1, 8])
+    with _lc:
+        st.image("assets/tradylo-logo.png", width=72)
+    with _tc:
+        st.markdown(
+            "<h1 style='font-size:1.8rem;font-weight:700;margin:4px 0 0 0;'>"
+            "Import Trades</h1>",
+            unsafe_allow_html=True,
+        )
+    st.caption(
+        "Import trades from Tradovate, NinjaTrader, Rithmic, or any platform "
+        "that exports a CSV. Your existing trades are never overwritten."
+    )
+
+    st.markdown("---")
+
+    PLATFORM_COLS = {
+        "Tradovate": {
+            "date":        ["Buy/Sell Time", "Entry time", "Date"],
+            "instrument":  ["Contract", "Instrument", "Symbol"],
+            "direction":   ["B/S", "Side", "Direction"],
+            "pnl":         ["P&L", "PnL", "Net P&L", "Profit/Loss"],
+            "contracts":   ["Qty", "Quantity", "Contracts", "Size"],
+        },
+        "NinjaTrader": {
+            "date":        ["Entry time", "Time", "Date"],
+            "instrument":  ["Instrument", "Symbol", "Contract"],
+            "direction":   ["Market pos.", "Side", "Direction"],
+            "pnl":         ["Profit", "P&L", "Net profit"],
+            "contracts":   ["Quantity", "Qty", "Contracts"],
+        },
+        "Rithmic": {
+            "date":        ["Entry Date/Time", "Date", "Time"],
+            "instrument":  ["Symbol", "Instrument", "Contract"],
+            "direction":   ["Buy/Sell", "Side", "Direction"],
+            "pnl":         ["Closed P&L", "P&L", "Net P&L"],
+            "contracts":   ["Qty", "Quantity", "Contracts"],
+        },
+        "Manual / Other": {
+            "date": [], "instrument": [], "direction": [], "pnl": [], "contracts": [],
+        },
+    }
+
+    platform = st.selectbox("Platform / broker", list(PLATFORM_COLS.keys()), key="import_platform")
+    account_type_import = st.selectbox(
+        "Import into account",
+        ["Funded Account Data", "Evaluation Account Data", "Live Account Data"],
+        key="import_account_type",
+    )
+    uploaded = st.file_uploader("Upload CSV file", type=["csv"], key="import_csv_upload")
+
+    if uploaded is None:
+        st.info("Upload a CSV exported from your platform. We will preview the mapping before importing anything.")
+        with st.expander("How to export from Tradovate"):
+            st.markdown("1. Open Tradovate → Account → Trade History\n2. Set your date range\n3. Click **Export** → CSV\n4. Upload the file above")
+        with st.expander("How to export from NinjaTrader"):
+            st.markdown("1. Open NinjaTrader → Account Performance\n2. Right-click → Export to CSV\n3. Upload the file above")
+        return
+
+    try:
+        df_raw = pd.read_csv(uploaded)
+    except Exception as e:
+        st.error(f"Could not read CSV: {e}")
+        return
+
+    st.markdown("### Column Mapping")
+    st.caption("We detected these columns in your file. Map them to Tradylo fields.")
+
+    csv_cols = ["— skip —"] + list(df_raw.columns)
+    hints = PLATFORM_COLS[platform]
+
+    def _best_guess(candidates):
+        for c in candidates:
+            if c in df_raw.columns:
+                return c
+        return "— skip —"
+
+    col_a, col_b = st.columns(2)
+    map_date       = col_a.selectbox("Date column",       csv_cols, index=csv_cols.index(_best_guess(hints["date"]))       if _best_guess(hints["date"])       in csv_cols else 0, key="import_map_date")
+    map_instrument = col_b.selectbox("Instrument column", csv_cols, index=csv_cols.index(_best_guess(hints["instrument"])) if _best_guess(hints["instrument"]) in csv_cols else 0, key="import_map_instrument")
+    map_direction  = col_a.selectbox("Direction/Side column", csv_cols, index=csv_cols.index(_best_guess(hints["direction"])) if _best_guess(hints["direction"]) in csv_cols else 0, key="import_map_direction")
+    map_pnl        = col_b.selectbox("P&L column",        csv_cols, index=csv_cols.index(_best_guess(hints["pnl"]))        if _best_guess(hints["pnl"])        in csv_cols else 0, key="import_map_pnl")
+    map_contracts  = col_a.selectbox("Contracts/Qty column", csv_cols, index=csv_cols.index(_best_guess(hints["contracts"])) if _best_guess(hints["contracts"]) in csv_cols else 0, key="import_map_contracts")
+
+    st.markdown("### Preview (first 10 rows)")
+
+    def _direction_clean(val):
+        v = str(val).strip().upper()
+        if v in ("B", "BUY", "LONG", "L"):   return "Long"
+        if v in ("S", "SELL", "SHORT", "SH"): return "Short"
+        return str(val)
+
+    mapped_rows = []
+    for _, r in df_raw.head(20).iterrows():
+        row = {}
+        try:
+            row["date"] = pd.to_datetime(r[map_date]).strftime("%Y-%m-%d") if map_date != "— skip —" else ""
+        except Exception:
+            row["date"] = str(r.get(map_date, ""))
+        row["instrument"] = str(r[map_instrument]).strip() if map_instrument != "— skip —" else ""
+        row["direction"]  = _direction_clean(r[map_direction]) if map_direction != "— skip —" else "Long"
+        try:
+            row["pnl"] = float(str(r[map_pnl]).replace(",", "").replace("$", "")) if map_pnl != "— skip —" else 0.0
+        except Exception:
+            row["pnl"] = 0.0
+        try:
+            row["contracts"] = int(float(str(r[map_contracts]).replace(",", ""))) if map_contracts != "— skip —" else 1
+        except Exception:
+            row["contracts"] = 1
+        mapped_rows.append(row)
+
+    preview_df = pd.DataFrame(mapped_rows)
+    st.dataframe(preview_df.head(10), use_container_width=True, hide_index=True)
+    st.caption(f"{len(df_raw)} rows detected in file. Previewing first 10.")
+
+    st.markdown("### Import Settings")
+    skip_dupes = st.checkbox("Skip duplicate trades (same date + instrument + P&L)", value=True, key="import_skip_dupes")
+    default_session = st.selectbox("Default session (applied to all imported trades)", ["NY", "London", "Asia", "Other"], key="import_default_session")
+    default_grade   = st.selectbox("Default grade", ["—"] + ["A++", "A+", "A", "B+", "B", "C", "D"], key="import_default_grade")
+
+    if st.button("Import Trades", type="primary", key="import_confirm_btn"):
+        all_mapped = []
+        for _, r in df_raw.iterrows():
+            row = {}
+            try:
+                dt = pd.to_datetime(r[map_date]) if map_date != "— skip —" else datetime.now()
+                row["date"]       = dt.strftime("%Y-%m-%dT%H:%M:%S")
+                row["entry_time"] = dt.strftime("%H:%M")
+            except Exception:
+                row["date"]       = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+                row["entry_time"] = "09:30"
+            row["instrument"] = str(r[map_instrument]).strip() if map_instrument != "— skip —" else "Unknown"
+            row["direction"]  = _direction_clean(r[map_direction]) if map_direction != "— skip —" else "Long"
+            try:
+                pnl_val = float(str(r[map_pnl]).replace(",", "").replace("$", "")) if map_pnl != "— skip —" else 0.0
+            except Exception:
+                pnl_val = 0.0
+            try:
+                qty = int(float(str(r[map_contracts]).replace(",", ""))) if map_contracts != "— skip —" else 1
+            except Exception:
+                qty = 1
+            row["pnl_net"]       = pnl_val
+            row["pnl_gross"]     = pnl_val
+            row["contracts"]     = qty
+            row["session"]       = default_session
+            row["trade_grade"]   = default_grade if default_grade != "—" else None
+            row["followed_plan"] = "Yes"
+            row["emotion_score"] = 5
+            row["revenge_trade"] = "No"
+            row["source"]        = f"imported:{platform}"
+            all_mapped.append(row)
+
+        if skip_dupes:
+            existing_df = load_trades(user_id, account_type_import)
+            if not existing_df.empty:
+                existing_keys = set()
+                for _, er in existing_df.iterrows():
+                    try:
+                        edate = pd.to_datetime(er.get("date", "")).strftime("%Y-%m-%d")
+                        existing_keys.add(f"{edate}_{er.get('instrument','')}_{er.get('pnl_net',0)}")
+                    except Exception:
+                        pass
+                pre_count = len(all_mapped)
+                def _key(r):
+                    try:
+                        d = pd.to_datetime(r.get("date", "")).strftime("%Y-%m-%d")
+                    except Exception:
+                        d = ""
+                    return f"{d}_{r.get('instrument','')}_{r.get('pnl_net',0)}"
+                all_mapped = [r for r in all_mapped if _key(r) not in existing_keys]
+                skipped = pre_count - len(all_mapped)
+                if skipped:
+                    st.info(f"Skipping {skipped} duplicate trades.")
+
+        if not all_mapped:
+            st.warning("No new trades to import after deduplication.")
+            return
+
+        imported = 0
+        errors   = 0
+        progress = st.progress(0)
+        for i, row in enumerate(all_mapped):
+            try:
+                save_trade(user_id, account_type_import, row)
+                imported += 1
+            except Exception:
+                errors += 1
+            progress.progress(int((i + 1) / len(all_mapped) * 100))
+        progress.empty()
+
+        if imported:
+            st.success(f"Successfully imported {imported} trades into {account_type_import}.")
+            if errors:
+                st.warning(f"{errors} rows could not be saved.")
+            try:
+                load_trades.clear()
+            except Exception:
+                pass
+            st.cache_data.clear()
+        else:
+            st.error("Import failed. Check your column mapping and try again.")
+
+
 # ── Main section renderer ─────────────────────────────────────────────────────
 
 def render_section(user_id: str, account_type: str, section: str) -> None:
@@ -5911,6 +6317,56 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                 + "</div></div>",
                 unsafe_allow_html=True,
             )
+
+        # ── Psychological Patterns ────────────────────────────────────────────
+        _psych_lines = []
+        if "followed_plan" in df_view.columns and total_trades >= 3:
+            _plan_yes = df_view[df_view["followed_plan"] == "Yes"]
+            _plan_no  = df_view[df_view["followed_plan"] == "No"]
+            if not _plan_yes.empty and not _plan_no.empty:
+                _avg_yes = float(_plan_yes[pnl_col].mean())
+                _avg_no  = float(_plan_no[pnl_col].mean())
+                _diff    = _avg_yes - _avg_no
+                _col     = "#22c55e" if _diff >= 0 else "#ef4444"
+                _psych_lines.append(
+                    f"When you follow your plan, avg trade is "
+                    f"<span style='color:{_col};font-weight:700;'>${_avg_yes:+.2f}</span> vs "
+                    f"<span style='color:#ef4444;font-weight:700;'>${_avg_no:+.2f}</span> when you don't "
+                    f"(<span style='color:{_col};font-weight:700;'>${abs(_diff):.2f} difference</span> per trade)."
+                )
+        if "emotion_score" in df_view.columns and total_trades >= 3:
+            _emo = pd.to_numeric(df_view["emotion_score"], errors="coerce")
+            _high_emo = df_view[_emo >= 7]
+            _low_emo  = df_view[_emo <= 4]
+            if not _high_emo.empty and not _low_emo.empty:
+                _avg_high = float(_high_emo[pnl_col].mean())
+                _avg_low  = float(_low_emo[pnl_col].mean())
+                _better   = "calm (score 1–4)" if _avg_low > _avg_high else "confident (score 7–10)"
+                _psych_lines.append(
+                    f"You trade better when <span style='color:#a78bfa;font-weight:700;'>{_better}</span>. "
+                    f"High emotion avg: <span style='color:#f59e0b;'>${_avg_high:+.2f}</span>, "
+                    f"Low emotion avg: <span style='color:#7c3aed;'>${_avg_low:+.2f}</span>."
+                )
+        if "revenge_trade" in df_view.columns:
+            _revenge = df_view[df_view["revenge_trade"] == "Yes"]
+            if not _revenge.empty:
+                _avg_rev   = float(_revenge[pnl_col].mean())
+                _count_rev = len(_revenge)
+                _col       = "#22c55e" if _avg_rev >= 0 else "#ef4444"
+                _psych_lines.append(
+                    f"You've flagged <span style='color:#ef4444;font-weight:700;'>{_count_rev} revenge trade(s)</span>. "
+                    f"Avg P&L on revenge trades: <span style='color:{_col};font-weight:700;'>${_avg_rev:+.2f}</span>."
+                )
+        if _psych_lines:
+            st.markdown(
+                "<div class='metric-card' style='padding:14px 14px;'>"
+                "<div class='metric-label'>Psychological Patterns</div>"
+                "<div class='metric-sub' style='font-size:13px;margin-top:8px;line-height:1.65;'>"
+                + "<br/>".join([f"• {line}" for line in _psych_lines])
+                + "</div></div>",
+                unsafe_allow_html=True,
+            )
+
         a_day, a_conf, a_overall = st.tabs(
             ["Day & Time Analysis", "Confluence Analytics", "Overall Performance"]
         )
@@ -6114,6 +6570,73 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                 st.markdown("**Top PnL combos**")
                 st.dataframe(top_pnl, use_container_width=True)
 
+            st.markdown("---")
+            st.markdown("### R-Multiple Distribution")
+            st.caption("How your wins and losses compare in R terms.")
+            if "r_multiple" in df_view.columns:
+                r_data = pd.to_numeric(df_view["r_multiple"], errors="coerce").dropna()
+                if not r_data.empty:
+                    _r_bins   = [-float("inf"), -2, -1, 0, 1, 2, 3, float("inf")]
+                    _r_labels = ["< -2R", "-2R to -1R", "-1R to 0R", "0R to 1R", "1R to 2R", "2R to 3R", "> 3R"]
+                    _r_counts = pd.cut(r_data, bins=_r_bins, labels=_r_labels).value_counts().reindex(_r_labels).fillna(0)
+                    _r_colours = ["#ef4444","#f87171","#fca5a5","#a78bfa","#7c3aed","#6d28d9","#4c1d95"]
+                    fig_r = go.Figure(go.Bar(x=_r_labels, y=_r_counts.values, marker_color=_r_colours))
+                    fig_r.update_layout(
+                        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                        font_color="#e2e8f0", height=280,
+                        margin=dict(t=20, b=40, l=40, r=20),
+                        yaxis_title="No. of trades", xaxis_title="R-Multiple bucket",
+                    )
+                    st.plotly_chart(fig_r, use_container_width=True)
+                else:
+                    st.caption("No R-multiple data yet. Fill in Entry/SL/Exit prices when logging trades.")
+            else:
+                st.caption("R-multiple column not found.")
+
+            st.markdown("### Risk of Ruin")
+            st.caption("Statistical probability of losing your account based on your current win rate, avg win/loss ratio, and risk per trade.")
+            if total_trades >= 5:
+                ror_risk = st.slider("% of account risked per trade", min_value=0.5, max_value=10.0, value=2.0, step=0.5, key="ror_risk_pct")
+                try:
+                    _ror_wins   = df_view[df_view[pnl_col] > 0][pnl_col]
+                    _ror_losses = df_view[df_view[pnl_col] < 0][pnl_col]
+                    _ror_wr     = len(_ror_wins) / total_trades
+                    _ror_lr     = 1 - _ror_wr
+                    _ror_avgw   = float(_ror_wins.mean())  if not _ror_wins.empty  else 1.0
+                    _ror_avgl   = abs(float(_ror_losses.mean())) if not _ror_losses.empty else 1.0
+                    _ror_ratio  = _ror_avgw / _ror_avgl if _ror_avgl else 1.0
+                    _ror_edge   = (_ror_wr * _ror_ratio - _ror_lr) / (_ror_wr * _ror_ratio + _ror_lr)
+                    _ror_cap_u  = int(100 / ror_risk)
+                    if _ror_edge <= 0:
+                        ror = 1.0
+                    elif _ror_edge >= 1:
+                        ror = 0.0
+                    else:
+                        ror = ((1 - _ror_edge) / (1 + _ror_edge)) ** _ror_cap_u
+                    ror_pct = ror * 100
+                    ror_col1, ror_col2, ror_col3 = st.columns(3)
+                    ror_col1.metric("Win Rate", f"{_ror_wr*100:.1f}%")
+                    ror_col2.metric("Avg Win / Avg Loss ratio", f"{_ror_ratio:.2f}")
+                    ror_col3.metric("Trading Edge", f"{_ror_edge*100:.1f}%")
+                    _ror_colour = "#22c55e" if ror_pct < 5 else "#f59e0b" if ror_pct < 20 else "#ef4444"
+                    _ror_label  = "Low risk" if ror_pct < 5 else "Moderate risk" if ror_pct < 20 else "HIGH RISK"
+                    st.markdown(
+                        f"<div style='background:#1a1a2e;border:1px solid {_ror_colour};"
+                        f"border-left:4px solid {_ror_colour};border-radius:8px;"
+                        f"padding:16px 20px;margin:12px 0;'>"
+                        f"<p style='color:{_ror_colour};font-size:0.75rem;font-weight:700;"
+                        f"letter-spacing:1px;margin:0 0 4px 0;'>RISK OF RUIN — {_ror_label}</p>"
+                        f"<p style='color:#ffffff;font-size:2rem;font-weight:800;margin:0;'>{ror_pct:.1f}%</p>"
+                        f"<p style='color:#9ca3af;font-size:0.8rem;margin:4px 0 0 0;'>"
+                        f"At {ror_risk}% risk per trade, risking {_ror_cap_u} units to reach 100%</p>"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+                except Exception:
+                    st.info("Not enough data to calculate Risk of Ruin.")
+            else:
+                st.info("Log at least 5 trades to see your Risk of Ruin calculation.")
+
     if section != "New Trade":
         return
 
@@ -6206,6 +6729,7 @@ else:
         "Streaks & Milestones",
         "Journal",
         "Strategy/Model Creation",
+        "Import Trades",
         "Affiliates",
     ]
     # Menu items shown in the sidebar (hide "New Trade" to avoid duplicate with +Add Trade button).
@@ -6624,6 +7148,8 @@ else:
         _safe_render("Strategy/Model Creation", lambda: render_strategy_creation_page(user.id))
     elif section == "Affiliates":
         _safe_render("Affiliates", lambda: render_affiliates_page(user.id))
+    elif section == "Import Trades":
+        _safe_render("Import Trades", lambda: render_import_page(user.id))
     else:
         # Default to Funded tab first (better UX). Keep "All Accounts" available as a final tab.
         # Short display labels → actual account_type strings stored in DB.
@@ -6632,6 +7158,7 @@ else:
             ("Evaluation", ACCOUNT_TYPES[0]),
             ("Live", ACCOUNT_TYPES[2]),
             ("All Accounts", None),
+            ("Prop Sim", "prop_sim"),
         ]
         tabs = st.tabs([t[0] for t in tab_config])
         for tab, (display_label, account_type) in zip(tabs, tab_config):
@@ -6641,6 +7168,9 @@ else:
                         f"{section} (All Accounts)",
                         lambda: render_all_accounts_section(user.id, section),
                     )
+                elif account_type == "prop_sim":
+                    _safe_render("Prop Firm Simulator",
+                        lambda: render_prop_sim_page(user.id))
                 else:
                     _safe_render(
                         f"{section} ({account_type})",
