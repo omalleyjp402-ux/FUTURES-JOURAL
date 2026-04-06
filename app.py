@@ -1447,9 +1447,18 @@ def render_public_sidebar(active: str) -> str:
         st.rerun()
 
     with st.sidebar:
-        # A compact brand header in the sidebar for the public shell.
-        render_brand_header(center=True)
-        st.markdown("---")
+        st.image("assets/tradylo-logo.png", width=52)
+        st.markdown(
+            "<p style='color:#ffffff; font-size:1.1rem; font-weight:700; "
+            "margin:-8px 0 4px 0; letter-spacing:0.5px;'>Tradylo</p>"
+            "<p style='color:#7c3aed; font-size:0.65rem; font-weight:600; "
+            "letter-spacing:2px; margin:0 0 12px 0;'>TRADING JOURNAL</p>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            "<hr style='border:none; border-top:1px solid #2d2d4e; margin:0 0 14px 0;'/>",
+            unsafe_allow_html=True,
+        )
         options = ["Home", "Pricing", "Demo", "Terms", "Privacy", "Refunds", "Contact"]
         if active not in options:
             active = "Home"
@@ -1462,25 +1471,13 @@ def render_public_sidebar(active: str) -> str:
         if current not in options:
             current = active
 
-        public_icons = {
-            "Home": "⌂",
-            "Pricing": "$",
-            "Demo": "▣",
-            "Terms": "≡",
-            "Privacy": "⛨",
-            "Refunds": "↺",
-            "Contact": "✉",
-        }
-        st.markdown("### Menu")
         for opt in options:
-            label = f"{public_icons.get(opt, '•')}  {opt}"
             btn_type = "primary" if opt == current else "secondary"
-            if st.button(label, use_container_width=True, type=btn_type, key=f"public_nav_btn_{opt}"):
+            if st.button(opt, use_container_width=True, type=btn_type, key=f"public_nav_btn_{opt}"):
                 _set_public_nav(opt)
         st.markdown("---")
         if st.button("Log in / Sign up", use_container_width=True, key="public_login_btn"):
             _go_auth()
-        st.caption("-> Access is free for life for now - won't last long.")
     return st.session_state.get("public_nav", active)
 
 
@@ -3048,7 +3045,11 @@ def upsert_journal_entry(user_id: str, entry_date: str, content: str) -> bool:
 
 
 def render_journal_page(user_id: str) -> None:
-    st.subheader("Journal")
+    _lc, _tc = st.columns([1, 10])
+    with _lc:
+        st.image("assets/tradylo-logo.png", width=38)
+    with _tc:
+        st.markdown("<h1 style='font-size:1.8rem;font-weight:700;margin:4px 0 0 0;'>Journal</h1>", unsafe_allow_html=True)
     st.caption("Daily notes + weekly reviews.")
 
     tab_daily, tab_weekly = st.tabs(["Daily", "Weekly"])
@@ -3209,7 +3210,16 @@ def render_journal_page(user_id: str) -> None:
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
 def show_auth():
-    render_brand_header(center=True)
+    _login_c1, _login_c2, _login_c3 = st.columns([2, 1, 2])
+    with _login_c2:
+        st.image("assets/tradylo-logo.png", width=72)
+        st.markdown(
+            "<h2 style='font-size:1.6rem; font-weight:800; letter-spacing:0.5px; "
+            "margin:8px 0 2px 0;'>Tradylo</h2>"
+            "<p style='color:#7c3aed; font-size:0.7rem; font-weight:600; "
+            "letter-spacing:2.5px; margin:0 0 24px 0;'>TRADING JOURNAL</p>",
+            unsafe_allow_html=True,
+        )
     tab_login, tab_signup = st.tabs(["Log in", "Sign up"])
 
     def _clean_cred(s: str, *, lower: bool = False) -> str:
@@ -4094,7 +4104,11 @@ def compute_streaks(daily_pnl: pd.DataFrame) -> Dict[str, Any]:
 
 
 def render_reports_page(df_view: pd.DataFrame, pnl_col: str, account_type: str) -> None:
-    st.title("Report Cards")
+    _lc, _tc = st.columns([1, 10])
+    with _lc:
+        st.image("assets/tradylo-logo.png", width=38)
+    with _tc:
+        st.markdown("<h1 style='font-size:1.8rem;font-weight:700;margin:4px 0 0 0;'>Reports</h1>", unsafe_allow_html=True)
     st.caption("Shareable weekly + monthly summaries. (You can download as PNG.)")
 
     dfp = df_view.copy()
@@ -5681,7 +5695,11 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         )
 
     if section == "Dashboard":
-        st.markdown("<h1 style='font-size:2rem;font-weight:700;margin-bottom:0.25rem;margin-top:0.5rem;'>Dashboard</h1>", unsafe_allow_html=True)
+        _lc, _tc = st.columns([1, 10])
+        with _lc:
+            st.image("assets/tradylo-logo.png", width=38)
+        with _tc:
+            st.markdown("<h1 style='font-size:1.8rem;font-weight:700;margin:4px 0 0 0;'>Dashboard</h1>", unsafe_allow_html=True)
         render_metric_cards(cards)
         render_next_week_focus_panel(user_id)
 
@@ -5736,7 +5754,11 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         st.altair_chart(style_altair_chart(drawdown_chart), use_container_width=True)
 
     if section == "PnL Calendar":
-        st.subheader("PnL calendar")
+        _lc, _tc = st.columns([1, 10])
+        with _lc:
+            st.image("assets/tradylo-logo.png", width=38)
+        with _tc:
+            st.markdown("<h1 style='font-size:1.8rem;font-weight:700;margin:4px 0 0 0;'>PnL Calendar</h1>", unsafe_allow_html=True)
         if not daily_df.empty:
             best_row = daily_df.loc[daily_df["pnl"].idxmax()]
             worst_row = daily_df.loc[daily_df["pnl"].idxmin()]
@@ -5850,7 +5872,11 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                             img_cols[i % 3].warning("Could not load image")
 
     if section == "Analytics":
-        st.subheader("Analytics")
+        _lc, _tc = st.columns([1, 10])
+        with _lc:
+            st.image("assets/tradylo-logo.png", width=38)
+        with _tc:
+            st.markdown("<h1 style='font-size:1.8rem;font-weight:700;margin:4px 0 0 0;'>Analytics</h1>", unsafe_allow_html=True)
         insights = build_problem_insights(df_view, pnl_col)
         if insights:
             st.markdown("**Your biggest problems (auto)**")
@@ -6211,6 +6237,18 @@ else:
         st.session_state["sidebar_nav_section"] = st.session_state["nav_section"]
 
     with st.sidebar:
+        st.image("assets/tradylo-logo.png", width=52)
+        st.markdown(
+            "<p style='color:#ffffff; font-size:1.1rem; font-weight:700; "
+            "margin:-8px 0 4px 0; letter-spacing:0.5px;'>Tradylo</p>"
+            "<p style='color:#7c3aed; font-size:0.65rem; font-weight:600; "
+            "letter-spacing:2px; margin:0 0 12px 0;'>TRADING JOURNAL</p>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            "<hr style='border:none; border-top:1px solid #2d2d4e; margin:0 0 14px 0;'/>",
+            unsafe_allow_html=True,
+        )
         add_trade = st.button("+ Add Trade", type="primary", use_container_width=True, key="sidebar_add_trade")
         if add_trade:
             _request_nav("New Trade")
