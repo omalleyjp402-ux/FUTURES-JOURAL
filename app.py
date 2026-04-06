@@ -1447,11 +1447,11 @@ def render_public_sidebar(active: str) -> str:
         st.rerun()
 
     with st.sidebar:
-        st.image("assets/tradylo-logo.png", width=52)
+        st.image("assets/tradylo-logo.png", width=120)
         st.markdown(
-            "<p style='color:#ffffff; font-size:1.1rem; font-weight:700; "
+            "<p style='color:#ffffff; font-size:1.4rem; font-weight:700; "
             "margin:-8px 0 4px 0; letter-spacing:0.5px;'>Tradylo</p>"
-            "<p style='color:#7c3aed; font-size:0.65rem; font-weight:600; "
+            "<p style='color:#7c3aed; font-size:0.75rem; font-weight:600; "
             "letter-spacing:2px; margin:0 0 12px 0;'>TRADING JOURNAL</p>",
             unsafe_allow_html=True,
         )
@@ -3047,7 +3047,7 @@ def upsert_journal_entry(user_id: str, entry_date: str, content: str) -> bool:
 def render_journal_page(user_id: str) -> None:
     _lc, _tc = st.columns([1, 10])
     with _lc:
-        st.image("assets/tradylo-logo.png", width=38)
+        st.image("assets/tradylo-logo.png", width=46)
     with _tc:
         st.markdown("<h1 style='font-size:1.8rem;font-weight:700;margin:4px 0 0 0;'>Journal</h1>", unsafe_allow_html=True)
     st.caption("Daily notes + weekly reviews.")
@@ -3212,7 +3212,7 @@ def render_journal_page(user_id: str) -> None:
 def show_auth():
     _login_c1, _login_c2, _login_c3 = st.columns([2, 1, 2])
     with _login_c2:
-        st.image("assets/tradylo-logo.png", width=72)
+        st.image("assets/tradylo-logo.png", width=110)
         st.markdown(
             "<h2 style='font-size:1.6rem; font-weight:800; letter-spacing:0.5px; "
             "margin:8px 0 2px 0;'>Tradylo</h2>"
@@ -4106,7 +4106,7 @@ def compute_streaks(daily_pnl: pd.DataFrame) -> Dict[str, Any]:
 def render_reports_page(df_view: pd.DataFrame, pnl_col: str, account_type: str) -> None:
     _lc, _tc = st.columns([1, 10])
     with _lc:
-        st.image("assets/tradylo-logo.png", width=38)
+        st.image("assets/tradylo-logo.png", width=46)
     with _tc:
         st.markdown("<h1 style='font-size:1.8rem;font-weight:700;margin:4px 0 0 0;'>Reports</h1>", unsafe_allow_html=True)
     st.caption("Shareable weekly + monthly summaries. (You can download as PNG.)")
@@ -5697,7 +5697,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     if section == "Dashboard":
         _lc, _tc = st.columns([1, 10])
         with _lc:
-            st.image("assets/tradylo-logo.png", width=38)
+            st.image("assets/tradylo-logo.png", width=46)
         with _tc:
             st.markdown("<h1 style='font-size:1.8rem;font-weight:700;margin:4px 0 0 0;'>Dashboard</h1>", unsafe_allow_html=True)
         render_metric_cards(cards)
@@ -5756,7 +5756,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     if section == "PnL Calendar":
         _lc, _tc = st.columns([1, 10])
         with _lc:
-            st.image("assets/tradylo-logo.png", width=38)
+            st.image("assets/tradylo-logo.png", width=46)
         with _tc:
             st.markdown("<h1 style='font-size:1.8rem;font-weight:700;margin:4px 0 0 0;'>PnL Calendar</h1>", unsafe_allow_html=True)
         if not daily_df.empty:
@@ -5874,7 +5874,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     if section == "Analytics":
         _lc, _tc = st.columns([1, 10])
         with _lc:
-            st.image("assets/tradylo-logo.png", width=38)
+            st.image("assets/tradylo-logo.png", width=46)
         with _tc:
             st.markdown("<h1 style='font-size:1.8rem;font-weight:700;margin:4px 0 0 0;'>Analytics</h1>", unsafe_allow_html=True)
         insights = build_problem_insights(df_view, pnl_col)
@@ -6237,11 +6237,11 @@ else:
         st.session_state["sidebar_nav_section"] = st.session_state["nav_section"]
 
     with st.sidebar:
-        st.image("assets/tradylo-logo.png", width=52)
+        st.image("assets/tradylo-logo.png", width=120)
         st.markdown(
-            "<p style='color:#ffffff; font-size:1.1rem; font-weight:700; "
+            "<p style='color:#ffffff; font-size:1.4rem; font-weight:700; "
             "margin:-8px 0 4px 0; letter-spacing:0.5px;'>Tradylo</p>"
-            "<p style='color:#7c3aed; font-size:0.65rem; font-weight:600; "
+            "<p style='color:#7c3aed; font-size:0.75rem; font-weight:600; "
             "letter-spacing:2px; margin:0 0 12px 0;'>TRADING JOURNAL</p>",
             unsafe_allow_html=True,
         )
