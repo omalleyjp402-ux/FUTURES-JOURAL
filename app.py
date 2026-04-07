@@ -5833,57 +5833,76 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                         if name not in selected_confluences:
                             selected_confluences.append(name)
     
-                row3 = st.columns(4)
-                entry = row3[0].number_input("Entry price", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_entry")
-                stop = row3[1].number_input("Stop loss", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_stop")
-                take_profit = row3[2].number_input("Take profit (final target)", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_take_profit")
-                exit_price = row3[3].number_input("Exit price (avg)", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_exit")
+                if import_mode == "Manual entry":
+                    row3 = st.columns(4)
+                    entry = row3[0].number_input("Entry price", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_entry")
+                    stop = row3[1].number_input("Stop loss", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_stop")
+                    take_profit = row3[2].number_input("Take profit (final target)", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_take_profit")
+                    exit_price = row3[3].number_input("Exit price (avg)", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_exit")
 
-                with st.expander("Scale out (TP1 / TP2 / TP3 + multiple exits)", expanded=False):
-                    st.caption("Optional. If you scale out, you can record partial exits and targets here. This won't change your stats unless you enable it below.")
+                    with st.expander("Scale out (TP1 / TP2 / TP3 + multiple exits)", expanded=False):
+                        st.caption("Optional. If you scale out, you can record partial exits and targets here. This won't change your stats unless you enable it below.")
 
-                    tp_cols = st.columns(3)
-                    tp1 = tp_cols[0].number_input("TP1", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_tp1")
-                    tp2 = tp_cols[1].number_input("TP2", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_tp2")
-                    tp3 = tp_cols[2].number_input("TP3 (final)", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_tp3")
+                        tp_cols = st.columns(3)
+                        tp1 = tp_cols[0].number_input("TP1", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_tp1")
+                        tp2 = tp_cols[1].number_input("TP2", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_tp2")
+                        tp3 = tp_cols[2].number_input("TP3 (final)", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_tp3")
 
-                    st.markdown("**Exits (prices + qty)**")
-                    ex_cols = st.columns(3)
-                    exit1 = ex_cols[0].number_input("Exit price 1", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_exit1")
-                    exit2 = ex_cols[1].number_input("Exit price 2", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_exit2")
-                    exit3 = ex_cols[2].number_input("Exit price 3", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_exit3")
+                        st.markdown("**Exits (prices + qty)**")
+                        ex_cols = st.columns(3)
+                        exit1 = ex_cols[0].number_input("Exit price 1", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_exit1")
+                        exit2 = ex_cols[1].number_input("Exit price 2", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_exit2")
+                        exit3 = ex_cols[2].number_input("Exit price 3", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_exit3")
 
-                    qty_cols = st.columns(3)
-                    qty1 = qty_cols[0].number_input("Qty 1", min_value=0, step=1, value=int(contracts), key=f"{form_key}_qty1")
-                    qty2 = qty_cols[1].number_input("Qty 2", min_value=0, step=1, value=0, key=f"{form_key}_qty2")
-                    qty3 = qty_cols[2].number_input("Qty 3", min_value=0, step=1, value=0, key=f"{form_key}_qty3")
+                        qty_cols = st.columns(3)
+                        qty1 = qty_cols[0].number_input("Qty 1", min_value=0, step=1, value=int(contracts), key=f"{form_key}_qty1")
+                        qty2 = qty_cols[1].number_input("Qty 2", min_value=0, step=1, value=0, key=f"{form_key}_qty2")
+                        qty3 = qty_cols[2].number_input("Qty 3", min_value=0, step=1, value=0, key=f"{form_key}_qty3")
 
-                    def _weighted_avg(pairs):
-                        num = 0.0
-                        den = 0.0
-                        for price, qty in pairs:
-                            if price and qty and qty > 0:
-                                num += float(price) * int(qty)
-                                den += int(qty)
-                        if den <= 0:
-                            return None
-                        return num / den
+                        def _weighted_avg(pairs):
+                            num = 0.0
+                            den = 0.0
+                            for price, qty in pairs:
+                                if price and qty and qty > 0:
+                                    num += float(price) * int(qty)
+                                    den += int(qty)
+                            if den <= 0:
+                                return None
+                            return num / den
 
-                    avg_exit = _weighted_avg([(exit1, qty1), (exit2, qty2), (exit3, qty3)])
-                    avg_target = _weighted_avg([(tp1, qty1), (tp2, qty2), (tp3, qty3)])
+                        avg_exit = _weighted_avg([(exit1, qty1), (exit2, qty2), (exit3, qty3)])
+                        avg_target = _weighted_avg([(tp1, qty1), (tp2, qty2), (tp3, qty3)])
 
-                    info_cols = st.columns(2)
-                    info_cols[0].metric("Calculated avg exit", f"{avg_exit:,.2f}" if avg_exit is not None else "—")
-                    info_cols[1].metric("Total take profit (avg target)", f"{avg_target:,.2f}" if avg_target is not None else "—")
+                        info_cols = st.columns(2)
+                        info_cols[0].metric("Calculated avg exit", f"{avg_exit:,.2f}" if avg_exit is not None else "—")
+                        info_cols[1].metric("Total take profit (avg target)", f"{avg_target:,.2f}" if avg_target is not None else "—")
 
-                    use_scale_avg = st.checkbox(
-                        "Use scale-out exits to set Exit price (avg) on save",
-                        value=False,
-                        key=f"{form_key}_use_scale_avg_exit",
-                        help="If enabled, your saved Exit price will be the weighted average of Exit 1/2/3 (by qty).",
-                    )
-                    # NOTE: Can't use `st.button` inside a form. The checkbox above is enough:
-                    # if enabled, we'll store the weighted avg as `exit_price` on save.
+                        use_scale_avg = st.checkbox(
+                            "Use scale-out exits to set Exit price (avg) on save",
+                            value=False,
+                            key=f"{form_key}_use_scale_avg_exit",
+                            help="If enabled, your saved Exit price will be the weighted average of Exit 1/2/3 (by qty).",
+                        )
+                        # NOTE: Can't use `st.button` inside a form. The checkbox above is enough:
+                        # if enabled, we'll store the weighted avg as `exit_price` on save.
+                else:
+                    # Import CSV mode — set safe defaults so save logic doesn't break
+                    entry = 0.0
+                    stop = 0.0
+                    take_profit = 0.0
+                    exit_price = 0.0
+                    tp1 = 0.0
+                    tp2 = 0.0
+                    tp3 = 0.0
+                    exit1 = 0.0
+                    exit2 = 0.0
+                    exit3 = 0.0
+                    qty1 = 1
+                    qty2 = 0
+                    qty3 = 0
+                    use_scale_avg = False
+                    avg_exit = None
+                    avg_target = None
     
                 row4 = st.columns(4)
                 emotion = row4[0].slider("Emotion score (1–10)", 1, 10, 5, key=f"{form_key}_emotion")
@@ -5939,7 +5958,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
             except Exception:
                 valid_exit = exit_price > 0
 
-            if entry <= 0 or stop <= 0 or not valid_exit:
+            if import_mode == "Manual entry" and (entry <= 0 or stop <= 0 or not valid_exit):
                 st.error("Entry and stop loss must be greater than 0, and you must provide an exit price (or enable scale-out avg exit).")
             else:
                 # Embed 3 lessons in notes (hidden JSON block) so we can store without altering DB schema.
