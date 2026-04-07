@@ -265,6 +265,22 @@ div[data-testid="stExpander"] > div {
     border-bottom: 2px solid #7c3aed !important;
     font-weight: 600 !important;
 }
+
+/* File uploader — prominent purple dashed border */
+[data-testid="stFileUploader"] {
+    border: 2px dashed #7c3aed !important;
+    border-radius: 10px !important;
+    padding: 8px !important;
+    background: rgba(124, 58, 237, 0.06) !important;
+    transition: border-color 0.2s ease;
+}
+[data-testid="stFileUploader"]:hover {
+    border-color: #a78bfa !important;
+    background: rgba(124, 58, 237, 0.12) !important;
+}
+[data-testid="stFileUploaderDropzone"] {
+    background: transparent !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -5101,7 +5117,13 @@ def render_prop_sim_page(user_id: str) -> None:
         "FTMO ($100k)":     dict(balance=100000, profit_target=10.0,
                                   max_daily_loss=5.0, max_total_dd=10.0,
                                   min_days=4),
+        "FTMO ($50k)":      dict(balance=50000,  profit_target=10.0,
+                                  max_daily_loss=5.0, max_total_dd=10.0,
+                                  min_days=4),
         "Apex ($100k)":     dict(balance=100000, profit_target=9.0,
+                                  max_daily_loss=5.0, max_total_dd=6.0,
+                                  min_days=0),
+        "Apex ($50k)":      dict(balance=50000,  profit_target=9.0,
                                   max_daily_loss=5.0, max_total_dd=6.0,
                                   min_days=0),
         "MyFundedFutures ($50k)": dict(balance=50000, profit_target=8.0,
@@ -5110,6 +5132,18 @@ def render_prop_sim_page(user_id: str) -> None:
         "The Funded Trader ($100k)": dict(balance=100000, profit_target=10.0,
                                            max_daily_loss=5.0, max_total_dd=8.0,
                                            min_days=5),
+        "Lucid Trading ($100k)": dict(balance=100000, profit_target=10.0,
+                                       max_daily_loss=4.0, max_total_dd=6.0,
+                                       min_days=5),
+        "Tradeify ($50k)":       dict(balance=50000,  profit_target=8.0,
+                                       max_daily_loss=4.0, max_total_dd=6.0,
+                                       min_days=0),
+        "Funded Next ($100k)":   dict(balance=100000, profit_target=10.0,
+                                       max_daily_loss=5.0, max_total_dd=10.0,
+                                       min_days=5),
+        "Take Profit Trader ($50k)": dict(balance=50000, profit_target=6.0,
+                                           max_daily_loss=3.0, max_total_dd=6.0,
+                                           min_days=0),
     }
 
     col_firm, col_bal = st.columns(2)
@@ -5308,19 +5342,67 @@ def render_import_page(user_id: str) -> None:
     }
 
     platform = st.selectbox("Platform / broker", list(PLATFORM_COLS.keys()), key="import_platform")
-    account_type_import = st.selectbox(
+    acct_display_map = {
+        "Funded":     "Funded Account Data",
+        "Evaluation": "Evaluation Account Data",
+        "Live":       "Live Account Data",
+    }
+    acct_display = st.selectbox(
         "Import into account",
-        ["Funded Account Data", "Evaluation Account Data", "Live Account Data"],
-        key="import_account_type",
+        list(acct_display_map.keys()),
+        key="import_account_type_display",
     )
+    account_type_import = acct_display_map[acct_display]
     uploaded = st.file_uploader("Upload CSV file", type=["csv"], key="import_csv_upload")
 
     if uploaded is None:
         st.info("Upload a CSV exported from your platform. We will preview the mapping before importing anything.")
-        with st.expander("How to export from Tradovate"):
-            st.markdown("1. Open Tradovate → Account → Trade History\n2. Set your date range\n3. Click **Export** → CSV\n4. Upload the file above")
-        with st.expander("How to export from NinjaTrader"):
-            st.markdown("1. Open NinjaTrader → Account Performance\n2. Right-click → Export to CSV\n3. Upload the file above")
+        with st.expander("How to export from Tradovate", expanded=False):
+            st.markdown("""
+**Step 1:** Log into Tradovate and go to **Account** in the top menu.
+
+**Step 2:** Click **Performance** → **Trade History**.
+
+**Step 3:** Set your date range using the date filters at the top.
+
+**Step 4:** Click the **Export** button (top right of the table) → select **Export as CSV**.
+
+**Step 5:** Save the file to your computer, then upload it above.
+
+*The CSV will include columns like: Buy/Sell Time, Contract, B/S, Qty, Entry Price, Exit Price, P&L — these map automatically.*
+            """)
+        with st.expander("How to export from NinjaTrader", expanded=False):
+            st.markdown("""
+**Step 1:** Open NinjaTrader 8 → go to **New** → **Trade Performance**.
+
+**Step 2:** In the Trade Performance window, click the **Executions** tab.
+
+**Step 3:** Right-click anywhere in the table → **Export** → **Export to CSV**.
+
+**Step 4:** Save the file and upload it above.
+            """)
+        with st.expander("How to export from Rithmic (R Trader)", expanded=False):
+            st.markdown("""
+**Step 1:** Open R Trader Pro → go to **Reports** → **Trade Activity**.
+
+**Step 2:** Set your date range and click **Run Report**.
+
+**Step 3:** Click **Export** → **CSV** from the report toolbar.
+
+**Step 4:** Upload the file above.
+            """)
+        with st.expander("Using Manual / Other platform", expanded=False):
+            st.markdown("""
+If your platform isn't listed, export any CSV with these columns (column names can vary — you'll map them after upload):
+
+- **Date/Time** of the trade
+- **Instrument** or symbol (e.g. MNQ, ES)
+- **Direction** (Buy/Long or Sell/Short)
+- **P&L** or profit/loss amount
+- **Quantity** or contracts
+
+After uploading, you'll see a column mapping screen where you can match your CSV columns to Tradylo fields.
+            """)
         return
 
     try:
