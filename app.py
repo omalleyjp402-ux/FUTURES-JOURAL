@@ -5586,25 +5586,161 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     if section == "New Trade":
         # ── Add new trade form ────────────────────────────────────────────────────
         with st.expander("Add new trade", expanded=True):
+            # Entry mode toggle — must be OUTSIDE the form (file_uploader can't live inside st.form)
+            import_mode = st.radio(
+                "Entry mode",
+                ["Manual entry", "Import from CSV"],
+                horizontal=True,
+                key=f"{form_key}_entry_mode",
+                label_visibility="collapsed",
+            )
+
+            # CSV section — outside the form so file_uploader works
+            csv_date = None
+            csv_instrument = None
+            csv_direction = "Long"
+            csv_contracts = 1
+            csv_pnl = None
+            csv_entry_time = "09:30"
+            session_csv = "NY"
+
+            if import_mode == "Import from CSV":
+                st.caption(
+                    "Upload your CSV below. "
+                    "Complete the confluences, psychology and grade fields — "
+                    "these can't be imported automatically."
+                )
+                _csv_platform_opts = ["Tradovate", "NinjaTrader", "Rithmic", "Manual / Other"]
+                csv_platform = st.selectbox("Platform", _csv_platform_opts, key=f"{form_key}_csv_platform")
+                uploaded_csv = st.file_uploader(
+                    "Upload CSV file", type=["csv"],
+                    key=f"{form_key}_csv_upload",
+                    help="Upload a CSV exported from your trading platform.",
+                )
+                _FORM_PLATFORM_COLS = {
+                    "Tradovate":    {"date": ["boughtTimestamp","soldTimestamp","Buy/Sell Time","Entry time","Date"],
+                                     "instrument": ["symbol","Contract","Instrument","Symbol"],
+                                     "pnl": ["pnl","P&L","PnL","Net P&L"],
+                                     "contracts": ["qty","Qty","Quantity","Contracts"]},
+                    "NinjaTrader":  {"date": ["Entry time","Time","Date"],
+                                     "instrument": ["Instrument","Symbol","Contract"],
+                                     "pnl": ["Profit","P&L","Net profit"],
+                                     "contracts": ["Quantity","Qty","Contracts"]},
+                    "Rithmic":      {"date": ["Entry Date/Time","Date","Time"],
+                                     "instrument": ["Symbol","Instrument","Contract"],
+                                     "pnl": ["Closed P&L","P&L","Net P&L"],
+                                     "contracts": ["Qty","Quantity","Contracts"]},
+                    "Manual / Other": {"date": [], "instrument": [], "pnl": [], "contracts": []},
+                }
+                if uploaded_csv is not None:
+                    try:
+                        import io as _io
+                        _df_csv = pd.read_csv(_io.BytesIO(uploaded_csv.read()))
+                        _hints = _FORM_PLATFORM_COLS.get(csv_platform, {})
+                        def _fc(candidates):
+                            for c in candidates:
+                                if c in _df_csv.columns:
+                                    return c
+                            return None
+                        _date_c = _fc(_hints.get("date", []))
+                        _inst_c = _fc(_hints.get("instrument", []))
+                        _pnl_c  = _fc(_hints.get("pnl", []))
+                        _qty_c  = _fc(_hints.get("contracts", []))
+                        if len(_df_csv) > 0:
+                            _r0 = _df_csv.iloc[0]
+                            if _date_c:
+                                try:
+                                    _dt = pd.to_datetime(_r0[_date_c])
+                                    csv_date = _dt.date()
+                                    csv_entry_time = _dt.strftime("%H:%M")
+                                except Exception:
+                                    pass
+                            if _inst_c:
+                                _ri = str(_r0[_inst_c]).strip()
+                                csv_instrument = re.sub(r'[A-Z]\d+$', '', _ri) or _ri
+                            if "buyPrice" in _df_csv.columns and "sellPrice" in _df_csv.columns:
+                                try:
+                                    _bp = float(str(_r0["buyPrice"]).replace(",",""))
+                                    _sp = float(str(_r0["sellPrice"]).replace(",",""))
+                                    csv_direction = "Long" if _sp > _bp else "Short"
+                                except Exception:
+                                    csv_direction = "Long"
+                            if _pnl_c:
+                                try:
+                                    _ps = str(_r0[_pnl_c]).replace(",","").replace("$","").strip()
+                                    if _ps.startswith("(") and _ps.endswith(")"):
+                                        _ps = "-" + _ps[1:-1].strip()
+                                    csv_pnl = float(_ps)
+                                except Exception:
+                                    pass
+                            if _qty_c:
+                                try:
+                                    csv_contracts = int(float(str(_r0[_qty_c]).replace(",","")))
+                                except Exception:
+                                    csv_contracts = 1
+                        _pnl_colour = "#22c55e" if csv_pnl is not None and csv_pnl >= 0 else "#ef4444"
+                        _pnl_display = f"${csv_pnl:,.2f}" if csv_pnl is not None else "Not found"
+                        st.markdown(
+                            f"<div style='background:#1a1a2e;border:1px solid #2d2d4e;"
+                            f"border-left:4px solid #7c3aed;border-radius:8px;"
+                            f"padding:14px 18px;margin:10px 0;'>"
+                            f"<p style='color:#a78bfa;font-size:0.7rem;font-weight:700;"
+                            f"letter-spacing:1px;margin:0 0 8px 0;'>DETECTED FROM CSV</p>"
+                            f"<p style='color:#e2e8f0;margin:2px 0;'>"
+                            f"Date: <b>{csv_date or 'Not found'}</b> &nbsp; Time: <b>{csv_entry_time}</b></p>"
+                            f"<p style='color:#e2e8f0;margin:2px 0;'>"
+                            f"Instrument: <b>{csv_instrument or 'Not found'}</b> &nbsp; "
+                            f"{'Long' if csv_direction=='Long' else 'Short'} &nbsp; Qty: <b>{csv_contracts}</b></p>"
+                            f"<p style='color:#e2e8f0;margin:2px 0;'>"
+                            f"P&L: <b style='color:{_pnl_colour};'>{_pnl_display}</b></p>"
+                            f"</div>",
+                            unsafe_allow_html=True,
+                        )
+                        if csv_pnl is None:
+                            st.warning("P&L not detected. Enter it via P&L override in the Advanced section.")
+                    except Exception as _csv_err:
+                        st.error(f"Could not read CSV: {_csv_err}")
+                csv_date = st.date_input(
+                    "Date (confirm or override)",
+                    value=csv_date or datetime.now().date(),
+                    key=f"{form_key}_csv_date_override",
+                )
+                session_csv = st.selectbox("Session", SESSIONS, key=f"{form_key}_csv_session")
+            else:
+                st.caption("Fill in your trade details manually.")
+
             with st.form(f"{form_key}_form", clear_on_submit=True):
-                st.markdown("**Core trade info**")
-                row1 = st.columns(4)
-                date_val = row1[0].date_input("Date", key=f"{form_key}_date")
-                use_times = row1[1].checkbox("Use entry/exit times", value=False, key=f"{form_key}_use_times")
-                with row1[2]:
-                    ec = st.columns(2)
-                    entry_time = ec[0].selectbox("Entry time (15m)", TIME_OPTIONS, index=TIME_OPTIONS.index("09:30"), key=f"{form_key}_entry_time")
-                    entry_time_custom = ec[1].text_input("Entry time (HH:MM)", placeholder="15:44", key=f"{form_key}_entry_time_custom")
-                with row1[3]:
-                    xc = st.columns(2)
-                    exit_time = xc[0].selectbox("Exit time (15m)", TIME_OPTIONS, index=TIME_OPTIONS.index("10:00"), key=f"{form_key}_exit_time")
-                    exit_time_custom = xc[1].text_input("Exit time (HH:MM)", placeholder="16:02", key=f"{form_key}_exit_time_custom")
-    
-                row2 = st.columns(4)
-                instrument = row2[0].selectbox("Instrument", INSTRUMENT_ORDER, key=f"{form_key}_instrument")
-                direction = row2[1].radio("Direction", ["Long", "Short"], key=f"{form_key}_direction")
-                contracts = row2[2].number_input("Contracts", min_value=1, step=1, value=1, key=f"{form_key}_contracts")
-                session = row2[3].selectbox("Session", SESSIONS, key=f"{form_key}_session")
+                if import_mode == "Manual entry":
+                    st.markdown("**Core trade info**")
+                    row1 = st.columns(4)
+                    date_val = row1[0].date_input("Date", key=f"{form_key}_date")
+                    use_times = row1[1].checkbox("Use entry/exit times", value=False, key=f"{form_key}_use_times")
+                    with row1[2]:
+                        ec = st.columns(2)
+                        entry_time = ec[0].selectbox("Entry time (15m)", TIME_OPTIONS, index=TIME_OPTIONS.index("09:30"), key=f"{form_key}_entry_time")
+                        entry_time_custom = ec[1].text_input("Entry time (HH:MM)", placeholder="15:44", key=f"{form_key}_entry_time_custom")
+                    with row1[3]:
+                        xc = st.columns(2)
+                        exit_time = xc[0].selectbox("Exit time (15m)", TIME_OPTIONS, index=TIME_OPTIONS.index("10:00"), key=f"{form_key}_exit_time")
+                        exit_time_custom = xc[1].text_input("Exit time (HH:MM)", placeholder="16:02", key=f"{form_key}_exit_time_custom")
+
+                    row2 = st.columns(4)
+                    instrument = row2[0].selectbox("Instrument", INSTRUMENT_ORDER, key=f"{form_key}_instrument")
+                    direction = row2[1].radio("Direction", ["Long", "Short"], key=f"{form_key}_direction")
+                    contracts = row2[2].number_input("Contracts", min_value=1, step=1, value=1, key=f"{form_key}_contracts")
+                    session = row2[3].selectbox("Session", SESSIONS, key=f"{form_key}_session")
+                else:
+                    # CSV import mode — use parsed values; no core widgets needed
+                    date_val        = csv_date or datetime.now().date()
+                    instrument      = csv_instrument or "MNQ"
+                    direction       = csv_direction
+                    contracts       = csv_contracts
+                    session         = session_csv
+                    entry_time      = csv_entry_time
+                    exit_time       = "00:00"
+                    entry_time_custom = ""
+                    exit_time_custom  = ""
+                    use_times       = True
     
                 row2b = st.columns(4)
                 trade_type = row2b[0].selectbox("Trade type", TRADE_TYPES, key=f"{form_key}_trade_type")
@@ -5926,7 +6062,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     "risk_percent_planned": to_float(risk_percent_planned) if risk_percent_planned > 0 else None,
                     "commission": float(commission),
                     "slippage": float(slippage),
-                    "pnl_override": float(pnl_override) if use_pnl_override else None,
+                    "pnl_override": float(csv_pnl) if import_mode == "Import from CSV" and csv_pnl is not None else (float(pnl_override) if use_pnl_override else None),
                     "max_favorable_price": round(float(max_fav), 2) if max_fav is not None else None,
                     "max_adverse_price": round(float(max_adv), 2) if max_adv is not None else None,
                     "notes": notes_to_save,
@@ -6838,7 +6974,6 @@ else:
         "Streaks & Milestones",
         "Journal",
         "Strategy/Model Creation",
-        "Import Trades",
         "Affiliates",
     ]
     # Menu items shown in the sidebar (hide "New Trade" to avoid duplicate with +Add Trade button).
@@ -7257,8 +7392,6 @@ else:
         _safe_render("Strategy/Model Creation", lambda: render_strategy_creation_page(user.id))
     elif section == "Affiliates":
         _safe_render("Affiliates", lambda: render_affiliates_page(user.id))
-    elif section == "Import Trades":
-        _safe_render("Import Trades", lambda: render_import_page(user.id))
     else:
         # Default to Funded tab first (better UX). Keep "All Accounts" available as a final tab.
         # Short display labels → actual account_type strings stored in DB.
