@@ -5316,11 +5316,11 @@ def render_import_page(user_id: str) -> None:
 
     PLATFORM_COLS = {
         "Tradovate": {
-            "date":        ["Buy/Sell Time", "Entry time", "Date"],
-            "instrument":  ["Contract", "Instrument", "Symbol"],
+            "date":        ["boughtTimestamp", "soldTimestamp", "Buy/Sell Time", "Entry time", "Date"],
+            "instrument":  ["symbol", "Contract", "Instrument", "Symbol"],
             "direction":   ["B/S", "Side", "Direction"],
-            "pnl":         ["P&L", "PnL", "Net P&L", "Profit/Loss"],
-            "contracts":   ["Qty", "Quantity", "Contracts", "Size"],
+            "pnl":         ["pnl", "P&L", "PnL", "Net P&L", "Profit/Loss"],
+            "contracts":   ["qty", "Qty", "Quantity", "Contracts", "Size"],
         },
         "NinjaTrader": {
             "date":        ["Entry time", "Time", "Date"],
@@ -5438,6 +5438,29 @@ After uploading, you'll see a column mapping screen where you can match your CSV
         if v in ("S", "SELL", "SHORT", "SH"): return "Short"
         return str(val)
 
+    def _parse_pnl(raw_str):
+        s = str(raw_str).replace(",", "").replace("$", "").strip()
+        if s.startswith("(") and s.endswith(")"):
+            s = "-" + s[1:-1].strip()
+        return float(s)
+
+    def _clean_instrument(raw):
+        s = str(raw).strip()
+        cleaned = re.sub(r'[A-Z]\d+$', '', s)
+        return cleaned if cleaned else s
+
+    def _infer_direction(r, mapped_val):
+        if mapped_val in ("Long", "Short"):
+            return mapped_val
+        if "buyPrice" in df_raw.columns and "sellPrice" in df_raw.columns:
+            try:
+                buy  = float(str(r.get("buyPrice",  0)).replace(",", ""))
+                sell = float(str(r.get("sellPrice", 0)).replace(",", ""))
+                return "Long" if sell > buy else "Short"
+            except Exception:
+                pass
+        return "Long"
+
     mapped_rows = []
     for _, r in df_raw.head(20).iterrows():
         row = {}
@@ -5445,10 +5468,12 @@ After uploading, you'll see a column mapping screen where you can match your CSV
             row["date"] = pd.to_datetime(r[map_date]).strftime("%Y-%m-%d") if map_date != "— skip —" else ""
         except Exception:
             row["date"] = str(r.get(map_date, ""))
-        row["instrument"] = str(r[map_instrument]).strip() if map_instrument != "— skip —" else ""
-        row["direction"]  = _direction_clean(r[map_direction]) if map_direction != "— skip —" else "Long"
+        raw_instr = str(r[map_instrument]) if map_instrument != "— skip —" else ""
+        row["instrument"] = _clean_instrument(raw_instr)
+        raw_dir = _direction_clean(r[map_direction]) if map_direction != "— skip —" else ""
+        row["direction"] = _infer_direction(r, raw_dir)
         try:
-            row["pnl"] = float(str(r[map_pnl]).replace(",", "").replace("$", "")) if map_pnl != "— skip —" else 0.0
+            row["pnl"] = _parse_pnl(r[map_pnl]) if map_pnl != "— skip —" else 0.0
         except Exception:
             row["pnl"] = 0.0
         try:
@@ -5477,10 +5502,12 @@ After uploading, you'll see a column mapping screen where you can match your CSV
             except Exception:
                 row["date"]       = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
                 row["entry_time"] = "09:30"
-            row["instrument"] = str(r[map_instrument]).strip() if map_instrument != "— skip —" else "Unknown"
-            row["direction"]  = _direction_clean(r[map_direction]) if map_direction != "— skip —" else "Long"
+            raw_instr_i = str(r[map_instrument]) if map_instrument != "— skip —" else "Unknown"
+            row["instrument"] = _clean_instrument(raw_instr_i)
+            raw_dir_i = _direction_clean(r[map_direction]) if map_direction != "— skip —" else ""
+            row["direction"] = _infer_direction(r, raw_dir_i)
             try:
-                pnl_val = float(str(r[map_pnl]).replace(",", "").replace("$", "")) if map_pnl != "— skip —" else 0.0
+                pnl_val = _parse_pnl(r[map_pnl]) if map_pnl != "— skip —" else 0.0
             except Exception:
                 pnl_val = 0.0
             try:
