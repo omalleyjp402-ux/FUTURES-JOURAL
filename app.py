@@ -5746,16 +5746,17 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     session = row2[3].selectbox("Session", SESSIONS, key=f"{form_key}_session")
                 else:
                     # CSV import mode — use parsed values; no core widgets needed
-                    date_val        = csv_date or datetime.now().date()
-                    instrument      = csv_instrument or "MNQ"
-                    direction       = csv_direction
-                    contracts       = csv_contracts
-                    session         = session_csv
-                    entry_time      = csv_entry_time
-                    exit_time       = "00:00"
+                    date_val          = csv_date or datetime.now().date()
+                    instrument        = csv_instrument or "MNQ"
+                    direction         = csv_direction
+                    contracts         = csv_contracts
+                    session           = session_csv
+                    entry_time        = csv_entry_time
+                    exit_time         = ""
                     entry_time_custom = ""
                     exit_time_custom  = ""
-                    use_times       = True
+                    # No exit time from CSV → don't compute a fake duration
+                    use_times         = False
     
                 row2b = st.columns(4)
                 trade_type = row2b[0].selectbox("Trade type", TRADE_TYPES, key=f"{form_key}_trade_type")
