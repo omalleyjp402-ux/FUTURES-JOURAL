@@ -98,7 +98,7 @@ div[data-testid="stDataFrame"]{
 .metric-label {font-size:11px;color:var(--tz-muted);letter-spacing:.06em;text-transform:uppercase}
 .metric-value {font-size:20px;font-weight:700;color:var(--tz-title);margin-top:1px; line-height:1.12}
 .metric-sub {font-size:11px;color:rgba(148,163,184,0.9);margin-top:4px}
-@media (max-width: 1200px) {.metric-grid {grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media (max-width: 900px) {.metric-grid {grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media (max-width: 768px) {.metric-grid {grid-template-columns:1fr;}}
 
 /* PnL calendar (used in demo + logged-in) */
@@ -2130,7 +2130,7 @@ def render_all_accounts_dashboard(user_id: str) -> None:
     avg_duration = None
     if "duration_minutes" in dfx.columns:
         dur = pd.to_numeric(dfx["duration_minutes"], errors="coerce")
-        dur = dur[(dur >= 0) & (dur <= 12 * 60)]
+        dur = dur[(dur > 0) & (dur <= 720)]
         if not dur.dropna().empty:
             avg_duration = float(dur.dropna().mean())
 
@@ -2150,7 +2150,7 @@ def render_all_accounts_dashboard(user_id: str) -> None:
         ("Expectancy", format_money(expectancy), None),
         ("Largest win", format_money(largest_win), None),
         ("Largest loss", format_money(largest_loss), None),
-        ("Avg duration", f"{avg_duration:.1f} min" if avg_duration is not None else "n/a", None),
+        ("Avg duration", (f"{int(avg_duration//60)}h {int(avg_duration%60)}m" if avg_duration >= 60 else f"{int(avg_duration)}m") if avg_duration is not None else "n/a", None),
         ("Plan adherence", f"{plan_rate:.1f}%", None),
         ("Revenge", f"{revenge_rate:.1f}%", None),
         ("Most profitable account", safe_str(most_profitable_account), None),
@@ -5586,14 +5586,30 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     if section == "New Trade":
         # ── Add new trade form ────────────────────────────────────────────────────
         with st.expander("Add new trade", expanded=True):
-            # Entry mode toggle — must be OUTSIDE the form (file_uploader can't live inside st.form)
-            import_mode = st.radio(
-                "Entry mode",
-                ["Manual entry", "Import from CSV"],
-                horizontal=True,
-                key=f"{form_key}_entry_mode",
-                label_visibility="collapsed",
-            )
+            # Entry mode toggle — button-based to avoid session loss on radio rerun
+            st.caption("How are you logging this trade?")
+            if f"{form_key}_entry_mode" not in st.session_state:
+                st.session_state[f"{form_key}_entry_mode"] = "Manual entry"
+            _mode_c1, _mode_c2 = st.columns(2)
+            with _mode_c1:
+                if st.button(
+                    "Manual entry",
+                    type="primary" if st.session_state[f"{form_key}_entry_mode"] == "Manual entry" else "secondary",
+                    key=f"{form_key}_mode_manual",
+                    use_container_width=True,
+                ):
+                    st.session_state[f"{form_key}_entry_mode"] = "Manual entry"
+                    st.rerun()
+            with _mode_c2:
+                if st.button(
+                    "Import from CSV",
+                    type="primary" if st.session_state[f"{form_key}_entry_mode"] == "Import from CSV" else "secondary",
+                    key=f"{form_key}_mode_csv",
+                    use_container_width=True,
+                ):
+                    st.session_state[f"{form_key}_entry_mode"] = "Import from CSV"
+                    st.rerun()
+            import_mode = st.session_state[f"{form_key}_entry_mode"]
 
             # CSV section — outside the form so file_uploader works
             csv_date = None
@@ -5606,8 +5622,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
 
             if import_mode == "Import from CSV":
                 st.caption(
-                    "Upload your CSV below. "
-                    "Complete the confluences, psychology and grade fields — "
+                    "Confluences, psychology and grade still need to be filled in manually — "
                     "these can't be imported automatically."
                 )
                 _csv_platform_opts = ["Tradovate", "NinjaTrader", "Rithmic", "Manual / Other"]
@@ -6228,7 +6243,12 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     expectancy = (win_rate / 100 * avg_win) + ((1 - win_rate / 100) * avg_loss) if total_trades > 0 else 0
     largest_win = df_view[pnl_col].max()
     largest_loss = df_view[pnl_col].min()
-    avg_duration = df_view["duration_minutes"].dropna().mean() if "duration_minutes" in df_view.columns else None
+    avg_duration = None
+    if "duration_minutes" in df_view.columns:
+        _dur = pd.to_numeric(df_view["duration_minutes"], errors="coerce")
+        _dur = _dur[(_dur > 0) & (_dur <= 720)]  # only valid trades: >0 and ≤12h
+        if not _dur.empty:
+            avg_duration = float(_dur.mean())
     plan_rate = (df_view["followed_plan"] == "Yes").mean() * 100 if "followed_plan" in df_view.columns else 0
     revenge_rate = (df_view["revenge_trade"] == "Yes").mean() * 100 if "revenge_trade" in df_view.columns else 0
 
@@ -6244,7 +6264,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         ("Expectancy", format_money(expectancy), None),
         ("Largest win", format_money(largest_win), None),
         ("Largest loss", format_money(largest_loss), None),
-        ("Avg duration", f"{avg_duration:.1f} min" if avg_duration is not None else "n/a", None),
+        ("Avg duration", (f"{int(avg_duration//60)}h {int(avg_duration%60)}m" if avg_duration >= 60 else f"{int(avg_duration)}m") if avg_duration is not None else "n/a", None),
         ("Plan adherence", f"{plan_rate:.1f}%", f"Revenge: {revenge_rate:.1f}%"),
     ]
 
@@ -6418,12 +6438,12 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
             if "trade_grade" in recent.columns:
                 recent["trade_grade"] = recent["trade_grade"].fillna("—").replace("None", "—")
             show_cols = []
-            for col in ("Date", "instrument", "direction", "contracts", "session", "trade_grade", "PnL"):
+            for col in ("Date", "instrument", "direction", "session", "trade_grade", "PnL"):
                 if col in recent.columns:
                     show_cols.append(col)
             if show_cols:
                 st.dataframe(
-                    recent[show_cols].rename(columns={"instrument": "Instrument", "direction": "Dir", "contracts": "Size", "session": "Session", "trade_grade": "Grade"}),
+                    recent[show_cols].rename(columns={"instrument": "Instrument", "direction": "Dir", "session": "Session", "trade_grade": "Grade"}),
                     use_container_width=True,
                     hide_index=True,
                 )
