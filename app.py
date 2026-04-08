@@ -6881,7 +6881,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
             st.markdown("### Risk of Ruin")
             st.caption("Statistical probability of losing your account based on your current win rate, avg win/loss ratio, and risk per trade.")
             if total_trades >= 5:
-                ror_risk = st.slider("% of account risked per trade", min_value=0.5, max_value=10.0, value=2.0, step=0.5, key="ror_risk_pct")
+                ror_risk = st.slider("% of account risked per trade", min_value=0.5, max_value=10.0, value=2.0, step=0.5, key=f"{form_key}_ror_risk_pct")
                 try:
                     _ror_wins   = df_view[df_view[pnl_col] > 0][pnl_col]
                     _ror_losses = df_view[df_view[pnl_col] < 0][pnl_col]
