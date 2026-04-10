@@ -47,6 +47,9 @@ header[data-testid="stHeader"] { display: none !important; }
 footer { visibility: hidden !important; }
 .stDeployButton { display: none !important; }
 
+/* Always show sidebar collapse/expand toggle */
+[data-testid="collapsedControl"] { display: flex !important; visibility: visible !important; }
+
 /* Sidebar: thin purple top accent */
 section[data-testid="stSidebar"] > div:first-child {
     border-top: 3px solid #7c3aed;
