@@ -34,7 +34,7 @@ st.set_page_config(
     page_title=BRAND_NAME,
     layout="wide",
     page_icon=str(LOGO_PATH),
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",
 )
 st.markdown("""
 <style>
@@ -47,14 +47,19 @@ header[data-testid="stHeader"] { display: none !important; }
 footer { visibility: hidden !important; }
 .stDeployButton { display: none !important; }
 
-/* Sidebar collapse/expand button — always visible */
-[data-testid="collapsedControl"] {
-    display: flex !important;
-    background: #1a1a2e !important;
-    border-right: 1px solid #2d2d4e !important;
+/* Sidebar: force expanded, hide collapse button */
+section[data-testid="stSidebar"] {
+    transform: none !important;
+    margin-left: 0 !important;
+    min-width: 244px !important;
 }
-[data-testid="collapsedControl"] svg {
-    fill: #a78bfa !important;
+section[data-testid="stSidebar"][aria-expanded="false"] {
+    transform: none !important;
+    min-width: 244px !important;
+    display: flex !important;
+}
+[data-testid="collapsedControl"] {
+    display: none !important;
 }
 
 /* Sidebar: thin purple top accent */
@@ -5609,7 +5614,6 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     use_container_width=True,
                 ):
                     st.session_state[f"{form_key}_entry_mode"] = "Manual entry"
-                    st.rerun()
             with _mode_c2:
                 if st.button(
                     "Import from CSV",
@@ -5618,7 +5622,6 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     use_container_width=True,
                 ):
                     st.session_state[f"{form_key}_entry_mode"] = "Import from CSV"
-                    st.rerun()
             import_mode = st.session_state[f"{form_key}_entry_mode"]
 
             # CSV section — outside the form so file_uploader works
