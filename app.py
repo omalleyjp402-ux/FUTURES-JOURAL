@@ -5336,6 +5336,8 @@ def render_import_page(user_id: str) -> None:
             "direction":   ["B/S", "Side", "Direction"],
             "pnl":         ["pnl", "P&L", "PnL", "Net P&L", "Profit/Loss"],
             "contracts":   ["qty", "Qty", "Quantity", "Contracts", "Size"],
+            "entry_price": ["buyPrice", "Entry price", "Entry Price", "entry_price", "Fill Price"],
+            "exit_price":  ["sellPrice", "Exit price", "Exit Price", "exit_price", "Avg Exit Price"],
         },
         "NinjaTrader": {
             "date":        ["Entry time", "Time", "Date"],
@@ -5506,6 +5508,12 @@ After uploading, you'll see a column mapping screen where you can match your CSV
     default_session = st.selectbox("Default session (applied to all imported trades)", ["NY", "London", "Asia", "Other"], key="import_default_session")
     default_grade   = st.selectbox("Default grade", ["—"] + ["A++", "A+", "A", "B+", "B", "C", "D"], key="import_default_grade")
 
+    # Detect entry/exit price columns once before the loop
+    _entry_col = _best_guess(hints.get("entry_price", []))
+    _exit_col  = _best_guess(hints.get("exit_price", []))
+    _entry_col = None if _entry_col == "— skip —" else _entry_col
+    _exit_col  = None if _exit_col  == "— skip —" else _exit_col
+
     if st.button("Import Trades", type="primary", key="import_confirm_btn"):
         all_mapped = []
         for _, r in df_raw.iterrows():
@@ -5529,6 +5537,22 @@ After uploading, you'll see a column mapping screen where you can match your CSV
                 qty = int(float(str(r[map_contracts]).replace(",", ""))) if map_contracts != "— skip —" else 1
             except Exception:
                 qty = 1
+            # Entry price
+            try:
+                row["entry_price"] = float(str(r[_entry_col]).replace(",", "").replace("$", "").strip()) if _entry_col else 0.0
+            except Exception:
+                row["entry_price"] = 0.0
+            # Exit price
+            try:
+                row["exit_price"] = float(str(r[_exit_col]).replace(",", "").replace("$", "").strip()) if _exit_col else 0.0
+            except Exception:
+                row["exit_price"] = 0.0
+            # Override direction from prices if available
+            if row.get("entry_price") and row.get("exit_price"):
+                if row["exit_price"] > row["entry_price"]:
+                    row["direction"] = "Long"
+                elif row["exit_price"] < row["entry_price"]:
+                    row["direction"] = "Short"
             row["pnl_net"]       = pnl_val
             row["pnl_gross"]     = pnl_val
             row["contracts"]     = qty
@@ -5632,6 +5656,8 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
             csv_pnl = None
             csv_entry_time = "09:30"
             session_csv = "NY"
+            csv_entry_price = None
+            csv_exit_price = None
 
             if import_mode == "Import from CSV":
                 st.caption(
@@ -5649,7 +5675,9 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     "Tradovate":    {"date": ["boughtTimestamp","soldTimestamp","Buy/Sell Time","Entry time","Date"],
                                      "instrument": ["symbol","Contract","Instrument","Symbol"],
                                      "pnl": ["pnl","P&L","PnL","Net P&L"],
-                                     "contracts": ["qty","Qty","Quantity","Contracts"]},
+                                     "contracts": ["qty","Qty","Quantity","Contracts"],
+                                     "entry_price": ["buyPrice","Entry price","Entry Price","entry_price","Fill Price"],
+                                     "exit_price":  ["sellPrice","Exit price","Exit Price","exit_price","Avg Exit Price"]},
                     "NinjaTrader":  {"date": ["Entry time","Time","Date"],
                                      "instrument": ["Instrument","Symbol","Contract"],
                                      "pnl": ["Profit","P&L","Net profit"],
@@ -5670,10 +5698,12 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                                 if c in _df_csv.columns:
                                     return c
                             return None
-                        _date_c = _fc(_hints.get("date", []))
-                        _inst_c = _fc(_hints.get("instrument", []))
-                        _pnl_c  = _fc(_hints.get("pnl", []))
-                        _qty_c  = _fc(_hints.get("contracts", []))
+                        _date_c   = _fc(_hints.get("date", []))
+                        _inst_c   = _fc(_hints.get("instrument", []))
+                        _pnl_c    = _fc(_hints.get("pnl", []))
+                        _qty_c    = _fc(_hints.get("contracts", []))
+                        _entry_c  = _fc(_hints.get("entry_price", []))
+                        _exit_c   = _fc(_hints.get("exit_price", []))
                         if len(_df_csv) > 0:
                             _r0 = _df_csv.iloc[0]
                             if _date_c:
@@ -5691,8 +5721,20 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                                     _bp = float(str(_r0["buyPrice"]).replace(",",""))
                                     _sp = float(str(_r0["sellPrice"]).replace(",",""))
                                     csv_direction = "Long" if _sp > _bp else "Short"
+                                    csv_entry_price = _bp
+                                    csv_exit_price  = _sp
                                 except Exception:
                                     csv_direction = "Long"
+                            elif _entry_c:
+                                try:
+                                    csv_entry_price = float(str(_r0[_entry_c]).replace(",","").replace("$","").strip())
+                                except Exception:
+                                    pass
+                            if _exit_c and csv_exit_price is None:
+                                try:
+                                    csv_exit_price = float(str(_r0[_exit_c]).replace(",","").replace("$","").strip())
+                                except Exception:
+                                    pass
                             if _pnl_c:
                                 try:
                                     _ps = str(_r0[_pnl_c]).replace(",","").replace("$","").strip()
@@ -5708,6 +5750,8 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                                     csv_contracts = 1
                         _pnl_colour = "#22c55e" if csv_pnl is not None and csv_pnl >= 0 else "#ef4444"
                         _pnl_display = f"${csv_pnl:,.2f}" if csv_pnl is not None else "Not found"
+                        _ep_display  = f"{csv_entry_price:,.2f}" if csv_entry_price is not None else "—"
+                        _xp_display  = f"{csv_exit_price:,.2f}"  if csv_exit_price  is not None else "—"
                         st.markdown(
                             f"<div style='background:#1a1a2e;border:1px solid #2d2d4e;"
                             f"border-left:4px solid #7c3aed;border-radius:8px;"
@@ -5720,10 +5764,13 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                             f"Instrument: <b>{csv_instrument or 'Not found'}</b> &nbsp; "
                             f"{'Long' if csv_direction=='Long' else 'Short'} &nbsp; Qty: <b>{csv_contracts}</b></p>"
                             f"<p style='color:#e2e8f0;margin:2px 0;'>"
+                            f"Entry: <b>{_ep_display}</b> &nbsp; Exit: <b>{_xp_display}</b></p>"
+                            f"<p style='color:#e2e8f0;margin:2px 0;'>"
                             f"P&L: <b style='color:{_pnl_colour};'>{_pnl_display}</b></p>"
                             f"</div>",
                             unsafe_allow_html=True,
                         )
+                        st.caption("ℹ️ Stop loss cannot be imported from Tradovate — add it manually in the form below if needed.")
                         if csv_pnl is None:
                             st.warning("P&L not detected. Enter it via P&L override in the Advanced section.")
                     except Exception as _csv_err:
@@ -6087,10 +6134,10 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     "exit_time": exit_time_str,
                     "instrument": instrument,
                     "direction": direction,
-                    "entry_price": round(float(entry), 2),
+                    "entry_price": round(float(csv_entry_price if import_mode == "Import from CSV" and csv_entry_price else entry), 2),
                     "stop_loss": round(float(stop), 2),
                     "take_profit": round(float(tp_value), 2) if tp_value is not None else None,
-                    "exit_price": round(float(exit_for_metrics), 2),
+                    "exit_price": round(float(csv_exit_price if import_mode == "Import from CSV" and csv_exit_price else exit_for_metrics), 2),
                     "contracts": int(contracts),
                     "session": session,
                     "emotion_score": int(emotion),
