@@ -47,8 +47,10 @@ header[data-testid="stHeader"] { display: none !important; }
 footer { visibility: hidden !important; }
 .stDeployButton { display: none !important; }
 
-/* Always show sidebar collapse/expand toggle */
-[data-testid="collapsedControl"] { display: flex !important; visibility: visible !important; }
+/* Sidebar always open — hide collapse button, force sidebar visible */
+[data-testid="collapsedControl"] { display: none !important; }
+section[data-testid="stSidebar"] { display: flex !important; visibility: visible !important; transform: none !important; width: 21rem !important; }
+section[data-testid="stSidebar"][aria-expanded="false"] { display: flex !important; margin-left: 0 !important; }
 
 /* Sidebar: thin purple top accent */
 section[data-testid="stSidebar"] > div:first-child {
