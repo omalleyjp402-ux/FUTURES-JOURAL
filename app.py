@@ -47,6 +47,16 @@ header[data-testid="stHeader"] { display: none !important; }
 footer { visibility: hidden !important; }
 .stDeployButton { display: none !important; }
 
+/* Sidebar collapse/expand button — always visible */
+[data-testid="collapsedControl"] {
+    display: flex !important;
+    background: #1a1a2e !important;
+    border-right: 1px solid #2d2d4e !important;
+}
+[data-testid="collapsedControl"] svg {
+    fill: #a78bfa !important;
+}
+
 /* Sidebar: thin purple top accent */
 section[data-testid="stSidebar"] > div:first-child {
     border-top: 3px solid #7c3aed;
