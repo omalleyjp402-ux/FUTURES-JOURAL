@@ -5270,29 +5270,87 @@ def render_prop_sim_page(user_id: str) -> None:
               "Met" if days_ok else f"{min_trading_days - trading_days} more needed")
     r4.progress(min(int(trading_days / max(min_trading_days, 1) * 100), 100))
 
+    # ── Build x-axis labels (real dates when available, else Day N) ──────────
+    _has_dates = "_date" in sim_df.columns
+    if _has_dates:
+        try:
+            _start_d = pd.to_datetime(sim_df["_date"].iloc[0]) - pd.Timedelta(days=1)
+            _x_labels = [str(_start_d.date())] + [str(d) for d in sim_df["_date"]]
+        except Exception:
+            _x_labels = ["Start"] + [str(d) for d in sim_df["_date"]]
+    else:
+        _x_labels = ["Start"] + [f"Day {i+1}" for i in range(len(cumulative))]
+
+    _y_balance  = [starting_balance] + [starting_balance + v for v in cumulative]
+    _min_bal    = starting_balance - max_total_dd_amt
+    _target_bal = starting_balance + profit_target_amt
+
     fig = go.Figure()
+
+    # ── Area fill (gradient: transparent at bottom → purple at line) ─────────
     fig.add_trace(go.Scatter(
-        x=list(range(len(cumulative))),
-        y=[starting_balance + v for v in cumulative],
+        x=_x_labels, y=_y_balance,
         mode="lines",
-        line=dict(color="#7c3aed", width=2.5, shape="spline", smoothing=0.7),
-        fill="tozeroy", fillcolor="rgba(124,58,237,0.12)",
+        line=dict(color="#7c3aed", width=2.5, shape="spline", smoothing=0.8),
+        fill="tozeroy",
+        fillgradient=dict(
+            colorscale=[[0.0, "rgba(124,58,237,0.0)"], [1.0, "rgba(124,58,237,0.35)"]],
+            type="vertical",
+        ),
         name="Balance",
+        hovertemplate="<b>%{x}</b><br>Balance: $%{y:,.2f}<extra></extra>",
     ))
-    fig.add_hline(y=starting_balance + profit_target_amt,
-                  line_dash="dash", line_color="#22c55e",
-                  annotation_text=f"Profit target ${starting_balance+profit_target_amt:,.0f}",
-                  annotation_font_color="#22c55e")
-    fig.add_hline(y=starting_balance - max_total_dd_amt,
-                  line_dash="dash", line_color="#ef4444",
-                  annotation_text=f"Max DD ${starting_balance-max_total_dd_amt:,.0f}",
-                  annotation_font_color="#ef4444")
+
+    # ── Minimum balance line (dashed red — shown in legend) ──────────────────
+    fig.add_trace(go.Scatter(
+        x=_x_labels, y=[_min_bal] * len(_x_labels),
+        mode="lines",
+        line=dict(color="rgba(239,68,68,0.75)", width=1.5, dash="dot"),
+        name="Minimum",
+        hovertemplate=f"Min Balance: ${_min_bal:,.2f}<extra></extra>",
+    ))
+
+    # ── Profit target line (dashed green — annotation only) ──────────────────
+    fig.add_hline(
+        y=_target_bal,
+        line_dash="dot", line_color="rgba(34,197,94,0.65)", line_width=1.5,
+        annotation_text=f"Profit target  ${_target_bal:,.0f}",
+        annotation_position="top right",
+        annotation_font_color="#22c55e",
+        annotation_font_size=11,
+    )
+
     fig.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font_color="#e2e8f0", height=320,
-        margin=dict(t=30, b=40, l=60, r=20),
-        yaxis_title="Account Balance ($)", xaxis_title="Trading Day",
-        showlegend=False,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#e2e8f0", family="Inter, sans-serif"),
+        height=340,
+        margin=dict(t=20, b=40, l=80, r=30),
+        xaxis=dict(
+            showgrid=False,
+            zeroline=False,
+            tickfont=dict(color="#94a3b8", size=11),
+            tickcolor="rgba(0,0,0,0)",
+            linecolor="rgba(0,0,0,0)",
+        ),
+        yaxis=dict(
+            showgrid=True,
+            gridcolor="rgba(255,255,255,0.05)",
+            zeroline=False,
+            tickfont=dict(color="#94a3b8", size=11),
+            tickcolor="rgba(0,0,0,0)",
+            linecolor="rgba(0,0,0,0)",
+            tickprefix="$",
+            tickformat=",.0f",
+        ),
+        legend=dict(
+            orientation="h",
+            yanchor="top", y=1.06,
+            xanchor="left", x=0,
+            bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#e2e8f0", size=12),
+        ),
+        hovermode="x unified",
     )
     st.plotly_chart(fig, use_container_width=True)
 
