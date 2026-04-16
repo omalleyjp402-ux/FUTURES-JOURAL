@@ -1292,14 +1292,14 @@ def render_demo_dashboard() -> None:
             alt.Chart(daily_equity)
             .mark_area(
                 interpolate="monotone",
-                line={"color": "#A78BFA", "width": 2.6},
+                line={"color": "#7c3aed", "width": 2.6},
                 color=alt.Gradient(
                     gradient="linear",
                     stops=[
-                        alt.GradientStop(color="rgba(124,58,237,0.45)", offset=0),
-                        alt.GradientStop(color="rgba(56,189,248,0.12)", offset=1),
+                        alt.GradientStop(color="rgba(124,58,237,0.35)", offset=0),
+                        alt.GradientStop(color="rgba(124,58,237,0.0)", offset=1),
                     ],
-                    x1=0, x2=1, y1=0, y2=0,
+                    x1=1, x2=1, y1=1, y2=0,
                 ),
             )
             .encode(
@@ -1415,8 +1415,19 @@ def render_tour_page() -> None:
         chart_df["equity"] = chart_df[pnl_col].cumsum()
         curve = (
             alt.Chart(chart_df)
-            .mark_area(line={"color": "#A78BFA", "width": 2}, color="rgba(124,58,237,0.25)")
-            .encode(x="date:T", y="equity:Q")
+            .mark_area(
+                interpolate="monotone",
+                line={"color": "#7c3aed", "width": 2},
+                color=alt.Gradient(
+                    gradient="linear",
+                    stops=[
+                        alt.GradientStop(color="rgba(124,58,237,0.35)", offset=0),
+                        alt.GradientStop(color="rgba(124,58,237,0.0)", offset=1),
+                    ],
+                    x1=1, x2=1, y1=1, y2=0,
+                ),
+            )
+            .encode(x=alt.X("date:T", title=None), y=alt.Y("equity:Q", title=None))
             .properties(height=220)
         )
         st.altair_chart(style_altair_chart(curve), use_container_width=True)
@@ -2206,16 +2217,16 @@ def render_all_accounts_dashboard(user_id: str) -> None:
         alt.Chart(daily_df)
         .mark_area(
             interpolate="monotone",
-            line={"color": "#A78BFA", "width": 2.6},
+            line={"color": "#7c3aed", "width": 2.6},
             color=alt.Gradient(
                 gradient="linear",
                 stops=[
-                    alt.GradientStop(color="rgba(124,58,237,0.45)", offset=0),
-                    alt.GradientStop(color="rgba(56,189,248,0.12)", offset=1),
+                    alt.GradientStop(color="rgba(124,58,237,0.35)", offset=0),
+                    alt.GradientStop(color="rgba(124,58,237,0.0)", offset=1),
                 ],
-                x1=0,
+                x1=1,
                 x2=1,
-                y1=0,
+                y1=1,
                 y2=0,
             ),
         )
@@ -6268,7 +6279,11 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         default_idx = trade_ids.index(last_saved) if last_saved in trade_ids else 0
         selected_id = st.selectbox("Select trade to print", trade_ids, index=default_idx,
                                     format_func=lambda x: label_map.get(x, x), key=f"{form_key}_a4_id")
-        selected_row = sheet_df[sheet_df["id"] == selected_id].iloc[0]
+        selected_row = sheet_df[sheet_df["id"] == selected_id].iloc[0].copy()
+        # Restore raw notes (prepare_df strips the lessons block — use df_raw to recover it)
+        _raw_match = df_raw[df_raw["id"] == selected_id]
+        if not _raw_match.empty:
+            selected_row["notes"] = _raw_match.iloc[0].get("notes", "")
         sheet_html = build_a4_trade_sheet_html(selected_row, account_type=account_type)
         st.download_button("Download trade sheet HTML (A4)", sheet_html.encode("utf-8"),
                             file_name="trade_sheet.html", mime="text/html", key=f"{form_key}_a4_dl")
@@ -6423,12 +6438,12 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         alt.Chart(daily_df)
         .mark_area(
             interpolate="monotone",
-            line={"color": "#7C3AED", "strokeWidth": 2},
+            line={"color": "#7c3aed", "strokeWidth": 2.5},
             color=alt.Gradient(
                 gradient="linear",
                 stops=[
-                    alt.GradientStop(color="rgba(124, 58, 237, 0.35)", offset=0),
-                    alt.GradientStop(color="rgba(59, 130, 246, 0.02)", offset=1),
+                    alt.GradientStop(color="rgba(124,58,237,0.35)", offset=0),
+                    alt.GradientStop(color="rgba(124,58,237,0.0)", offset=1),
                 ],
                 x1=1,
                 x2=1,
