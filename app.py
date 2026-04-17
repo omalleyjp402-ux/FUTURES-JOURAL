@@ -5816,7 +5816,7 @@ def _render_trades_table(df: pd.DataFrame, pnl_col: str) -> str:
 
 
 def _style_analytics_table(df: pd.DataFrame, pnl_col: str = "Total PnL") -> "pd.DataFrame.style":
-    """Apply colour styling to analytics summary tables."""
+    """Apply colour styling and number formatting to analytics summary tables."""
     def _colour_pnl(val):
         try:
             v = float(str(val).replace(",", "").replace("$", "").replace("None", "0").strip() or 0)
@@ -5827,7 +5827,19 @@ def _style_analytics_table(df: pd.DataFrame, pnl_col: str = "Total PnL") -> "pd.
         except Exception:
             pass
         return "color: #94a3b8"
-    styler = df.style
+
+    # Build a format dict: 2dp for float columns, leave int/str columns alone
+    fmt: dict = {}
+    for col in df.columns:
+        if pd.api.types.is_float_dtype(df[col]):
+            if col in ("Win rate %", "Win Rate %"):
+                fmt[col] = "{:.1f}"
+            else:
+                fmt[col] = "{:.2f}"
+        elif pd.api.types.is_integer_dtype(df[col]):
+            fmt[col] = "{:d}"
+
+    styler = df.style.format(fmt, na_rep="—")
     if pnl_col in df.columns:
         styler = styler.map(_colour_pnl, subset=[pnl_col])
     return styler
@@ -6725,7 +6737,11 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                 if col in recent.columns:
                     show_cols.append(col)
             if show_cols:
-                st.markdown(_render_trades_table(recent, pnl_col), unsafe_allow_html=True)
+                _tbl_html = _render_trades_table(recent, pnl_col)
+                try:
+                    st.html(_tbl_html)
+                except AttributeError:
+                    st.markdown(_tbl_html, unsafe_allow_html=True)
             else:
                 st.info("No trades yet.")
 
