@@ -4247,7 +4247,7 @@ def render_reports_page(df_view: pd.DataFrame, pnl_col: str, account_type: str) 
         render_period("Weekly Report", period_trades, subtitle=choice)
 
     with tab_month:
-        mo = daily.set_index("date")["pnl"].resample("M").sum().reset_index()
+        mo = daily.set_index("date")["pnl"].resample("ME").sum().reset_index()
         mo = mo.sort_values("date")
         mo["label"] = mo["date"].dt.strftime("%B %Y")
         labels = mo["label"].tolist()
@@ -4286,7 +4286,7 @@ def render_streaks_page(df_view: pd.DataFrame, pnl_col: str) -> None:
     st.markdown("---")
     st.subheader("Milestones")
     wk = daily.set_index("date")["pnl"].resample("W-SUN").sum().reset_index()
-    mo = daily.set_index("date")["pnl"].resample("M").sum().reset_index()
+    mo = daily.set_index("date")["pnl"].resample("ME").sum().reset_index()
 
     best_week = wk.sort_values("pnl", ascending=False).head(1)
     best_month = mo.sort_values("pnl", ascending=False).head(1)
