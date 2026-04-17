@@ -296,6 +296,43 @@ div[data-testid="stExpander"] > div {
 [data-testid="stFileUploaderDropzone"] {
     background: transparent !important;
 }
+/* ── Dataframe / table overhaul ── */
+[data-testid="stDataFrame"] > div {
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    border: 1px solid rgba(124,58,237,0.25) !important;
+}
+[data-testid="stDataFrame"] table {
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+    width: 100% !important;
+}
+[data-testid="stDataFrame"] thead tr th {
+    background: rgba(124,58,237,0.18) !important;
+    color: #a78bfa !important;
+    font-size: 0.7rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 1.2px !important;
+    text-transform: uppercase !important;
+    padding: 10px 14px !important;
+    border-bottom: 1px solid rgba(124,58,237,0.3) !important;
+}
+[data-testid="stDataFrame"] tbody tr {
+    border-bottom: 1px solid rgba(255,255,255,0.04) !important;
+    transition: background 0.15s ease !important;
+}
+[data-testid="stDataFrame"] tbody tr:hover {
+    background: rgba(124,58,237,0.08) !important;
+}
+[data-testid="stDataFrame"] tbody tr:nth-child(even) {
+    background: rgba(255,255,255,0.02) !important;
+}
+[data-testid="stDataFrame"] tbody td {
+    padding: 10px 14px !important;
+    font-size: 0.88rem !important;
+    color: #e2e8f0 !important;
+    border: none !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -2962,7 +2999,7 @@ def load_weekly_journal_entry(user_id: str, week_start: str) -> Optional[Dict[st
     - {} when no entry exists yet
     - None when table isn't set up / errors (caller should show 'run SQL' hint)
     """
-    try:
+    def _run() -> Dict[str, Any]:
         sb = authed_supabase()
         res = (
             sb.table("weekly_journal_entries")
@@ -2975,13 +3012,23 @@ def load_weekly_journal_entry(user_id: str, week_start: str) -> Optional[Dict[st
         if res.data:
             return res.data[0]
         return {}
+
+    try:
+        return _run()
     except Exception as e:
+        # Common transient: JWT expired. Try to refresh once, then retry.
+        if _is_jwt_expired_error(e) and _try_refresh_supabase_session():
+            try:
+                return _run()
+            except Exception as e2:
+                st.session_state["_weekly_journal_last_error"] = f"{type(e2).__name__}: {e2}"
+                return None
         st.session_state["_weekly_journal_last_error"] = f"{type(e).__name__}: {e}"
         return None
 
 
 def upsert_weekly_journal_entry(user_id: str, week_start: str, payload: Dict[str, Any]) -> bool:
-    try:
+    def _run() -> bool:
         sb = authed_supabase()
         row = {"user_id": user_id, "week_start": week_start}
         row.update(payload)
@@ -2998,7 +3045,17 @@ def upsert_weekly_journal_entry(user_id: str, week_start: str, payload: Dict[str
         else:
             sb.table("weekly_journal_entries").insert(row).execute()
         return True
+
+    try:
+        return _run()
     except Exception as e:
+        # Common transient: JWT expired. Try to refresh once, then retry.
+        if _is_jwt_expired_error(e) and _try_refresh_supabase_session():
+            try:
+                return _run()
+            except Exception as e2:
+                st.session_state["_weekly_journal_last_error"] = f"{type(e2).__name__}: {e2}"
+                return False
         st.session_state["_weekly_journal_last_error"] = f"{type(e).__name__}: {e}"
         return False
 
@@ -3246,7 +3303,11 @@ def render_journal_page(user_id: str) -> None:
                 if save_w:
                     st.success("Saved weekly journal.")
             else:
-                st.error("Could not save weekly journal yet (database table/policies may not be set up).")
+                details = safe_str(st.session_state.get("_weekly_journal_last_error"))
+                if "JWT expired" in details or "PGRST303" in details:
+                    st.warning("Your session expired. Please refresh the page or log in again, then try saving.")
+                else:
+                    st.error("Could not save weekly journal yet (database table/policies may not be set up).")
 
         st.markdown("---")
         st.subheader("Weekly journal sheet (printable)")
@@ -5684,6 +5745,95 @@ After uploading, you'll see a column mapping screen where you can match your CSV
             st.error("Import failed. Check your column mapping and try again.")
 
 
+# ── Trade table helpers ───────────────────────────────────────────────────────
+
+def _render_trades_table(df: pd.DataFrame, pnl_col: str) -> str:
+    """Render a colour-coded trade table as HTML."""
+    rows_html = ""
+    for _, row in df.iterrows():
+        pnl_val = float(row.get(pnl_col, 0) or 0)
+        pnl_colour = "#22c55e" if pnl_val > 0 else "#ef4444" if pnl_val < 0 else "#94a3b8"
+        pnl_str = f"${pnl_val:,.2f}" if pnl_val >= 0 else f"-${abs(pnl_val):,.2f}"
+
+        grade = str(row.get("trade_grade", "") or "").strip()
+        if not grade or grade.lower() == "none":
+            grade = "—"
+        grade_colour = {
+            "A++": "#22c55e", "A+": "#4ade80", "A": "#86efac",
+            "B+": "#a78bfa", "B": "#c4b5fd",
+            "C": "#fb923c", "D": "#ef4444",
+        }.get(grade, "#94a3b8")
+
+        date_str = str(row.get("date", ""))[:10]
+        instrument = str(row.get("instrument", "") or "")
+        direction = str(row.get("direction", "") or "")
+        dir_colour = "#22c55e" if direction == "Long" else "#ef4444"
+        session = str(row.get("session", "") or "")
+
+        rows_html += f"""
+        <tr>
+          <td style="color:#94a3b8;font-size:0.82rem;">{date_str}</td>
+          <td style="font-weight:600;">{instrument}</td>
+          <td style="color:{dir_colour};font-weight:600;">{direction}</td>
+          <td style="color:#94a3b8;">{session}</td>
+          <td style="color:{grade_colour};font-weight:700;
+              background:rgba(124,58,237,0.08);border-radius:4px;
+              padding:3px 8px;text-align:center;">{grade}</td>
+          <td style="color:{pnl_colour};font-weight:700;
+              font-size:0.95rem;">{pnl_str}</td>
+        </tr>"""
+
+    return f"""
+    <div style="border:1px solid rgba(124,58,237,0.25);border-radius:12px;
+    overflow:hidden;margin-top:8px;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="background:rgba(124,58,237,0.18);">
+            <th style="color:#a78bfa;font-size:0.7rem;font-weight:700;
+                letter-spacing:1px;text-transform:uppercase;padding:10px 14px;
+                text-align:left;border-bottom:1px solid rgba(124,58,237,0.3);">Date</th>
+            <th style="color:#a78bfa;font-size:0.7rem;font-weight:700;
+                letter-spacing:1px;text-transform:uppercase;padding:10px 14px;
+                text-align:left;border-bottom:1px solid rgba(124,58,237,0.3);">Instrument</th>
+            <th style="color:#a78bfa;font-size:0.7rem;font-weight:700;
+                letter-spacing:1px;text-transform:uppercase;padding:10px 14px;
+                text-align:left;border-bottom:1px solid rgba(124,58,237,0.3);">Dir</th>
+            <th style="color:#a78bfa;font-size:0.7rem;font-weight:700;
+                letter-spacing:1px;text-transform:uppercase;padding:10px 14px;
+                text-align:left;border-bottom:1px solid rgba(124,58,237,0.3);">Session</th>
+            <th style="color:#a78bfa;font-size:0.7rem;font-weight:700;
+                letter-spacing:1px;text-transform:uppercase;padding:10px 14px;
+                text-align:center;border-bottom:1px solid rgba(124,58,237,0.3);">Grade</th>
+            <th style="color:#a78bfa;font-size:0.7rem;font-weight:700;
+                letter-spacing:1px;text-transform:uppercase;padding:10px 14px;
+                text-align:left;border-bottom:1px solid rgba(124,58,237,0.3);">PnL</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows_html}
+        </tbody>
+      </table>
+    </div>"""
+
+
+def _style_analytics_table(df: pd.DataFrame, pnl_col: str = "Total PnL") -> "pd.DataFrame.style":
+    """Apply colour styling to analytics summary tables."""
+    def _colour_pnl(val):
+        try:
+            v = float(str(val).replace(",", "").replace("$", "").replace("None", "0").strip() or 0)
+            if v > 0:
+                return "color: #22c55e; font-weight: 700"
+            if v < 0:
+                return "color: #ef4444; font-weight: 700"
+        except Exception:
+            pass
+        return "color: #94a3b8"
+    styler = df.style
+    if pnl_col in df.columns:
+        styler = styler.map(_colour_pnl, subset=[pnl_col])
+    return styler
+
+
 # ── Main section renderer ─────────────────────────────────────────────────────
 
 def render_section(user_id: str, account_type: str, section: str) -> None:
@@ -6576,11 +6726,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                 if col in recent.columns:
                     show_cols.append(col)
             if show_cols:
-                st.dataframe(
-                    recent[show_cols].rename(columns={"instrument": "Instrument", "direction": "Dir", "session": "Session", "trade_grade": "Grade"}),
-                    use_container_width=True,
-                    hide_index=True,
-                )
+                st.markdown(_render_trades_table(recent, pnl_col), unsafe_allow_html=True)
             else:
                 st.info("No trades yet.")
 
