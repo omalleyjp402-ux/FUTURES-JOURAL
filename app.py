@@ -2422,11 +2422,8 @@ def render_all_accounts_dashboard(user_id: str) -> None:
     show["PF"] = show["profit_factor"].apply(lambda v: f"{float(v):.2f}" if pd.notna(v) else "n/a")
     show["Avg R"] = show["avg_r"].apply(lambda v: f"{float(v):.2f}" if pd.notna(v) else "n/a")
     show["Avg Emotion"] = show["avg_emotion"].apply(lambda v: f"{float(v):.1f}" if pd.notna(v) else "n/a")
-    st.dataframe(
-        show[["account", "trades", "PnL", "Win %", "PF", "Avg R", "Avg Emotion"]].rename(columns={"account": "Account", "trades": "Trades"}),
-        use_container_width=True,
-        hide_index=True,
-    )
+    _all_acct_show = show[["account", "trades", "PnL", "Win %", "PF", "Avg R", "Avg Emotion"]].rename(columns={"account": "Account", "trades": "Trades"})
+    st.dataframe(_style_analytics_table(_all_acct_show, "PnL"), use_container_width=True, hide_index=True)
 
 
 def render_next_week_focus_panel(user_id: str) -> None:
@@ -3779,10 +3776,12 @@ def render_metric_cards(cards: list) -> None:
         sub_block = f"<div class='metric-sub'>{sub_html}</div>" if sub_html else ""
         if value_color:
             value_node = f"<div class='metric-value' style='color:{value_color};'>{value_html}</div>"
+            border_style = f"border-left-color:{value_color} !important;"
         else:
             value_node = f"<div class='metric-value'>{value_html}</div>"
+            border_style = ""
         blocks.append(
-            "<div class='metric-card'>"
+            f"<div class='metric-card' style='{border_style}'>"
             f"<div class='metric-label'>{label_html}</div>"
             f"{value_node}"
             f"{sub_block}"
@@ -6988,10 +6987,10 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
             c_day, c_hour = st.columns(2)
             with c_day:
                 st.markdown("**Day of week breakdown**")
-                st.dataframe(day_display, use_container_width=True, hide_index=True)
+                st.dataframe(_style_analytics_table(day_display, "Total PnL"), use_container_width=True, hide_index=True)
             with c_hour:
                 st.markdown("**Hour breakdown**")
-                st.dataframe(hour_display, use_container_width=True, hide_index=True)
+                st.dataframe(_style_analytics_table(hour_display, "Total PnL"), use_container_width=True, hide_index=True)
 
         with a_conf:
             conf_df = explode_tags(chart_df, "confluences")
