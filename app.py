@@ -333,6 +333,86 @@ div[data-testid="stExpander"] > div {
     color: #e2e8f0 !important;
     border: none !important;
 }
+
+/* ── Tradylo Design System ── */
+.tdy-metric-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;font-family:'Inter',system-ui,sans-serif}
+.tdy-metric{position:relative;background:linear-gradient(180deg,#1c1b35 0%,#16152a 100%);border:1px solid #2d2d4e;border-left:3px solid #7c3aed;border-radius:10px;padding:18px 20px;transition:box-shadow .2s,border-color .2s}
+.tdy-metric::before{content:"";position:absolute;inset:0;border-radius:10px;box-shadow:inset 0 0 0 1px rgba(124,58,237,0);transition:box-shadow .25s;pointer-events:none}
+.tdy-metric:hover::before{box-shadow:inset 0 0 20px rgba(124,58,237,.18)}
+.tdy-metric .label{font-size:10.5px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#a78bfa;margin:0 0 10px}
+.tdy-metric .value{font-size:26px;font-weight:700;line-height:1.1;color:#ffffff;letter-spacing:-.02em}
+.tdy-metric .sub{font-size:12px;color:#94a3b8;margin-top:6px;font-weight:500}
+.tdy-metric.pnl-pos{border-left-color:#22c55e}
+.tdy-metric.pnl-pos .value{color:#22c55e}
+.tdy-metric.pnl-neg{border-left-color:#ef4444}
+.tdy-metric.pnl-neg .value{color:#ef4444}
+@media(max-width:900px){.tdy-metric-grid{grid-template-columns:repeat(2,1fr)}}
+.tdy-table-wrap{border:1px solid #2d2d4e;border-left:3px solid #7c3aed;border-radius:12px;overflow:hidden;background:#16152a;font-family:'Inter',system-ui,sans-serif}
+.tdy-table{width:100%;border-collapse:collapse;font-size:13.5px}
+.tdy-table thead th{background:linear-gradient(180deg,rgba(124,58,237,.14),rgba(124,58,237,.06));color:#a78bfa;font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;font-weight:600;padding:14px 18px;text-align:left;border-bottom:1px solid #2d2d4e}
+.tdy-table thead th.num{text-align:right}
+.tdy-table tbody td{padding:13px 18px;border-bottom:1px solid rgba(45,45,78,.5);color:#e2e8f0;vertical-align:middle}
+.tdy-table tbody tr:nth-child(even) td{background:#1a1a2e}
+.tdy-table tbody tr:nth-child(odd) td{background:#16152a}
+.tdy-table tbody tr{transition:background .15s,box-shadow .15s}
+.tdy-table tbody tr:hover td{background:rgba(124,58,237,.08)}
+.tdy-table tbody tr:last-child td{border-bottom:none}
+.tdy-date{color:#94a3b8;font-family:'JetBrains Mono',monospace;font-size:12.5px}
+.tdy-inst{font-weight:600;color:#e2e8f0;font-family:'JetBrains Mono',monospace}
+.tdy-dir{font-weight:700;font-size:12.5px;letter-spacing:.04em}
+.tdy-dir.long{color:#22c55e}
+.tdy-dir.short{color:#ef4444}
+.tdy-session{color:#94a3b8;font-size:12.5px;font-weight:500}
+.tdy-pnl{text-align:right;font-weight:700;font-family:'JetBrains Mono',monospace;font-size:13.5px}
+.tdy-pnl.pos{color:#22c55e}
+.tdy-pnl.neg{color:#ef4444}
+.tdy-grade{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.04em;color:#fff;min-width:34px;text-align:center}
+.tdy-grade.g-app{background:#15803d;box-shadow:0 0 0 1px rgba(34,197,94,.4) inset}
+.tdy-grade.g-ap{background:#16a34a;box-shadow:0 0 0 1px rgba(34,197,94,.3) inset}
+.tdy-grade.g-a{background:#22c55e;color:#14532d}
+.tdy-grade.g-bp{background:#7c3aed}
+.tdy-grade.g-b{background:#6d28d9}
+.tdy-grade.g-c{background:#f59e0b;color:#451a03}
+.tdy-grade.g-d{background:#ef4444}
+.tdy-grade.g-none{background:#1e293b;color:#64748b;border:1px solid #334155}
+.tdy-focus{background:linear-gradient(180deg,#1c1b35 0%,#16152a 100%);border:1px solid #2d2d4e;border-left:4px solid #7c3aed;border-radius:12px;padding:22px 24px;font-family:'Inter',system-ui,sans-serif;color:#e2e8f0}
+.tdy-focus .hdr{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px}
+.tdy-focus .ttl{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:#a78bfa;font-weight:700;margin:0}
+.tdy-focus .wk{font-size:12px;color:#94a3b8;font-family:'JetBrains Mono',monospace}
+.tdy-focus ul{list-style:none;margin:0;padding:0}
+.tdy-focus li{position:relative;padding:8px 0 8px 22px;font-size:14px;line-height:1.5;color:#e2e8f0;border-bottom:1px solid rgba(45,45,78,.4)}
+.tdy-focus li:last-child{border-bottom:none}
+.tdy-focus li::before{content:"";position:absolute;left:4px;top:15px;width:7px;height:7px;border-radius:50%;background:#7c3aed;box-shadow:0 0 8px rgba(124,58,237,.6)}
+.tdy-focus .tgt{margin-top:18px;padding-top:16px;border-top:1px solid #2d2d4e}
+.tdy-focus .tgt-row{display:flex;justify-content:space-between;margin-bottom:8px;font-size:12px}
+.tdy-focus .tgt-lbl{color:#a78bfa;letter-spacing:.14em;text-transform:uppercase;font-weight:600;font-size:10.5px}
+.tdy-focus .tgt-pct{color:#fff;font-family:'JetBrains Mono',monospace;font-weight:700}
+.tdy-focus .bar{height:6px;background:#0e1117;border:1px solid #2d2d4e;border-radius:999px;overflow:hidden}
+.tdy-focus .bar>i{display:block;height:100%;background:linear-gradient(90deg,#7c3aed,#a78bfa);box-shadow:0 0 10px rgba(124,58,237,.5);border-radius:999px;transition:width .6s ease}
+.tdy-coach{background:linear-gradient(135deg,#1e1b4b 0%,#1a1a2e 100%);border:1px solid #2d2d4e;border-left:4px solid #7c3aed;border-radius:12px;padding:22px 24px;box-shadow:0 0 20px rgba(124,58,237,.15);font-family:'Inter',system-ui,sans-serif;color:#e2e8f0}
+.tdy-coach .hdr{display:flex;align-items:center;gap:8px;margin-bottom:16px}
+.tdy-coach .ttl{font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#a78bfa;font-weight:700;margin:0}
+.tdy-coach .list{display:flex;flex-direction:column;gap:12px}
+.tdy-coach .row{display:flex;align-items:flex-start;gap:12px;font-size:14px;line-height:1.6;color:#e2e8f0}
+.tdy-coach .dot{flex:0 0 auto;width:9px;height:9px;border-radius:50%;margin-top:7px}
+.tdy-coach .dot.good{background:#22c55e;box-shadow:0 0 8px rgba(34,197,94,.55)}
+.tdy-coach .dot.warn{background:#f59e0b;box-shadow:0 0 8px rgba(245,158,11,.55)}
+.tdy-coach .dot.bad{background:#ef4444;box-shadow:0 0 8px rgba(239,68,68,.55)}
+.tdy-coach .row b{color:#fff;font-weight:700}
+.tdy-cal-wrap{font-family:'Inter',system-ui,sans-serif}
+.tdy-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;max-width:100%}
+.tdy-cal .hd{font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;color:#a78bfa;font-weight:600;text-align:center;padding:6px 0;margin-bottom:4px}
+.tdy-cal .cell{position:relative;border-radius:9px;padding:8px 10px;min-height:72px;display:flex;flex-direction:column;justify-content:space-between;border:1px solid #2d2d4e;background:#16152a;overflow:hidden}
+.tdy-cal .cell .dn{font-size:11px;color:#94a3b8;font-family:'JetBrains Mono',monospace;font-weight:600}
+.tdy-cal .cell .pnl{text-align:center;font-size:13px;font-weight:800;letter-spacing:-.01em;font-family:'JetBrains Mono',monospace}
+.tdy-cal .cell .tc{font-size:10px;color:#94a3b8;text-align:center;letter-spacing:.08em;text-transform:uppercase}
+.tdy-cal .cell.win{background:rgba(34,197,94,.10);border-top:2px solid #22c55e}
+.tdy-cal .cell.win .pnl{color:#22c55e}
+.tdy-cal .cell.loss{background:rgba(239,68,68,.08);border-top:2px solid #ef4444}
+.tdy-cal .cell.loss .pnl{color:#ef4444}
+.tdy-cal .cell.flat{background:rgba(148,163,184,.04)}
+.tdy-cal .cell.flat .pnl{color:#475569}
+.tdy-cal .cell.out{opacity:.3;background:#0e1117}
 </style>
 """, unsafe_allow_html=True)
 
@@ -2444,15 +2524,36 @@ def render_next_week_focus_panel(user_id: str) -> None:
         subtitle = datetime.strptime(week_start, "%Y-%m-%d").strftime("Week of %B %d") if week_start else "Latest"
     except Exception:
         subtitle = week_start or "Latest"
-    st.markdown("**Next week focus**")
-    st.caption(subtitle)
-    if imp is not None and safe_str(imp).strip() != "":
-        try:
-            st.caption(f"Weekly improvement: **{float(imp):.1f}%**")
-        except Exception:
-            pass
-    for it in items[:3]:
-        st.markdown(f"- {it}")
+    items_html = "".join(f"<li>{html_lib.escape(it)}</li>" for it in items[:5])
+    imp_raw = latest.get("improvement_percent")
+    try:
+        imp_pct = float(imp_raw) if imp_raw is not None and safe_str(imp_raw).strip() != "" else None
+    except Exception:
+        imp_pct = None
+    target_block = ""
+    if imp_pct is not None:
+        pct_clamped = max(0, min(100, imp_pct))
+        target_block = (
+            f'<div class="tgt">'
+            f'<div class="tgt-row"><span class="tgt-lbl">Weekly Improvement</span>'
+            f'<span class="tgt-pct">{pct_clamped:.1f}%</span></div>'
+            f'<div class="bar"><i style="width:{pct_clamped:.1f}%"></i></div>'
+            f'</div>'
+        )
+    html = (
+        f'<div class="tdy-focus">'
+        f'<div class="hdr">'
+        f'<h3 class="ttl">Next Week Focus</h3>'
+        f'<span class="wk">{html_lib.escape(subtitle)}</span>'
+        f'</div>'
+        f'<ul>{items_html}</ul>'
+        f'{target_block}'
+        f'</div>'
+    )
+    try:
+        st.html(html)
+    except AttributeError:
+        st.markdown(html, unsafe_allow_html=True)
 
 
 def render_all_accounts_section(user_id: str, section: str) -> None:
@@ -3775,24 +3876,34 @@ def render_metric_cards(cards: list) -> None:
     for item in cards:
         label, value, sub = item[0], item[1], item[2]
         value_color = item[3] if len(item) > 3 else None
-        label_html = html_lib.escape(str(label))
-        value_html = html_lib.escape(str(value))
-        sub_html = html_lib.escape(str(sub)) if sub else ""
-        sub_block = f"<div class='metric-sub'>{sub_html}</div>" if sub_html else ""
-        if value_color:
-            value_node = f"<div class='metric-value' style='color:{value_color};'>{value_html}</div>"
-            border_style = f"border-left-color:{value_color} !important;"
+        label_h = html_lib.escape(str(label))
+        value_h = html_lib.escape(str(value))
+        sub_h   = html_lib.escape(str(sub)) if sub else ""
+        # Determine card modifier class from value_color
+        if value_color == "#22c55e":
+            mod = " pnl-pos"
+        elif value_color == "#ef4444":
+            mod = " pnl-neg"
         else:
-            value_node = f"<div class='metric-value'>{value_html}</div>"
-            border_style = ""
+            mod = ""
+        sub_block = f'<div class="sub">{sub_h}</div>' if sub_h else ""
+        if value_color and mod == "":
+            # Custom colour not matching pos/neg (e.g. neutral override) — inline style
+            value_node = f'<div class="value" style="color:{value_color};">{value_h}</div>'
+        else:
+            value_node = f'<div class="value">{value_h}</div>'
         blocks.append(
-            f"<div class='metric-card' style='{border_style}'>"
-            f"<div class='metric-label'>{label_html}</div>"
-            f"{value_node}"
-            f"{sub_block}"
-            "</div>"
+            f'<div class="tdy-metric{mod}">'
+            f'<div class="label">{label_h}</div>'
+            f'{value_node}'
+            f'{sub_block}'
+            f'</div>'
         )
-    st.markdown(f"<div class='metric-grid'>{''.join(blocks)}</div>", unsafe_allow_html=True)
+    html = f'<div class="tdy-metric-grid">{"".join(blocks)}</div>'
+    try:
+        st.html(html)
+    except AttributeError:
+        st.markdown(html, unsafe_allow_html=True)
 
 
 def style_altair_chart(chart):
@@ -4422,40 +4533,34 @@ def _show_week_dialog(week_label: str, week_trades: pd.DataFrame, pnl_col: str) 
     pf_str = f"{pf:.2f}" if pf is not None else "n/a"
     rr_str = f"{avg_rr_val:.2f}" if avg_rr_val is not None and pd.notna(avg_rr_val) else "n/a"
 
-    st.markdown(
-        f"""
-        <div style="background:linear-gradient(135deg,rgba(124,58,237,0.22) 0%,rgba(56,189,248,0.12) 100%);
-                    border:1px solid rgba(124,58,237,0.40);border-radius:14px;
-                    padding:18px 22px;margin-bottom:18px;">
-          <div style="font-size:12px;color:rgba(148,163,184,0.85);letter-spacing:.07em;
-                      text-transform:uppercase;margin-bottom:6px;">Weekly Summary</div>
-          <div style="font-size:32px;font-weight:800;color:{pnl_color};line-height:1.1;">
-            {format_money(total_pnl)}</div>
-          <div style="font-size:13px;color:rgba(148,163,184,0.75);margin-top:4px;">{html_lib.escape(week_label)}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    pnl_mod = "pnl-pos" if total_pnl >= 0 else "pnl-neg"
+    _summary_html = (
+        f'<div class="tdy-metric{" " + pnl_mod}" style="margin-bottom:18px;">'
+        f'<div class="label">Weekly Summary &mdash; {html_lib.escape(week_label)}</div>'
+        f'<div class="value">{html_lib.escape(format_money(total_pnl))}</div>'
+        f'</div>'
     )
-
-    cards_row1 = "".join([
-        _rc_metric_card("Trades", str(total)),
-        _rc_metric_card("Win Rate", f"{win_rate:.1f}%"),
-        _rc_metric_card("Profit Factor", pf_str),
-        _rc_metric_card("Avg R/R", rr_str),
+    _row1_cards = "".join([
+        f'<div class="tdy-metric"><div class="label">Trades</div><div class="value">{total}</div></div>',
+        f'<div class="tdy-metric"><div class="label">Win Rate</div><div class="value">{win_rate:.1f}%</div></div>',
+        f'<div class="tdy-metric"><div class="label">Profit Factor</div><div class="value">{html_lib.escape(pf_str)}</div></div>',
+        f'<div class="tdy-metric"><div class="label">Avg R/R</div><div class="value">{html_lib.escape(rr_str)}</div></div>',
     ])
-    cards_row2 = "".join([
-        _rc_metric_card("Wins", str(wins), "#22c55e"),
-        _rc_metric_card("Losses", str(losses), "#ef4444"),
-        _rc_metric_card("Best Trade", format_money(best_trade), "#22c55e"),
-        _rc_metric_card("Worst Trade", format_money(worst_trade), "#ef4444"),
+    _row2_cards = "".join([
+        f'<div class="tdy-metric pnl-pos"><div class="label">Wins</div><div class="value">{wins}</div></div>',
+        f'<div class="tdy-metric pnl-neg"><div class="label">Losses</div><div class="value">{losses}</div></div>',
+        f'<div class="tdy-metric pnl-pos"><div class="label">Best Trade</div><div class="value">{html_lib.escape(format_money(best_trade))}</div></div>',
+        f'<div class="tdy-metric pnl-neg"><div class="label">Worst Trade</div><div class="value">{html_lib.escape(format_money(worst_trade))}</div></div>',
     ])
-    st.markdown(
-        f'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px;">'
-        f'{cards_row1}</div>'
-        f'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;">'
-        f'{cards_row2}</div>',
-        unsafe_allow_html=True,
+    _dialog_html = (
+        _summary_html
+        + f'<div class="tdy-metric-grid" style="margin-bottom:10px;">{_row1_cards}</div>'
+        + f'<div class="tdy-metric-grid" style="margin-bottom:18px;">{_row2_cards}</div>'
     )
+    try:
+        st.html(_dialog_html)
+    except AttributeError:
+        st.markdown(_dialog_html, unsafe_allow_html=True)
 
     st.markdown("**Trades this week**")
     show = week_trades.copy()
@@ -4527,7 +4632,7 @@ def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
     cal = calendar.Calendar(firstweekday=6)
     weeks = cal.monthdatescalendar(year, month)
     day_names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-    header_html = "".join([f"<div class='cal-head'>{d}</div>" for d in day_names])
+    header_html = "".join([f"<div class='hd'>{d}</div>" for d in day_names])
     cell_html = []
     week_html = []
     week_date_map = {}
@@ -4543,26 +4648,28 @@ def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
                 week_total += value
                 week_trades += trades
                 week_dates.append(day)
-            bg = pnl_color(value) if in_month else "rgba(148, 163, 184, 0.04)"
-            pnl_text = format_money(value) if in_month and value != 0 else ""
-            trades_text = f"{trades} trades" if in_month and trades else ""
-            day_class = "cal-cell" + ("" if in_month else " cal-off")
-            link_date = day.strftime("%Y-%m-%d")
-            # NOTE: We intentionally avoid clickable <a href> links here.
-            # Streamlit treats this as a full navigation and can create a new session,
-            # which would log users out (because auth is stored in session_state).
+            if not in_month:
+                cell_cls = "cell out"
+                pnl_text = ""
+                trades_text = ""
+            elif value > 0:
+                cell_cls = "cell win"
+                pnl_text = format_money(value)
+                trades_text = f"{trades} trades"
+            elif value < 0:
+                cell_cls = "cell loss"
+                pnl_text = format_money(value)
+                trades_text = f"{trades} trades"
+            else:
+                cell_cls = "cell flat"
+                pnl_text = ""
+                trades_text = ""
             cell_html.append(
-                "<div class='{cls}' style='background:{bg};'>"
-                "<div class='cal-day'>{day}</div>"
-                "<div class='cal-pnl'>{pnl}</div>"
-                "<div class='cal-trades'>{trades}</div>"
-                "</div>".format(
-                    cls=day_class,
-                    bg=bg,
-                    day=day.day,
-                    pnl=pnl_text,
-                    trades=trades_text,
-                )
+                f"<div class='{cell_cls}'>"
+                f"<div class='dn'>{day.day if in_month else ''}</div>"
+                f"<div class='pnl'>{pnl_text}</div>"
+                f"<div class='tc'>{trades_text}</div>"
+                f"</div>"
             )
         week_label = f"Week {week_idx}"
         week_total_text = format_money(week_total) if week_total != 0 else "$0"
@@ -4576,19 +4683,17 @@ def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
         )
         week_idx += 1
 
-    st.markdown(
-        "<div class='calendar-card'>"
-        "<div class='calendar-wrap'>"
-        "<div class='calendar-grid'>{header}{cells}</div>"
-        "<div class='calendar-weeks'>{weeks}</div>"
+    cal_html = (
+        "<div class='tdy-cal-wrap'>"
+        "<div class='tdy-cal'>"
+        f"{header_html}{''.join(cell_html)}"
         "</div>"
-        "</div>".format(
-            header=header_html,
-            cells="".join(cell_html),
-            weeks="".join(week_html),
-        ),
-        unsafe_allow_html=True,
+        "</div>"
     )
+    try:
+        st.html(cal_html)
+    except AttributeError:
+        st.markdown(cal_html, unsafe_allow_html=True)
     st.session_state["calendar_week_date_map"] = week_date_map
 
 
@@ -5994,7 +6099,12 @@ After uploading, you'll see a column mapping screen where you can match your CSV
 # ── Trade table helpers ───────────────────────────────────────────────────────
 
 def _render_trades_table(df: pd.DataFrame, pnl_col: str) -> str:
-    """Render a colour-coded trade table as HTML."""
+    """Render a colour-coded trade table as HTML using the tdy-table design."""
+    GRADE_CLASS = {
+        "A++": "g-app", "A+": "g-ap", "A": "g-a",
+        "B+": "g-bp",   "B": "g-b",
+        "C": "g-c",      "D": "g-d",
+    }
     rows_html = ""
     for _, row in df.iterrows():
         try:
@@ -6002,74 +6112,48 @@ def _render_trades_table(df: pd.DataFrame, pnl_col: str) -> str:
                 pnl_val = float(row.get(pnl_col) or 0)
             except (TypeError, ValueError):
                 pnl_val = 0.0
-            pnl_colour = "#22c55e" if pnl_val > 0 else "#ef4444" if pnl_val < 0 else "#94a3b8"
-            pnl_str = f"${pnl_val:,.2f}" if pnl_val >= 0 else f"-${abs(pnl_val):,.2f}"
+            pnl_cls = "pos" if pnl_val > 0 else ("neg" if pnl_val < 0 else "")
+            pnl_str = f"+${pnl_val:,.2f}" if pnl_val > 0 else (f"-${abs(pnl_val):,.2f}" if pnl_val < 0 else "$0.00")
 
             grade = str(row.get("trade_grade") or "").strip()
             if not grade or grade.lower() in ("none", "nan", ""):
-                grade = "—"
-            grade_colour = {
-                "A++": "#22c55e", "A+": "#4ade80", "A": "#86efac",
-                "B+": "#a78bfa", "B": "#c4b5fd",
-                "C": "#fb923c", "D": "#ef4444",
-            }.get(grade, "#94a3b8")
+                grade_label, grade_cls = "—", "g-none"
+            else:
+                grade_label = grade
+                grade_cls = GRADE_CLASS.get(grade, "g-none")
 
             try:
                 date_str = str(row.get("date", "") or "")[:10]
             except Exception:
                 date_str = ""
-            instrument = str(row.get("instrument") or "")
-            direction  = str(row.get("direction")  or "")
-            dir_colour = "#22c55e" if direction == "Long" else "#ef4444"
-            session    = str(row.get("session")    or "")
+            instrument = html_lib.escape(str(row.get("instrument") or ""))
+            direction  = str(row.get("direction") or "")
+            dir_cls    = "long" if direction == "Long" else "short"
+            session    = html_lib.escape(str(row.get("session") or ""))
 
-            rows_html += f"""
-        <tr>
-          <td style="color:#94a3b8;font-size:0.82rem;">{date_str}</td>
-          <td style="font-weight:600;">{instrument}</td>
-          <td style="color:{dir_colour};font-weight:600;">{direction}</td>
-          <td style="color:#94a3b8;">{session}</td>
-          <td style="color:{grade_colour};font-weight:700;
-              background:rgba(124,58,237,0.08);border-radius:4px;
-              padding:3px 8px;text-align:center;">{grade}</td>
-          <td style="color:{pnl_colour};font-weight:700;
-              font-size:0.95rem;">{pnl_str}</td>
-        </tr>"""
+            rows_html += (
+                f'<tr>'
+                f'<td class="tdy-date">{date_str}</td>'
+                f'<td class="tdy-inst">{instrument}</td>'
+                f'<td><span class="tdy-dir {dir_cls}">{html_lib.escape(direction)}</span></td>'
+                f'<td class="tdy-session">{session}</td>'
+                f'<td><span class="tdy-grade {grade_cls}">{html_lib.escape(grade_label)}</span></td>'
+                f'<td class="tdy-pnl {pnl_cls}">{pnl_str}</td>'
+                f'</tr>'
+            )
         except Exception:
-            # Skip any row that causes an unexpected error
             continue
 
-    return f"""
-    <div style="border:1px solid rgba(124,58,237,0.25);border-radius:12px;
-    overflow:hidden;margin-top:8px;">
-      <table style="width:100%;border-collapse:collapse;">
-        <thead>
-          <tr style="background:rgba(124,58,237,0.18);">
-            <th style="color:#a78bfa;font-size:0.7rem;font-weight:700;
-                letter-spacing:1px;text-transform:uppercase;padding:10px 14px;
-                text-align:left;border-bottom:1px solid rgba(124,58,237,0.3);">Date</th>
-            <th style="color:#a78bfa;font-size:0.7rem;font-weight:700;
-                letter-spacing:1px;text-transform:uppercase;padding:10px 14px;
-                text-align:left;border-bottom:1px solid rgba(124,58,237,0.3);">Instrument</th>
-            <th style="color:#a78bfa;font-size:0.7rem;font-weight:700;
-                letter-spacing:1px;text-transform:uppercase;padding:10px 14px;
-                text-align:left;border-bottom:1px solid rgba(124,58,237,0.3);">Dir</th>
-            <th style="color:#a78bfa;font-size:0.7rem;font-weight:700;
-                letter-spacing:1px;text-transform:uppercase;padding:10px 14px;
-                text-align:left;border-bottom:1px solid rgba(124,58,237,0.3);">Session</th>
-            <th style="color:#a78bfa;font-size:0.7rem;font-weight:700;
-                letter-spacing:1px;text-transform:uppercase;padding:10px 14px;
-                text-align:center;border-bottom:1px solid rgba(124,58,237,0.3);">Grade</th>
-            <th style="color:#a78bfa;font-size:0.7rem;font-weight:700;
-                letter-spacing:1px;text-transform:uppercase;padding:10px 14px;
-                text-align:left;border-bottom:1px solid rgba(124,58,237,0.3);">PnL</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows_html}
-        </tbody>
-      </table>
-    </div>"""
+    return (
+        '<div class="tdy-table-wrap">'
+        '<table class="tdy-table">'
+        '<thead><tr>'
+        '<th>Date</th><th>Instrument</th><th>Dir</th>'
+        '<th>Session</th><th>Grade</th><th class="num">PnL</th>'
+        '</tr></thead>'
+        f'<tbody>{rows_html}</tbody>'
+        '</table></div>'
+    )
 
 
 def _style_analytics_table(df: pd.DataFrame, pnl_col: str = "Total PnL") -> "pd.DataFrame.style":
@@ -7160,15 +7244,23 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
             st.markdown("<h1 style='font-size:1.8rem;font-weight:700;margin:4px 0 0 0;'>Analytics</h1>", unsafe_allow_html=True)
         insights = build_problem_insights(df_view, pnl_col)
         if insights:
-            st.markdown("**Your biggest problems (auto)**")
-            st.markdown(
-                "<div class='metric-card' style='padding:14px 14px;'>"
-                "<div class='metric-label'>Coach</div>"
-                "<div class='metric-sub' style='font-size:13px;margin-top:8px;line-height:1.55;'>"
-                + "<br/>".join([f"• {html_lib.escape(i)}" for i in insights])
-                + "</div></div>",
-                unsafe_allow_html=True,
+            _coach_rows = "".join(
+                f'<div class="row"><span class="dot warn"></span><div>{html_lib.escape(i)}</div></div>'
+                for i in insights
             )
+            _coach_html = (
+                '<div class="tdy-coach">'
+                '<div class="hdr">'
+                '<svg width="14" height="14" viewBox="0 0 24 24" fill="#a78bfa"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>'
+                '<h3 class="ttl">Coach Insights</h3>'
+                '</div>'
+                f'<div class="list">{_coach_rows}</div>'
+                '</div>'
+            )
+            try:
+                st.html(_coach_html)
+            except AttributeError:
+                st.markdown(_coach_html, unsafe_allow_html=True)
 
         # ── Psychological Patterns ────────────────────────────────────────────
         _psych_lines = []
@@ -7210,14 +7302,23 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     f"Avg P&L on revenge trades: <span style='color:{_col};font-weight:700;'>${_avg_rev:+.2f}</span>."
                 )
         if _psych_lines:
-            st.markdown(
-                "<div class='metric-card' style='padding:14px 14px;'>"
-                "<div class='metric-label'>Psychological Patterns</div>"
-                "<div class='metric-sub' style='font-size:13px;margin-top:8px;line-height:1.65;'>"
-                + "<br/>".join([f"• {line}" for line in _psych_lines])
-                + "</div></div>",
-                unsafe_allow_html=True,
+            _psych_rows = "".join(
+                f'<div class="row"><span class="dot warn"></span><div>{line}</div></div>'
+                for line in _psych_lines
             )
+            _psych_html = (
+                '<div class="tdy-coach">'
+                '<div class="hdr">'
+                '<svg width="14" height="14" viewBox="0 0 24 24" fill="#a78bfa"><path d="M12 2a5 5 0 1 0 0 10A5 5 0 0 0 12 2zm0 12c-5.33 0-8 2.67-8 4v2h16v-2c0-1.33-2.67-4-8-4z"/></svg>'
+                '<h3 class="ttl">Psychological Patterns</h3>'
+                '</div>'
+                f'<div class="list">{_psych_rows}</div>'
+                '</div>'
+            )
+            try:
+                st.html(_psych_html)
+            except AttributeError:
+                st.markdown(_psych_html, unsafe_allow_html=True)
 
         a_day, a_conf, a_overall = st.tabs(
             ["Day & Time Analysis", "Confluence Analytics", "Overall Performance"]
