@@ -5750,26 +5750,33 @@ def _render_trades_table(df: pd.DataFrame, pnl_col: str) -> str:
     """Render a colour-coded trade table as HTML."""
     rows_html = ""
     for _, row in df.iterrows():
-        pnl_val = float(row.get(pnl_col, 0) or 0)
-        pnl_colour = "#22c55e" if pnl_val > 0 else "#ef4444" if pnl_val < 0 else "#94a3b8"
-        pnl_str = f"${pnl_val:,.2f}" if pnl_val >= 0 else f"-${abs(pnl_val):,.2f}"
+        try:
+            try:
+                pnl_val = float(row.get(pnl_col) or 0)
+            except (TypeError, ValueError):
+                pnl_val = 0.0
+            pnl_colour = "#22c55e" if pnl_val > 0 else "#ef4444" if pnl_val < 0 else "#94a3b8"
+            pnl_str = f"${pnl_val:,.2f}" if pnl_val >= 0 else f"-${abs(pnl_val):,.2f}"
 
-        grade = str(row.get("trade_grade", "") or "").strip()
-        if not grade or grade.lower() == "none":
-            grade = "—"
-        grade_colour = {
-            "A++": "#22c55e", "A+": "#4ade80", "A": "#86efac",
-            "B+": "#a78bfa", "B": "#c4b5fd",
-            "C": "#fb923c", "D": "#ef4444",
-        }.get(grade, "#94a3b8")
+            grade = str(row.get("trade_grade") or "").strip()
+            if not grade or grade.lower() in ("none", "nan", ""):
+                grade = "—"
+            grade_colour = {
+                "A++": "#22c55e", "A+": "#4ade80", "A": "#86efac",
+                "B+": "#a78bfa", "B": "#c4b5fd",
+                "C": "#fb923c", "D": "#ef4444",
+            }.get(grade, "#94a3b8")
 
-        date_str = str(row.get("date", ""))[:10]
-        instrument = str(row.get("instrument", "") or "")
-        direction = str(row.get("direction", "") or "")
-        dir_colour = "#22c55e" if direction == "Long" else "#ef4444"
-        session = str(row.get("session", "") or "")
+            try:
+                date_str = str(row.get("date", "") or "")[:10]
+            except Exception:
+                date_str = ""
+            instrument = str(row.get("instrument") or "")
+            direction  = str(row.get("direction")  or "")
+            dir_colour = "#22c55e" if direction == "Long" else "#ef4444"
+            session    = str(row.get("session")    or "")
 
-        rows_html += f"""
+            rows_html += f"""
         <tr>
           <td style="color:#94a3b8;font-size:0.82rem;">{date_str}</td>
           <td style="font-weight:600;">{instrument}</td>
@@ -5781,6 +5788,9 @@ def _render_trades_table(df: pd.DataFrame, pnl_col: str) -> str:
           <td style="color:{pnl_colour};font-weight:700;
               font-size:0.95rem;">{pnl_str}</td>
         </tr>"""
+        except Exception:
+            # Skip any row that causes an unexpected error
+            continue
 
     return f"""
     <div style="border:1px solid rgba(124,58,237,0.25);border-radius:12px;
@@ -6423,6 +6433,10 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         return
 
     df = prepare_df(df_raw)
+    # Null-safety: ensure key string columns never contain NaN/None
+    for _col in ["instrument", "direction", "session", "trade_grade"]:
+        if _col in df.columns:
+            df[_col] = df[_col].fillna("").astype(str).replace("nan", "")
 
     if section == "New Trade":
         # ── A4 sheet ──────────────────────────────────────────────────────────────
