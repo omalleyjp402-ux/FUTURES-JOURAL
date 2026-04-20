@@ -2071,11 +2071,15 @@ def render_all_accounts_dashboard(user_id: str) -> None:
         st.info("No trades yet across accounts.")
         return
 
+    # Normalise date column to tz-naive so comparisons don't crash
+    if "date" in df_all.columns:
+        df_all["date"] = pd.to_datetime(df_all["date"], errors="coerce", utc=True).dt.tz_localize(None)
+
     # Filters (match the general style/feel of Dashboard filters)
     with st.expander("Filters", expanded=False):
         fp = "all_accounts_filter_"
-        min_date = pd.to_datetime(df_all["date"], errors="coerce").min()
-        max_date = pd.to_datetime(df_all["date"], errors="coerce").max()
+        min_date = df_all["date"].min()
+        max_date = df_all["date"].max()
         if pd.isna(min_date) or pd.isna(max_date):
             st.info("No valid trade dates found yet.")
             return
@@ -2108,9 +2112,10 @@ def render_all_accounts_dashboard(user_id: str) -> None:
         pnl_col = "pnl_effective"
 
     dfx = df_all.copy()
+    _dfx_date = dfx["date"].dt.tz_localize(None) if dfx["date"].dt.tz is not None else dfx["date"]
     dfx = dfx[
-        (dfx["date"] >= pd.to_datetime(start_date))
-        & (dfx["date"] <= pd.to_datetime(end_date))
+        (_dfx_date >= pd.to_datetime(start_date))
+        & (_dfx_date <= pd.to_datetime(end_date))
         & (dfx.get("account_type", "").isin(acct_filter))
         & (dfx.get("instrument", "").isin(instr_filter))
         & (dfx.get("session", "").isin(ses_filter))
