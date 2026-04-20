@@ -1825,6 +1825,8 @@ def render_public_router() -> None:
     active = "Home"
     if view == "auth":
         active = "Home"
+    elif page == "pricing":
+        active = "Pricing"
     elif page == "demo":
         active = "Demo"
     elif page == "terms":
