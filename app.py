@@ -1909,26 +1909,6 @@ def create_stripe_checkout_session(
     except Exception:
         return None
 
-    def referral_code_for_user(referred_user_id: str) -> str:
-        """
-        If the user was referred (via ?ref=CODE), we store it in `public.referrals`.
-        We use this to auto-apply an affiliate discount coupon at checkout.
-        """
-        try:
-            sb = authed_supabase()
-            res = (
-                sb.table("referrals")
-                .select("code")
-                .eq("referred_user_id", referred_user_id)
-                .limit(1)
-                .execute()
-            )
-            if res.data:
-                return safe_str(res.data[0].get("code")).strip()
-        except Exception:
-            return ""
-        return ""
-
     def trial_days_for_email(email: str) -> int:
         """
         Prevent easy trial abuse: if this email has ever had a Stripe subscription trial,
@@ -1980,18 +1960,9 @@ def create_stripe_checkout_session(
             # If payment method is missing at trial end, cancel (avoids past_due surprises).
             subscription_data["trial_settings"] = {"end_behavior": {"missing_payment_method": "cancel"}}
 
-        # Affiliate discount: if user was referred, auto-apply a Stripe coupon (20% off, etc).
-        # This makes the affiliate code function like a discount code (via referral link).
-        ref_code = referral_code_for_user(user_id) or safe_str(st.session_state.get("ref_code")).strip()
-        affiliate_coupon_id = safe_str(get_secret("STRIPE_AFFILIATE_COUPON_ID")).strip()
-        discounts = None
-        allow_promo = True
-        if ref_code and affiliate_coupon_id:
-            discounts = [{"coupon": affiliate_coupon_id}]
-            # Prevent stacking with other promo codes unless you intentionally want that behavior.
-            allow_promo = False
-
-        # Put the referral code onto the subscription so it's visible in Stripe + useful for support.
+        # Allow users to enter a Stripe Promotion Code at checkout (e.g. "BRACHO") for discounts.
+        # Affiliate attribution is handled in the Stripe webhook by reading the promo code used.
+        ref_code = safe_str(st.session_state.get("ref_code")).strip()
         if ref_code:
             subscription_data.setdefault("metadata", {})
             subscription_data["metadata"]["ref_code"] = ref_code
@@ -2004,11 +1975,10 @@ def create_stripe_checkout_session(
             customer_email=user_email or None,
             client_reference_id=user_id,
             metadata={"user_id": user_id, "ref_code": ref_code or ""},
-            allow_promotion_codes=allow_promo,
+            allow_promotion_codes=True,
             # Collect card details even when trialing.
             payment_method_collection="always" if (allowed_trial_days and allowed_trial_days > 0) else "if_required",
             subscription_data=subscription_data or None,
-            discounts=discounts,
         )
         return getattr(session, "url", None)
     except Exception:

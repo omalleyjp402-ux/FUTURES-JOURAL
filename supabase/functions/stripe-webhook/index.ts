@@ -172,22 +172,55 @@ async function recordAffiliateCommissionForInvoice(params: {
   stripeCustomerId?: string | null;
   invoiceCreatedUnixSeconds?: number | null;
   billingConfig?: BillingConfig | null;
+  promoCode?: string | null;
 }) {
   if (!params.referredUserId || !params.stripeInvoiceId) return;
   if (!Number.isFinite(params.amountPaidCents) || params.amountPaidCents <= 0) return;
 
   try {
-    // Was this user referred?
-    const { data: refRow } = await sb
-      .from("referrals")
-      .select("affiliate_user_id,code")
-      .eq("referred_user_id", params.referredUserId)
-      .maybeSingle();
-    if (!refRow) return;
+    let affiliateUserId = "";
+    let code = (params.promoCode || "").trim();
 
-    const affiliateUserId = (refRow.affiliate_user_id as string) || "";
-    const code = (refRow.code as string) || "";
+    // Preferred path: promo code entered at checkout (e.g. BRACHO)
+    if (code) {
+      const { data: codeRowLookup } = await sb
+        .from("affiliate_codes")
+        .select("affiliate_user_id,is_active")
+        .eq("code", code)
+        .maybeSingle();
+      if (codeRowLookup && codeRowLookup.is_active !== false) {
+        affiliateUserId = (codeRowLookup.affiliate_user_id as string) || "";
+        // Create referral mapping if missing (so future invoices still attribute even if promo code changes).
+        if (affiliateUserId && affiliateUserId !== params.referredUserId) {
+          await sb.from("referrals").upsert(
+            {
+              referred_user_id: params.referredUserId,
+              affiliate_user_id: affiliateUserId,
+              code,
+            },
+            { onConflict: "referred_user_id" },
+          );
+        }
+      } else {
+        // Not an affiliate code; ignore.
+        return;
+      }
+    } else {
+      // Backwards compatibility: referral captured via ?ref=CODE
+      const { data: refRow } = await sb
+        .from("referrals")
+        .select("affiliate_user_id,code")
+        .eq("referred_user_id", params.referredUserId)
+        .maybeSingle();
+      if (!refRow) return;
+
+      affiliateUserId = (refRow.affiliate_user_id as string) || "";
+      code = (refRow.code as string) || "";
+      if (!affiliateUserId || !code) return;
+    }
+
     if (!affiliateUserId || !code) return;
+    if (affiliateUserId === params.referredUserId) return;
 
     // Is the code still active and what %?
     const { data: codeRow } = await sb
@@ -300,6 +333,24 @@ Deno.serve(async (req) => {
       const userId = await userIdForSubscription(subscriptionId);
       if (!userId) return json({ ok: true });
 
+      // Best-effort: capture promo code used at checkout (e.g. "BRACHO") so we can attribute affiliates
+      // without relying on referral links.
+      let promoCode: string | null = null;
+      try {
+        const disc = (invoice as any).discount ?? null;
+        const discs = (invoice as any).discounts ?? null;
+        const promoId =
+          (disc?.promotion_code as string | undefined) ??
+          (Array.isArray(discs) ? (discs?.[0]?.promotion_code as string | undefined) : undefined) ??
+          null;
+        if (promoId) {
+          const promo = await stripe.promotionCodes.retrieve(promoId);
+          promoCode = (promo?.code || "").toString().trim() || null;
+        }
+      } catch (_) {
+        promoCode = null;
+      }
+
       let currentPeriodEnd: string | null = null;
       let subscriptionStatus: string | null = null;
       try {
@@ -330,6 +381,7 @@ Deno.serve(async (req) => {
           stripeCustomerId: customerId,
           invoiceCreatedUnixSeconds: Number.isFinite(invoiceCreated) ? invoiceCreated : null,
           billingConfig,
+          promoCode,
         });
       }
     }
