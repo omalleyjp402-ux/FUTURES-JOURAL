@@ -1713,14 +1713,11 @@ def render_demo_dashboard() -> None:
     st.markdown("---")
     st.subheader("Recent trades")
     recent = df.sort_values(["date", "entry_time"], ascending=False).head(10).copy()
-    recent["PnL"] = recent[pnl_col].apply(format_money)
-    if "trade_grade" in recent.columns:
-        recent["trade_grade"] = recent["trade_grade"].fillna("—").replace("None", "—")
-    st.dataframe(
-        recent[["date", "entry_time", "instrument", "direction", "session", "trade_grade", "r_multiple", "PnL"]],
-        use_container_width=True,
-        hide_index=True,
-    )
+    _tbl_html = _render_trades_table(recent, pnl_col)
+    try:
+        st.html(_tbl_html)
+    except AttributeError:
+        st.markdown(_tbl_html, unsafe_allow_html=True)
     render_public_footer()
 
 
@@ -1928,18 +1925,6 @@ def render_landing_page() -> None:
     st.caption("Tip: best experienced on a laptop or iPad. Mobile support is improving.")
 
     st.markdown("---")
-    st.subheader("Join the waitlist")
-    with st.form("waitlist_form", clear_on_submit=True):
-        email = st.text_input("Email", placeholder="you@email.com")
-        submitted = st.form_submit_button("Join waitlist")
-    if submitted:
-        ok = insert_waitlist_email(email, source="public_landing")
-        if ok:
-            st.success("You're on the waitlist. We'll email you when it's ready.")
-        else:
-            st.error("Please enter a valid email address.")
-
-    st.markdown("---")
     st.caption("Already have an account? Use the button at the top to log in or sign up.")
 
     render_public_footer()
@@ -1997,11 +1982,14 @@ def render_refund_page() -> None:
     st.write("Last updated: (placeholder)")
     st.markdown(
         f"""
-**Payments not enabled yet**
-This policy will apply once subscriptions are enabled.
-
 **Refund window**
-Once payments are enabled: refunds will be available within **{REFUND_WINDOW_DAYS} day(s)** of purchase, subject to verification and abuse prevention.
+Refunds are available within **{REFUND_WINDOW_DAYS} day(s)** of purchase, subject to verification and abuse prevention.
+
+**How to request a refund**
+Contact us at {PUBLIC_CONTACT_EMAIL} with your order details and we'll process your refund promptly.
+
+**Subscriptions**
+You may cancel your subscription at any time from your Stripe billing portal. Cancellation takes effect at the end of the current billing period.
         """
     )
     render_public_footer()
