@@ -4592,6 +4592,248 @@ def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
     st.session_state["calendar_week_date_map"] = week_date_map
 
 
+# ── PnL Calendar — period detail helper ──────────────────────────────────────
+
+def _show_period_trade_details(trades_df: pd.DataFrame, pnl_col: str, label: str) -> None:
+    """Show summary card + trade table for a selected week or month."""
+    if trades_df.empty:
+        st.info(f"No trades in {label}.")
+        return
+    period_total = float(trades_df[pnl_col].sum())
+    period_wins  = int((trades_df[pnl_col] > 0).sum())
+    period_losses= int((trades_df[pnl_col] < 0).sum())
+    pnl_c = "#22c55e" if period_total > 0 else "#ef4444" if period_total < 0 else "#94a3b8"
+    win_rate = period_wins / len(trades_df) * 100 if trades_df.shape[0] else 0
+    _card = (
+        f"<div style='background:#1a1a2e;border:1px solid rgba(124,58,237,0.25);"
+        f"border-left:4px solid {pnl_c};border-radius:8px;padding:14px 18px;margin:8px 0 12px;'>"
+        f"<p style='color:#a78bfa;font-size:0.68rem;font-weight:700;letter-spacing:1px;margin:0 0 6px;'>{label.upper()}</p>"
+        f"<p style='color:#e2e8f0;margin:2px 0;'>"
+        f"P&L: <b style='color:{pnl_c};'>{format_money(period_total)}</b> &nbsp;·&nbsp; "
+        f"Trades: <b>{len(trades_df)}</b> &nbsp;·&nbsp; "
+        f"Wins: <b style='color:#22c55e;'>{period_wins}</b> &nbsp;·&nbsp; "
+        f"Losses: <b style='color:#ef4444;'>{period_losses}</b> &nbsp;·&nbsp; "
+        f"Win rate: <b>{win_rate:.0f}%</b></p>"
+        f"</div>"
+    )
+    try:
+        st.html(_card)
+    except AttributeError:
+        st.markdown(_card, unsafe_allow_html=True)
+
+    view = trades_df.sort_values("date").copy()
+    _tbl = _render_trades_table(view, pnl_col)
+    try:
+        st.html(_tbl)
+    except AttributeError:
+        st.markdown(_tbl, unsafe_allow_html=True)
+
+
+# ── PnL Calendar — 52-week heatmap view ──────────────────────────────────────
+
+def _render_weeks_calendar(df: pd.DataFrame, pnl_col: str, form_key: str) -> None:
+    """Show a 52-week heatmap grid + selectable week detail panel."""
+    if df.empty:
+        st.info("No trade data yet.")
+        return
+
+    # Aggregate by ISO year/week
+    daily_grp = df.copy()
+    daily_grp["_d"] = pd.to_datetime(daily_grp["date"]).dt.normalize()
+    _iso = daily_grp["_d"].dt.isocalendar()
+    daily_grp["_iso_year"] = _iso["year"].astype(int).values
+    daily_grp["_iso_week"] = _iso["week"].astype(int).values
+
+    wk_agg = (
+        daily_grp.groupby(["_iso_year", "_iso_week"], as_index=False)[pnl_col]
+        .agg(pnl="sum", trades="count")
+    )
+
+    years = sorted(wk_agg["_iso_year"].unique(), reverse=True)
+    sel_year = int(st.selectbox("Year", years, key=f"{form_key}_wk_yr") if len(years) > 1 else years[0])
+
+    yr_wk = wk_agg[wk_agg["_iso_year"] == sel_year]
+    wk_pnl: dict = {int(r["_iso_week"]): (float(r["pnl"]), int(r["trades"])) for _, r in yr_wk.iterrows()}
+    max_abs = max((abs(v[0]) for v in wk_pnl.values()), default=0) or 1
+
+    def _wc(val):
+        if val == 0:
+            return "rgba(148,163,184,0.08)"
+        ratio = min(abs(val) / max_abs, 1)
+        a = 0.18 + 0.58 * ratio
+        return f"rgba(34,197,94,{a:.3f})" if val > 0 else f"rgba(239,68,68,{a:.3f})"
+
+    cells = []
+    for wk in range(1, 53):
+        pv, tv = wk_pnl.get(wk, (0, 0))
+        pc = "#22c55e" if pv > 0 else ("#ef4444" if pv < 0 else "#475569")
+        pt = format_money(pv) if pv != 0 else "—"
+        cells.append(
+            f"<div style='background:{_wc(pv)};border:1px solid rgba(255,255,255,0.05);"
+            f"border-radius:7px;padding:7px 4px;text-align:center;'>"
+            f"<div style='color:#64748b;font-size:0.6rem;font-weight:700;'>W{wk}</div>"
+            f"<div style='color:{pc};font-weight:700;font-size:0.73rem;margin:3px 0;'>{pt}</div>"
+            f"<div style='color:#475569;font-size:0.58rem;'>{tv}t</div>"
+            f"</div>"
+        )
+
+    grid_html = (
+        "<div style='display:grid;grid-template-columns:repeat(13,1fr);gap:4px;margin:10px 0;'>"
+        + "".join(cells) + "</div>"
+    )
+    try:
+        st.html(grid_html)
+    except AttributeError:
+        st.markdown(grid_html, unsafe_allow_html=True)
+
+    # Year summary strip
+    yr_total  = sum(v[0] for v in wk_pnl.values())
+    yr_trades = sum(v[1] for v in wk_pnl.values())
+    yr_green  = sum(1 for v in wk_pnl.values() if v[0] > 0)
+    yr_red    = sum(1 for v in wk_pnl.values() if v[0] < 0)
+    yc = "#22c55e" if yr_total > 0 else "#ef4444"
+    _strip = (
+        f"<div style='background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);"
+        f"border-radius:8px;padding:9px 16px;margin:4px 0 14px;font-size:0.82rem;'>"
+        f"<span style='color:#a78bfa;font-weight:700;letter-spacing:0.8px;'>YEAR {sel_year}</span> &nbsp; "
+        f"<span style='color:{yc};font-weight:700;'>{format_money(yr_total)}</span> &nbsp;·&nbsp; "
+        f"{yr_trades} trades &nbsp;·&nbsp; "
+        f"<span style='color:#22c55e;'>{yr_green} green</span> / "
+        f"<span style='color:#ef4444;'>{yr_red} red</span> weeks"
+        f"</div>"
+    )
+    try:
+        st.html(_strip)
+    except AttributeError:
+        st.markdown(_strip, unsafe_allow_html=True)
+
+    # Week detail picker
+    st.markdown("**Week details**")
+    avail_wks = sorted(wk_pnl.keys())
+    if not avail_wks:
+        return
+    sel_wk = st.selectbox(
+        "Select week", avail_wks, index=len(avail_wks) - 1,
+        format_func=lambda w: f"Week {w}  ({format_money(wk_pnl.get(w,(0,0))[0])})",
+        key=f"{form_key}_wk_detail",
+    )
+    _df_iso = df["date"].dt.isocalendar()
+    wk_trades = df[
+        (_df_iso["year"].astype(int).values == sel_year) &
+        (_df_iso["week"].astype(int).values == sel_wk)
+    ].copy()
+    _show_period_trade_details(wk_trades, pnl_col, f"Week {sel_wk} — {sel_year}")
+
+
+# ── PnL Calendar — 12-month + quarterly view ─────────────────────────────────
+
+def _render_months_calendar(df: pd.DataFrame, pnl_col: str, form_key: str) -> None:
+    """Show quarterly totals + 12-month heatmap + selectable month detail panel."""
+    MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+    QUARTERS    = {"Q1":[1,2,3], "Q2":[4,5,6], "Q3":[7,8,9], "Q4":[10,11,12]}
+
+    if df.empty:
+        st.info("No trade data yet.")
+        return
+
+    daily_grp = df.copy()
+    daily_grp["_yr"] = pd.to_datetime(daily_grp["date"]).dt.year.astype(int)
+    daily_grp["_mo"] = pd.to_datetime(daily_grp["date"]).dt.month.astype(int)
+
+    mo_agg = (
+        daily_grp.groupby(["_yr","_mo"], as_index=False)[pnl_col]
+        .agg(pnl="sum", trades="count")
+    )
+
+    years = sorted(mo_agg["_yr"].unique(), reverse=True)
+    sel_year = int(st.selectbox("Year", years, key=f"{form_key}_mo_yr") if len(years) > 1 else years[0])
+
+    yr_mo = mo_agg[mo_agg["_yr"] == sel_year]
+    mo_pnl: dict = {int(r["_mo"]): (float(r["pnl"]), int(r["trades"])) for _, r in yr_mo.iterrows()}
+    max_abs = max((abs(v[0]) for v in mo_pnl.values()), default=0) or 1
+
+    def _mc(val):
+        if val == 0:
+            return "rgba(148,163,184,0.08)"
+        ratio = min(abs(val) / max_abs, 1)
+        a = 0.18 + 0.58 * ratio
+        return f"rgba(34,197,94,{a:.3f})" if val > 0 else f"rgba(239,68,68,{a:.3f})"
+
+    # ── Quarterly cards ───────────────────────────────────────────────────────
+    q_cells = []
+    for q_name, months in QUARTERS.items():
+        qp = sum(mo_pnl.get(m,(0,0))[0] for m in months)
+        qt = sum(mo_pnl.get(m,(0,0))[1] for m in months)
+        qc = "#22c55e" if qp > 0 else ("#ef4444" if qp < 0 else "#94a3b8")
+        q_cells.append(
+            f"<div style='background:{_mc(qp)};border:1px solid rgba(124,58,237,0.2);"
+            f"border-radius:10px;padding:16px 10px;text-align:center;'>"
+            f"<div style='color:#a78bfa;font-size:0.7rem;font-weight:800;letter-spacing:1px;margin-bottom:6px;'>{q_name}</div>"
+            f"<div style='color:{qc};font-weight:700;font-size:1.05rem;'>{format_money(qp)}</div>"
+            f"<div style='color:#64748b;font-size:0.7rem;margin-top:4px;'>{qt} trades</div>"
+            f"</div>"
+        )
+    q_grid = (
+        "<div style='display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0 18px;'>"
+        + "".join(q_cells) + "</div>"
+    )
+
+    # ── Monthly cells (4×3) ───────────────────────────────────────────────────
+    mo_cells = []
+    for m in range(1, 13):
+        pv, tv = mo_pnl.get(m, (0, 0))
+        pc = "#22c55e" if pv > 0 else ("#ef4444" if pv < 0 else "#475569")
+        pt = format_money(pv) if pv != 0 else "—"
+        mo_cells.append(
+            f"<div style='background:{_mc(pv)};border:1px solid rgba(255,255,255,0.06);"
+            f"border-radius:10px;padding:18px 10px;text-align:center;'>"
+            f"<div style='color:#94a3b8;font-size:0.72rem;font-weight:700;letter-spacing:0.5px;'>{MONTH_NAMES[m-1]}</div>"
+            f"<div style='color:{pc};font-weight:700;font-size:1.0rem;margin:8px 0;'>{pt}</div>"
+            f"<div style='color:#475569;font-size:0.7rem;'>{tv} trades</div>"
+            f"</div>"
+        )
+    mo_grid = (
+        "<div style='display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0;'>"
+        + "".join(mo_cells) + "</div>"
+    )
+
+    # Year total strip
+    yr_total  = sum(v[0] for v in mo_pnl.values())
+    yr_trades = sum(v[1] for v in mo_pnl.values())
+    yc = "#22c55e" if yr_total > 0 else "#ef4444"
+    _strip = (
+        f"<div style='background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);"
+        f"border-radius:8px;padding:9px 16px;margin:4px 0 14px;font-size:0.82rem;'>"
+        f"<span style='color:#a78bfa;font-weight:700;letter-spacing:0.8px;'>YEAR {sel_year}</span> &nbsp; "
+        f"<span style='color:{yc};font-weight:700;'>{format_money(yr_total)}</span> &nbsp;·&nbsp; "
+        f"{yr_trades} trades"
+        f"</div>"
+    )
+
+    _label_q = "<p style='color:#a78bfa;font-size:0.68rem;font-weight:700;letter-spacing:1px;margin:0 0 4px;'>QUARTERLY TOTALS</p>"
+    _label_m = "<p style='color:#a78bfa;font-size:0.68rem;font-weight:700;letter-spacing:1px;margin:0 0 4px;'>MONTHLY BREAKDOWN</p>"
+    try:
+        st.html(_label_q + q_grid + _label_m + mo_grid + _strip)
+    except AttributeError:
+        st.markdown(_label_q + q_grid + _label_m + mo_grid + _strip, unsafe_allow_html=True)
+
+    # Month detail picker
+    st.markdown("**Month details**")
+    avail_mos = sorted(mo_pnl.keys())
+    if not avail_mos:
+        return
+    sel_mo = st.selectbox(
+        "Select month", avail_mos, index=len(avail_mos) - 1,
+        format_func=lambda m: f"{MONTH_NAMES[m-1]} {sel_year}  ({format_money(mo_pnl.get(m,(0,0))[0])})",
+        key=f"{form_key}_mo_detail",
+    )
+    mo_trades = df[
+        (pd.to_datetime(df["date"]).dt.year.astype(int) == sel_year) &
+        (pd.to_datetime(df["date"]).dt.month.astype(int) == sel_mo)
+    ].copy()
+    _show_period_trade_details(mo_trades, pnl_col, f"{MONTH_NAMES[sel_mo-1]} {sel_year}")
+
+
 def load_logo_data():
     if LOGO_PATH.exists():
         data = base64.b64encode(LOGO_PATH.read_bytes()).decode("utf-8")
@@ -6795,110 +7037,120 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
             worst_date = worst_row["date"].strftime("%Y-%m-%d")
             st.markdown(f"**Biggest winning day:** {best_date} — {format_money(best_row['pnl'])}")
             st.markdown(f"**Biggest losing day:** {worst_date} — {format_money(worst_row['pnl'])}")
-        render_pnl_calendar(chart_df, pnl_col)
 
-        # Weekly report popup — one button per week, opens a modal dialog.
-        week_map = st.session_state.get("calendar_week_date_map") or {}
-        week_keys = list(week_map.keys())
-        if week_keys:
-            st.markdown("**Weekly reports** — click a week to view:")
-            cols_per_row = 5
-            for row_start in range(0, len(week_keys), cols_per_row):
-                row_wks = week_keys[row_start:row_start + cols_per_row]
-                btn_cols = st.columns(len(row_wks))
-                for col, (idx, wk) in zip(btn_cols, enumerate(row_wks, start=row_start + 1)):
-                    with col:
-                        if st.button(f"Week {idx}", key=f"wk_btn_{form_key}_{idx}", use_container_width=True):
-                            st.session_state[f"_week_dialog_{form_key}"] = wk
+        _cal_tab_day, _cal_tab_wk, _cal_tab_mo = st.tabs(["📅 Month View", "📊 Year (Weeks)", "📈 Year (Months)"])
 
-            # Open dialog (consume the key so closing the dialog doesn't reopen it).
-            pending_wk = st.session_state.pop(f"_week_dialog_{form_key}", None)
-            if pending_wk and pending_wk in week_map:
-                wk_dates = week_map[pending_wk]
-                wk_trades = chart_df[chart_df["date"].dt.strftime("%Y-%m-%d").isin(wk_dates)].copy()
-                _show_week_dialog(pending_wk, wk_trades, pnl_col)
+        with _cal_tab_day:
+            render_pnl_calendar(chart_df, pnl_col)
 
-        # Day details (click a day on the calendar or pick below)
-        st.markdown("---")
-        st.markdown("**Day details**")
-        clicked = get_query_param("day").strip()
-        available_days = sorted({d.strftime("%Y-%m-%d") for d in pd.to_datetime(chart_df["date"]).dt.date})
-        default_day = clicked if clicked in available_days else (available_days[-1] if available_days else "")
-        selected_day = st.selectbox("Select day", available_days, index=(available_days.index(default_day) if default_day in available_days else 0))
+            # Weekly report popup — one button per week, opens a modal dialog.
+            week_map = st.session_state.get("calendar_week_date_map") or {}
+            week_keys = list(week_map.keys())
+            if week_keys:
+                st.markdown("**Weekly reports** — click a week to view:")
+                cols_per_row = 5
+                for row_start in range(0, len(week_keys), cols_per_row):
+                    row_wks = week_keys[row_start:row_start + cols_per_row]
+                    btn_cols = st.columns(len(row_wks))
+                    for col, (idx, wk) in zip(btn_cols, enumerate(row_wks, start=row_start + 1)):
+                        with col:
+                            if st.button(f"Week {idx}", key=f"wk_btn_{form_key}_{idx}", use_container_width=True):
+                                st.session_state[f"_week_dialog_{form_key}"] = wk
 
-        day_dt = pd.to_datetime(selected_day).date() if selected_day else None
-        if day_dt is not None:
-            day_trades = chart_df[chart_df["date"].dt.date == day_dt].copy()
-            if day_trades.empty:
-                st.info("No trades on this day.")
-            else:
-                day_total = float(day_trades[pnl_col].sum())
-                day_wins = int((day_trades[pnl_col] > 0).sum())
-                st.markdown(f"**Total PnL:** {format_money(day_total)} · **Trades:** {len(day_trades)} · **Wins:** {day_wins}")
+                # Open dialog (consume the key so closing the dialog doesn't reopen it).
+                pending_wk = st.session_state.pop(f"_week_dialog_{form_key}", None)
+                if pending_wk and pending_wk in week_map:
+                    wk_dates = week_map[pending_wk]
+                    wk_trades = chart_df[chart_df["date"].dt.strftime("%Y-%m-%d").isin(wk_dates)].copy()
+                    _show_week_dialog(pending_wk, wk_trades, pnl_col)
 
-                # Journal notes for the day (if available)
-                j = load_journal_entry(user_id, selected_day)
-                if j is not None and j.strip():
-                    with st.expander("Journal notes", expanded=False):
-                        st.write(j)
+            # Day details (click a day on the calendar or pick below)
+            st.markdown("---")
+            st.markdown("**Day details**")
+            clicked = get_query_param("day").strip()
+            available_days = sorted({d.strftime("%Y-%m-%d") for d in pd.to_datetime(chart_df["date"]).dt.date})
+            default_day = clicked if clicked in available_days else (available_days[-1] if available_days else "")
+            selected_day = st.selectbox("Select day", available_days, index=(available_days.index(default_day) if default_day in available_days else 0), key=f"{form_key}_cal_day_sel")
 
-                # Lessons / mistakes from the day's trades (if any)
-                lesson_rows: list[str] = []
-                for _, r in day_trades.iterrows():
-                    _, lessons = _extract_lessons(r.get("notes", ""))
-                    if not lessons:
-                        continue
-                    head = f"{safe_str(r.get('instrument'))} {safe_str(r.get('direction'))} {safe_str(r.get('entry_time'))}".strip()
-                    for l in lessons[:3]:
-                        lesson_rows.append(f"• {head}: {l}")
-                if lesson_rows:
-                    with st.expander("Lessons / mistakes (from trades)", expanded=False):
-                        st.write("\n".join(lesson_rows))
+            day_dt = pd.to_datetime(selected_day).date() if selected_day else None
+            if day_dt is not None:
+                day_trades = chart_df[chart_df["date"].dt.date == day_dt].copy()
+                if day_trades.empty:
+                    st.info("No trades on this day.")
+                else:
+                    day_total = float(day_trades[pnl_col].sum())
+                    day_wins = int((day_trades[pnl_col] > 0).sum())
+                    st.markdown(f"**Total PnL:** {format_money(day_total)} · **Trades:** {len(day_trades)} · **Wins:** {day_wins}")
 
-                # Trade cards / table
-                cols = ["entry_time", "instrument", "direction", "contracts", "session", "trade_grade", "r_multiple", pnl_col, "notes"]
-                show = [c for c in cols if c in day_trades.columns]
-                view = day_trades.sort_values(["entry_time"], ascending=True, na_position="last").copy()
-                if "r_multiple" in view.columns:
-                    view["r_multiple"] = pd.to_numeric(view["r_multiple"], errors="coerce").round(2)
-                if "notes" in view.columns:
-                    view["notes"] = view["notes"].fillna("").astype(str).apply(_strip_lessons_block)
-                view["PnL"] = view[pnl_col].apply(format_money)
-                rename = {
-                    "entry_time": "Time",
-                    "instrument": "Instrument",
-                    "direction": "Side",
-                    "contracts": "Size",
-                    "session": "Session",
-                    "trade_grade": "Grade",
-                    "r_multiple": "RR",
-                    "notes": "Notes",
-                }
-                out_cols = []
-                for c in show:
-                    if c == pnl_col:
-                        continue
-                    out_cols.append(c)
-                df_out = view[out_cols + ["PnL"]].rename(columns=rename)
-                st.dataframe(df_out, use_container_width=True, hide_index=True)
+                    # Journal notes for the day (if available)
+                    j = load_journal_entry(user_id, selected_day)
+                    if j is not None and j.strip():
+                        with st.expander("Journal notes", expanded=False):
+                            st.write(j)
 
-                # Images (if any)
-                images = []
-                for _, r in day_trades.iterrows():
-                    imgs = safe_str(r.get("images", ""))
-                    for p in imgs.split(";"):
-                        if p.strip():
-                            images.append((p.strip(), r))
-                if images:
-                    st.markdown("**Screenshots**")
-                    img_cols = st.columns(3)
-                    for i, (path, r) in enumerate(images[:12]):
-                        try:
-                            url = get_image_url(path)
-                            cap = f"{safe_str(r.get('instrument'))} {safe_str(r.get('direction'))} {safe_str(r.get('entry_time'))}"
-                            img_cols[i % 3].image(url, caption=cap, use_column_width=True)
-                        except Exception:
-                            img_cols[i % 3].warning("Could not load image")
+                    # Lessons / mistakes from the day's trades (if any)
+                    lesson_rows: list[str] = []
+                    for _, r in day_trades.iterrows():
+                        _, lessons = _extract_lessons(r.get("notes", ""))
+                        if not lessons:
+                            continue
+                        head = f"{safe_str(r.get('instrument'))} {safe_str(r.get('direction'))} {safe_str(r.get('entry_time'))}".strip()
+                        for l in lessons[:3]:
+                            lesson_rows.append(f"• {head}: {l}")
+                    if lesson_rows:
+                        with st.expander("Lessons / mistakes (from trades)", expanded=False):
+                            st.write("\n".join(lesson_rows))
+
+                    # Trade cards / table
+                    cols = ["entry_time", "instrument", "direction", "contracts", "session", "trade_grade", "r_multiple", pnl_col, "notes"]
+                    show = [c for c in cols if c in day_trades.columns]
+                    view = day_trades.sort_values(["entry_time"], ascending=True, na_position="last").copy()
+                    if "r_multiple" in view.columns:
+                        view["r_multiple"] = pd.to_numeric(view["r_multiple"], errors="coerce").round(2)
+                    if "notes" in view.columns:
+                        view["notes"] = view["notes"].fillna("").astype(str).apply(_strip_lessons_block)
+                    view["PnL"] = view[pnl_col].apply(format_money)
+                    rename = {
+                        "entry_time": "Time",
+                        "instrument": "Instrument",
+                        "direction": "Side",
+                        "contracts": "Size",
+                        "session": "Session",
+                        "trade_grade": "Grade",
+                        "r_multiple": "RR",
+                        "notes": "Notes",
+                    }
+                    out_cols = []
+                    for c in show:
+                        if c == pnl_col:
+                            continue
+                        out_cols.append(c)
+                    df_out = view[out_cols + ["PnL"]].rename(columns=rename)
+                    st.dataframe(df_out, use_container_width=True, hide_index=True)
+
+                    # Images (if any)
+                    images = []
+                    for _, r in day_trades.iterrows():
+                        imgs = safe_str(r.get("images", ""))
+                        for p in imgs.split(";"):
+                            if p.strip():
+                                images.append((p.strip(), r))
+                    if images:
+                        st.markdown("**Screenshots**")
+                        img_cols = st.columns(3)
+                        for i, (path, r) in enumerate(images[:12]):
+                            try:
+                                url = get_image_url(path)
+                                cap = f"{safe_str(r.get('instrument'))} {safe_str(r.get('direction'))} {safe_str(r.get('entry_time'))}"
+                                img_cols[i % 3].image(url, caption=cap, use_column_width=True)
+                            except Exception:
+                                img_cols[i % 3].warning("Could not load image")
+
+        with _cal_tab_wk:
+            _render_weeks_calendar(chart_df, pnl_col, form_key)
+
+        with _cal_tab_mo:
+            _render_months_calendar(chart_df, pnl_col, form_key)
 
     if section == "Analytics":
         _lc, _tc = st.columns([1, 8])
