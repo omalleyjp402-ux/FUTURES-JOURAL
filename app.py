@@ -742,73 +742,12 @@ def _public_checkout_url(plan: str = "monthly") -> Optional[str]:
 def render_pricing_page() -> None:
     render_brand_header(center=True)
 
-    # ── Promo-code banner ────────────────────────────────────────────────────
-    promo_html = """
-<div style="background:linear-gradient(90deg,rgba(124,58,237,.22),rgba(124,58,237,.10));
-            border:1px solid rgba(124,58,237,.45);border-radius:12px;
-            padding:14px 20px;margin:0 0 22px;display:flex;align-items:center;gap:12px;">
-  <span style="font-size:22px;">🏷️</span>
-  <div>
-    <div style="font-size:14px;font-weight:700;color:#c4b5fd;letter-spacing:.04em;">
-      Use code <span style="color:#ffffff;background:rgba(124,58,237,.5);
-      border-radius:6px;padding:2px 10px;font-family:monospace;font-size:15px;">DYLO20</span>
-      at checkout for <span style="color:#22c55e;font-size:16px;">20% OFF</span>
-    </div>
-    <div style="font-size:12px;color:#94a3b8;margin-top:3px;">
-      Enter the code at the Stripe checkout page — discount applied instantly.
-    </div>
-  </div>
-</div>"""
-    try:
-        st.html(promo_html)
-    except AttributeError:
-        st.markdown(promo_html, unsafe_allow_html=True)
-
-    st.markdown(
-        "<h2 style='text-align:center;margin:0 0 6px;color:#e2e8f0;font-size:2rem;font-weight:800;'>Simple, Transparent Pricing</h2>"
-        "<p style='text-align:center;color:#94a3b8;margin:0 0 28px;font-size:14px;'>No hidden fees. Cancel any time.</p>",
-        unsafe_allow_html=True,
-    )
-
-    # ── Preview discount ─────────────────────────────────────────────────────
-    promo_input = st.text_input(
-        "Have a promo code? Enter it here to preview your savings:",
-        placeholder="e.g. DYLO20",
-        key="pricing_promo_preview",
-    ).strip().upper()
-    discount_pct = PROMO_CODES.get(promo_input, 0.0)
-    disc_applied = discount_pct > 0
-
-    if disc_applied:
-        st.success(f"✅ Code **{promo_input}** applied — **{int(discount_pct*100)}% off** your plan!")
-
-    # ── Prices ───────────────────────────────────────────────────────────────
-    MONTHLY_ORIG  = 25.0
-    YEARLY_ORIG   = 210.0
-    monthly_final = round(MONTHLY_ORIG * (1 - discount_pct), 2)
-    yearly_final  = round(YEARLY_ORIG  * (1 - discount_pct), 2)
-
-    def _price_block(orig, final, per_label, billed_note, disc):
-        if disc:
-            return (
-                f"<div style='display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;'>"
-                f"  <span style='font-size:15px;color:#64748b;text-decoration:line-through;font-weight:600;'>${orig:.0f}</span>"
-                f"  <span style='font-size:34px;font-weight:800;color:#22c55e;line-height:1;'>${final:.0f}</span>"
-                f"  <span style='font-size:13px;color:#94a3b8;font-weight:500;'>{per_label}</span>"
-                f"</div>"
-                f"<div style='margin-top:6px;font-size:12px;color:#22c55e;font-weight:600;'>"
-                f"  💸 You save ${orig - final:.0f} — {int(discount_pct*100)}% off!"
-                f"</div>"
-                f"<div style='margin-top:4px;font-size:12px;color:#94a3b8;'>{billed_note}</div>"
-            )
-        else:
-            return (
-                f"<div style='display:flex;align-items:baseline;gap:8px;'>"
-                f"  <span style='font-size:34px;font-weight:800;color:#ffffff;line-height:1;'>${orig:.0f}</span>"
-                f"  <span style='font-size:13px;color:#94a3b8;font-weight:500;'>{per_label}</span>"
-                f"</div>"
-                f"<div style='margin-top:4px;font-size:12px;color:#94a3b8;'>{billed_note}</div>"
-            )
+    # ── Constants ────────────────────────────────────────────────────────────
+    MONTHLY_ORIG = 25.0
+    YEARLY_ORIG  = 210.0
+    DISC_PCT     = 0.20          # DYLO20 = 20% off, always shown pre-applied
+    MONTHLY_DISC = round(MONTHLY_ORIG * (1 - DISC_PCT), 2)   # $20
+    YEARLY_DISC  = round(YEARLY_ORIG  * (1 - DISC_PCT), 2)   # $168
 
     features_free = [
         f"Up to {int(FREE_TRADE_LIMIT)} trades",
@@ -827,129 +766,201 @@ def render_pricing_page() -> None:
         "Priority support",
     ]
 
-    def _feature_row(text, pro=True):
-        icon = "✅" if pro else "✓"
+    def _feat(text, pro=True):
+        icon  = "✅" if pro else "✓"
         color = "#a78bfa" if pro else "#64748b"
-        return f"<li style='padding:5px 0;font-size:13.5px;color:#e2e8f0;display:flex;gap:8px;align-items:flex-start;'><span style='color:{color};flex-shrink:0;'>{icon}</span>{html_lib.escape(text)}</li>"
+        return (f"<li style='padding:5px 0;font-size:13.5px;color:#e2e8f0;"
+                f"display:flex;gap:8px;align-items:flex-start;'>"
+                f"<span style='color:{color};flex-shrink:0;'>{icon}</span>"
+                f"{html_lib.escape(text)}</li>")
 
-    col_free, col_pro_mo, col_pro_yr = st.columns([1, 1, 1])
+    # ── Header ───────────────────────────────────────────────────────────────
+    hdr_html = """
+<div style="text-align:center;margin:0 0 24px;">
+  <h2 style="font-size:2rem;font-weight:800;color:#e2e8f0;margin:0 0 6px;">
+    Simple, Transparent Pricing
+  </h2>
+  <p style="color:#94a3b8;font-size:14px;margin:0;">No hidden fees. Cancel any time.</p>
+</div>"""
+    try: st.html(hdr_html)
+    except AttributeError: st.markdown(hdr_html, unsafe_allow_html=True)
 
-    # Free card
+    # ── Big discount banner — always visible ─────────────────────────────────
+    banner_html = """
+<div style="background:linear-gradient(135deg,rgba(34,197,94,.18) 0%,rgba(124,58,237,.18) 100%);
+            border:2px solid rgba(34,197,94,.55);border-radius:14px;
+            padding:18px 24px;margin:0 0 28px;
+            display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+  <div style="display:flex;align-items:center;gap:14px;">
+    <span style="font-size:32px;line-height:1;">🎉</span>
+    <div>
+      <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-.01em;">
+        Limited-time launch offer — <span style="color:#22c55e;">20% OFF</span> all plans
+      </div>
+      <div style="font-size:13px;color:#94a3b8;margin-top:3px;">
+        Prices shown below already include your discount. Just use code at checkout.
+      </div>
+    </div>
+  </div>
+  <div style="background:rgba(0,0,0,.35);border:1px solid rgba(34,197,94,.4);
+              border-radius:10px;padding:10px 18px;text-align:center;min-width:130px;">
+    <div style="font-size:10px;letter-spacing:.18em;text-transform:uppercase;
+                color:#94a3b8;font-weight:600;margin-bottom:4px;">Promo code</div>
+    <div style="font-size:22px;font-weight:900;color:#22c55e;font-family:monospace;
+                letter-spacing:.08em;">DYLO20</div>
+  </div>
+</div>"""
+    try: st.html(banner_html)
+    except AttributeError: st.markdown(banner_html, unsafe_allow_html=True)
+
+    # ── Three plan cards ─────────────────────────────────────────────────────
+    col_free, col_mo, col_yr = st.columns([1, 1, 1])
+
     with col_free:
         free_html = f"""
-<div style="background:#16152a;border:1px solid #2d2d4e;border-radius:14px;padding:24px;height:100%;display:flex;flex-direction:column;">
-  <div style="font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#64748b;font-weight:600;margin-bottom:10px;">Free</div>
-  <div style="font-size:34px;font-weight:800;color:#ffffff;line-height:1;">$0</div>
-  <div style="font-size:12px;color:#94a3b8;margin:4px 0 20px;">forever</div>
-  <ul style="list-style:none;padding:0;margin:0 0 20px;flex:1;">
-    {''.join(_feature_row(f, pro=False) for f in features_free)}
+<div style="background:#16152a;border:1px solid #2d2d4e;border-radius:14px;
+            padding:24px;min-height:460px;display:flex;flex-direction:column;">
+  <div style="font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+              color:#64748b;font-weight:600;margin-bottom:12px;">Free</div>
+  <div style="font-size:38px;font-weight:800;color:#ffffff;line-height:1;">$0</div>
+  <div style="font-size:12px;color:#94a3b8;margin:4px 0 22px;">forever · no card needed</div>
+  <ul style="list-style:none;padding:0;margin:0;flex:1;">
+    {''.join(_feat(f, pro=False) for f in features_free)}
   </ul>
-  <div style="font-size:12px;color:#64748b;text-align:center;margin-top:auto;">No upgrade needed to explore</div>
 </div>"""
-        try:
-            st.html(free_html)
-        except AttributeError:
-            st.markdown(free_html, unsafe_allow_html=True)
+        try: st.html(free_html)
+        except AttributeError: st.markdown(free_html, unsafe_allow_html=True)
 
-    # Pro Monthly card
-    with col_pro_mo:
-        mo_price_block = _price_block(MONTHLY_ORIG, monthly_final, "/ month", "Billed monthly", disc_applied)
-        trial_note = f'<div style="margin-top:10px;font-size:12px;color:#a78bfa;">Includes {int(TRIAL_DAYS)}-day free trial</div>' if int(TRIAL_DAYS or 0) > 0 else ""
+    with col_mo:
+        save_mo = MONTHLY_ORIG - MONTHLY_DISC
+        trial_note = (f'<div style="margin:8px 0 0;font-size:12px;color:#a78bfa;">'
+                      f'✨ Includes {int(TRIAL_DAYS)}-day free trial</div>'
+                      if int(TRIAL_DAYS or 0) > 0 else "")
         mo_html = f"""
-<div style="background:linear-gradient(180deg,#1c1b35 0%,#16152a 100%);border:1px solid #7c3aed;border-radius:14px;padding:24px;height:100%;display:flex;flex-direction:column;box-shadow:0 0 30px rgba(124,58,237,.2);">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-    <div style="font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#a78bfa;font-weight:700;">Pro Monthly</div>
-    <div style="font-size:11px;background:rgba(124,58,237,.3);color:#c4b5fd;border-radius:999px;padding:2px 10px;font-weight:600;">POPULAR</div>
+<div style="background:linear-gradient(180deg,#1c1b35 0%,#16152a 100%);
+            border:2px solid #7c3aed;border-radius:14px;padding:24px;min-height:460px;
+            display:flex;flex-direction:column;box-shadow:0 0 40px rgba(124,58,237,.25);">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+    <div style="font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+                color:#a78bfa;font-weight:700;">Pro Monthly</div>
+    <div style="font-size:11px;background:rgba(124,58,237,.35);color:#c4b5fd;
+                border-radius:999px;padding:3px 11px;font-weight:700;">POPULAR</div>
   </div>
-  {mo_price_block}
+  <!-- crossed-out original -->
+  <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;">
+    <span style="font-size:16px;color:#64748b;text-decoration:line-through;
+                 font-weight:600;">${MONTHLY_ORIG:.0f}</span>
+    <span style="font-size:12px;color:#64748b;">/ month</span>
+  </div>
+  <!-- discounted price -->
+  <div style="display:flex;align-items:baseline;gap:8px;">
+    <span style="font-size:42px;font-weight:900;color:#22c55e;line-height:1;">${MONTHLY_DISC:.0f}</span>
+    <span style="font-size:14px;color:#94a3b8;font-weight:500;">/ month</span>
+  </div>
+  <div style="margin-top:6px;font-size:12px;color:#22c55e;font-weight:700;">
+    🏷️ Code DYLO20 — saving ${save_mo:.0f}/mo (20% off)
+  </div>
+  <div style="font-size:12px;color:#64748b;margin-top:2px;">Billed monthly</div>
   {trial_note}
-  <ul style="list-style:none;padding:0;margin:20px 0;flex:1;">
-    {''.join(_feature_row(f) for f in features_pro)}
+  <ul style="list-style:none;padding:0;margin:18px 0 0;flex:1;">
+    {''.join(_feat(f) for f in features_pro)}
   </ul>
 </div>"""
-        try:
-            st.html(mo_html)
-        except AttributeError:
-            st.markdown(mo_html, unsafe_allow_html=True)
+        try: st.html(mo_html)
+        except AttributeError: st.markdown(mo_html, unsafe_allow_html=True)
 
-        # Buy Now — Monthly
-        mo_checkout_url = _public_checkout_url("monthly")
-        if mo_checkout_url:
+        mo_url = _public_checkout_url("monthly")
+        if mo_url:
             try:
-                st.link_button("🚀 Buy Now — Monthly", mo_checkout_url, use_container_width=True, type="primary")
+                st.link_button("🚀 Buy Now — Monthly", mo_url, use_container_width=True, type="primary")
             except Exception:
-                st.markdown(f'<a href="{mo_checkout_url}" target="_blank" style="display:block;text-align:center;background:#7c3aed;color:#fff;border-radius:10px;padding:10px;font-weight:700;text-decoration:none;margin-top:4px;">🚀 Buy Now — Monthly</a>', unsafe_allow_html=True)
+                st.markdown(f'<a href="{mo_url}" target="_blank" style="display:block;text-align:center;background:#7c3aed;color:#fff;border-radius:10px;padding:11px;font-weight:700;text-decoration:none;margin-top:6px;font-size:15px;">🚀 Buy Now — Monthly</a>', unsafe_allow_html=True)
         else:
             if st.button("🚀 Buy Now — Monthly", use_container_width=True, type="primary", key="pricing_buy_monthly"):
+                try: st.query_params["view"] = "auth"
+                except Exception: pass
                 st.session_state["public_nav"] = "Home"
-                try:
-                    st.query_params["view"] = "auth"
-                except Exception:
-                    pass
                 st.rerun()
 
-    # Pro Yearly card
-    with col_pro_yr:
-        yr_price_block = _price_block(YEARLY_ORIG, yearly_final, "/ year", f"${yearly_final/12:.2f}/mo — save vs monthly", disc_applied)
-        save_vs_mo = round((monthly_final * 12) - yearly_final, 2)
-        yr_badge = f'<div style="font-size:11px;background:rgba(34,197,94,.2);color:#22c55e;border-radius:999px;padding:2px 10px;font-weight:600;">SAVE ${save_vs_mo:.0f}/yr vs monthly</div>'
+    with col_yr:
+        save_yr   = YEARLY_ORIG - YEARLY_DISC
+        save_vs_mo = round((MONTHLY_DISC * 12) - YEARLY_DISC, 2)
         yr_html = f"""
-<div style="background:linear-gradient(180deg,#1a2e1a 0%,#16152a 100%);border:1px solid #22c55e;border-radius:14px;padding:24px;height:100%;display:flex;flex-direction:column;box-shadow:0 0 30px rgba(34,197,94,.12);">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-    <div style="font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#22c55e;font-weight:700;">Pro Yearly</div>
-    {yr_badge}
+<div style="background:linear-gradient(180deg,#0f2a18 0%,#16152a 100%);
+            border:2px solid #22c55e;border-radius:14px;padding:24px;min-height:460px;
+            display:flex;flex-direction:column;box-shadow:0 0 40px rgba(34,197,94,.15);">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+    <div style="font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+                color:#22c55e;font-weight:700;">Pro Yearly</div>
+    <div style="font-size:11px;background:rgba(34,197,94,.2);color:#22c55e;
+                border-radius:999px;padding:3px 11px;font-weight:700;">
+      SAVE ${save_vs_mo:.0f} vs monthly
+    </div>
   </div>
-  {yr_price_block}
-  <ul style="list-style:none;padding:0;margin:20px 0;flex:1;">
-    {''.join(_feature_row(f) for f in features_pro)}
+  <!-- crossed-out original -->
+  <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;">
+    <span style="font-size:16px;color:#64748b;text-decoration:line-through;
+                 font-weight:600;">${YEARLY_ORIG:.0f}</span>
+    <span style="font-size:12px;color:#64748b;">/ year</span>
+  </div>
+  <!-- discounted price -->
+  <div style="display:flex;align-items:baseline;gap:8px;">
+    <span style="font-size:42px;font-weight:900;color:#22c55e;line-height:1;">${YEARLY_DISC:.0f}</span>
+    <span style="font-size:14px;color:#94a3b8;font-weight:500;">/ year</span>
+  </div>
+  <div style="margin-top:6px;font-size:12px;color:#22c55e;font-weight:700;">
+    🏷️ Code DYLO20 — saving ${save_yr:.0f}/yr (20% off)
+  </div>
+  <div style="font-size:12px;color:#64748b;margin-top:2px;">
+    ${YEARLY_DISC/12:.2f}/mo · billed annually
+  </div>
+  <ul style="list-style:none;padding:0;margin:18px 0 0;flex:1;">
+    {''.join(_feat(f) for f in features_pro)}
   </ul>
 </div>"""
-        try:
-            st.html(yr_html)
-        except AttributeError:
-            st.markdown(yr_html, unsafe_allow_html=True)
+        try: st.html(yr_html)
+        except AttributeError: st.markdown(yr_html, unsafe_allow_html=True)
 
-        # Buy Now — Yearly
-        yr_checkout_url = _public_checkout_url("yearly")
-        if yr_checkout_url:
+        yr_url = _public_checkout_url("yearly")
+        if yr_url:
             try:
-                st.link_button("🚀 Buy Now — Yearly", yr_checkout_url, use_container_width=True, type="primary")
+                st.link_button("🚀 Buy Now — Yearly", yr_url, use_container_width=True, type="primary")
             except Exception:
-                st.markdown(f'<a href="{yr_checkout_url}" target="_blank" style="display:block;text-align:center;background:#16a34a;color:#fff;border-radius:10px;padding:10px;font-weight:700;text-decoration:none;margin-top:4px;">🚀 Buy Now — Yearly</a>', unsafe_allow_html=True)
+                st.markdown(f'<a href="{yr_url}" target="_blank" style="display:block;text-align:center;background:#16a34a;color:#fff;border-radius:10px;padding:11px;font-weight:700;text-decoration:none;margin-top:6px;font-size:15px;">🚀 Buy Now — Yearly</a>', unsafe_allow_html=True)
         else:
             if st.button("🚀 Buy Now — Yearly", use_container_width=True, type="primary", key="pricing_buy_yearly"):
+                try: st.query_params["view"] = "auth"
+                except Exception: pass
                 st.session_state["public_nav"] = "Home"
-                try:
-                    st.query_params["view"] = "auth"
-                except Exception:
-                    pass
                 st.rerun()
 
-    st.markdown("---")
-    promo_remind = """
-<div style="background:rgba(124,58,237,.08);border:1px dashed rgba(124,58,237,.4);border-radius:10px;
-            padding:12px 18px;text-align:center;margin:10px 0 20px;font-size:14px;color:#c4b5fd;">
-  💜 Remember to use code <strong style="color:#fff;font-family:monospace;font-size:15px;
-  background:rgba(124,58,237,.4);border-radius:5px;padding:1px 8px;">DYLO20</strong>
-  at the Stripe checkout page to get your <strong style="color:#22c55e;">20% discount</strong>.
+    # ── Checkout reminder ────────────────────────────────────────────────────
+    st.markdown("")
+    remind_html = """
+<div style="background:rgba(34,197,94,.06);border:1px dashed rgba(34,197,94,.4);
+            border-radius:10px;padding:13px 20px;text-align:center;margin:8px 0 18px;
+            font-size:14px;color:#86efac;">
+  ⚡ Prices above already reflect your 20% discount — just enter
+  <strong style="color:#ffffff;font-family:monospace;font-size:16px;
+  background:rgba(34,197,94,.25);border-radius:5px;padding:1px 9px;">DYLO20</strong>
+  in the <em>"Add promotion code"</em> field at Stripe checkout to confirm your savings.
 </div>"""
-    try:
-        st.html(promo_remind)
-    except AttributeError:
-        st.markdown(promo_remind, unsafe_allow_html=True)
+    try: st.html(remind_html)
+    except AttributeError: st.markdown(remind_html, unsafe_allow_html=True)
 
-    st.markdown("**Frequently asked questions**")
+    # ── FAQ ───────────────────────────────────────────────────────────────────
+    st.markdown("**Questions?**")
+    with st.expander("How do I use the DYLO20 code?"):
+        st.write("Click **Buy Now**, then on the Stripe checkout page find the **'Add promotion code'** field, type **DYLO20**, and hit Apply. Your total will drop by 20% before you pay.")
     with st.expander("Can I cancel any time?"):
-        st.write("Yes — cancel from your Stripe billing portal any time. No questions asked.")
+        st.write("Yes — cancel any time from your Stripe billing portal. No questions asked, no cancellation fees.")
     with st.expander("Is there a free trial?"):
         if int(TRIAL_DAYS or 0) > 0:
-            st.write(f"Yes! Monthly plans include a {int(TRIAL_DAYS)}-day free trial. A card is required but you won't be charged until the trial ends.")
+            st.write(f"Yes — monthly plans include a {int(TRIAL_DAYS)}-day free trial. A card is required but you won't be charged until the trial ends.")
         else:
-            st.write(f"We offer a free tier with up to {int(FREE_TRADE_LIMIT)} trades — no card required. Upgrade when you're ready.")
-    with st.expander("How do I apply the DYLO20 discount?"):
-        st.write("Click **Buy Now**, then on the Stripe checkout page you'll see a **'Add promotion code'** field — type **DYLO20** and hit Apply. Your 20% discount will be applied before you pay.")
+            st.write(f"We offer a free tier with up to {int(FREE_TRADE_LIMIT)} trades so you can explore the app before upgrading.")
     with st.expander("What payment methods are accepted?"):
-        st.write("All major credit and debit cards (Visa, Mastercard, Amex) via Stripe. Apple Pay and Google Pay may also be available depending on your browser.")
+        st.write("All major cards (Visa, Mastercard, Amex) via Stripe. Apple Pay and Google Pay may also appear depending on your browser/device.")
 
     render_public_footer()
 
