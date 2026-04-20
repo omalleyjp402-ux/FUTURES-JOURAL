@@ -4727,7 +4727,7 @@ def get_image_url(path: str) -> str:
 
 def prepare_df(df: pd.DataFrame) -> pd.DataFrame:
     cleaned = df.copy()
-    cleaned["date"] = pd.to_datetime(cleaned["date"], errors="coerce")
+    cleaned["date"] = pd.to_datetime(cleaned["date"], errors="coerce", utc=True).dt.tz_localize(None)
     for col in NUMERIC_COLUMNS:
         if col in cleaned.columns:
             cleaned[col] = pd.to_numeric(cleaned[col], errors="coerce")
@@ -6513,9 +6513,11 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         direction_filter = ["Long", "Short"]
         pnl_view = "Net (after fees)"
 
+    # Strip timezone from date column so tz-naive start/end comparisons work
+    _date_col = df_view["date"].dt.tz_localize(None) if df_view["date"].dt.tz is not None else df_view["date"]
     df_view = df_view[
-        (df_view["date"] >= pd.to_datetime(start_date))
-        & (df_view["date"] <= pd.to_datetime(end_date))
+        (_date_col >= pd.to_datetime(start_date))
+        & (_date_col <= pd.to_datetime(end_date))
         & (df_view["instrument"].isin(instrument_filter))
         & (df_view["session"].isin(session_filter))
         & (df_view["direction"].isin(direction_filter))
