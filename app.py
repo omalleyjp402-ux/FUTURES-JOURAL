@@ -1644,9 +1644,12 @@ def render_public_sidebar(active: str) -> str:
         if active not in options:
             active = "Home"
         if "public_nav" not in st.session_state:
+            # First load — seed from URL param.
             st.session_state["public_nav"] = active
-        # If URL deep-link changes, let it override the in-memory selection once.
-        if active and st.session_state.get("public_nav") != active:
+        elif active != "Home":
+            # Only let a real URL deep-link (non-default) override in-session choice.
+            # When active=="Home" it might just mean the URL failed to update — don't
+            # reset a button-driven selection back to Home.
             st.session_state["public_nav"] = active
         current = st.session_state.get("public_nav", active)
         if current not in options:
