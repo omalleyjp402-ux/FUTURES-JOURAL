@@ -6777,7 +6777,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         trade_ids = sheet_df["id"].tolist()
         label_map = {}
         for _, r in sheet_df.iterrows():
-            d = r["date"].strftime("%Y-%m-%d") if hasattr(r["date"], "strftime") else safe_str(r["date"])
+            d = r["date"].strftime("%Y-%m-%d") if (hasattr(r["date"], "strftime") and r["date"] is not pd.NaT and not pd.isnull(r["date"])) else safe_str(r["date"])
             t = safe_str(r.get("entry_time"))
             label_map[r["id"]] = f"{d} {t} | {safe_str(r.get('instrument'))} | {safe_str(r.get('direction'))} | {safe_str(r.get('contracts'))}"
     
