@@ -1005,6 +1005,25 @@ def invoke_edge_function(function_name: str, payload: dict) -> tuple[bool, str]:
         return False, safe_str(e)
 
 
+def upsert_user_email_mapping(user_id: str, email: str) -> bool:
+    """
+    Best-effort: store (user_id -> email) in `public.user_emails`.
+    This enables Stripe Payment Links (which only know email) to unlock Pro access.
+    Safe if the table isn't set up yet.
+    """
+    email = safe_str(email).strip().lower()
+    if not user_id or not email:
+        return False
+    try:
+        sb = authed_supabase()
+        # Upsert by user_id (PK). Email uniqueness is enforced by a unique index.
+        sb.table("user_emails").upsert({"user_id": user_id, "email": email}).execute()
+        return True
+    except Exception:
+        st.session_state["_user_emails_last_error"] = traceback.format_exc()
+        return False
+
+
 def admin_create_test_commission(affiliate_user_id: str, amount_cents: int = 1900, pct: int = 20) -> tuple[bool, str]:
     """
     Insert a single pending commission row for pipeline testing.
@@ -7880,6 +7899,18 @@ if not user:
     render_public_router()
 else:
     maybe_record_referral(user.id)
+    # Best-effort: store email mapping so Stripe Payment Links can unlock Pro by email.
+    try:
+        user_obj = st.session_state.get("user")
+        email_for_map = ""
+        if isinstance(user_obj, dict):
+            email_for_map = safe_str(user_obj.get("email"))
+        else:
+            email_for_map = safe_str(getattr(user_obj, "email", ""))
+        if email_for_map:
+            upsert_user_email_mapping(user.id, email_for_map)
+    except Exception:
+        pass
     apply_settings_to_session(user.id)
 
     # Full section set (routing). Keep "New Trade" here so +Add Trade can navigate to it.

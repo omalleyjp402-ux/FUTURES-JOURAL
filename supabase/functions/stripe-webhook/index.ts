@@ -164,6 +164,22 @@ async function userIdForSubscription(stripeSubscriptionId: string): Promise<stri
   return (data?.user_id as string) || null;
 }
 
+async function userIdForEmail(email: string): Promise<string | null> {
+  const e = (email || "").toString().trim().toLowerCase();
+  if (!e) return null;
+  try {
+    const { data, error } = await sb
+      .from("user_emails")
+      .select("user_id")
+      .eq("email", e)
+      .maybeSingle();
+    if (error) return null;
+    return (data?.user_id as string) || null;
+  } catch (_) {
+    return null;
+  }
+}
+
 async function recordAffiliateCommissionForInvoice(params: {
   referredUserId: string;
   stripeInvoiceId: string;
@@ -291,7 +307,12 @@ Deno.serve(async (req) => {
   try {
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session;
-      const userId = (session.client_reference_id || session.metadata?.user_id || "").toString();
+      let userId = (session.client_reference_id || session.metadata?.user_id || "").toString();
+      if (!userId) {
+        const email =
+          (session.customer_details?.email || (session as any).customer_email || "").toString();
+        userId = (await userIdForEmail(email)) || "";
+      }
       if (!userId) return json({ ok: true });
 
       const customerId = (session.customer || "").toString() || null;
