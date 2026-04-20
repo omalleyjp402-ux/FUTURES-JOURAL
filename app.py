@@ -1925,7 +1925,6 @@ def render_landing_page() -> None:
         "- Performance metrics & analytics"
     )
 
-    st.info("Payments not enabled yet.")
     st.caption("Tip: best experienced on a laptop or iPad. Mobile support is improving.")
 
     st.markdown("---")
