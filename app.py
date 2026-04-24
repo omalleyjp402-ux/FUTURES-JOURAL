@@ -3013,7 +3013,7 @@ def render_affiliates_page(user_id: str) -> None:
             st.caption("Use this to create/update a code for any user UUID. (Owner-only)")
             with st.form("admin_affiliate_code_form", clear_on_submit=False):
                 auid = st.text_input("Affiliate user UUID", placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
-                code = st.text_input("Code", placeholder="DODGY1010").upper()
+                code = st.text_input("Code", placeholder="e.g. FRIEND20").upper()
                 pct = st.number_input("Commission %", min_value=1.0, max_value=80.0, value=20.0, step=1.0)
                 active = st.checkbox("Active", value=True)
                 saved = st.form_submit_button("Save code")
@@ -4630,7 +4630,14 @@ def render_reports_page(df_view: pd.DataFrame, pnl_col: str, account_type: str) 
         wk = daily.set_index("date")["pnl"].resample("W-SUN").sum().reset_index()
         wk = wk.sort_values("date")
         wk["start"] = wk["date"] - pd.to_timedelta(6, unit="D")
-        wk["label"] = wk.apply(lambda r: f"{r['start'].strftime('%b %d')} - {r['date'].strftime('%b %d, %Y')}", axis=1)
+        def _wk_label(r):
+            try:
+                s = r["start"].strftime("%b %d") if hasattr(r["start"], "strftime") and not pd.isnull(r["start"]) else "?"
+                e = r["date"].strftime("%b %d, %Y") if hasattr(r["date"], "strftime") and not pd.isnull(r["date"]) else "?"
+                return f"{s} - {e}"
+            except Exception:
+                return safe_str(r.get("date", ""))
+        wk["label"] = wk.apply(_wk_label, axis=1)
         labels = wk["label"].tolist()
         default_idx = len(labels) - 1
         choice = st.selectbox("Select week", labels, index=max(0, default_idx))
@@ -5060,8 +5067,12 @@ def _render_months_calendar(df: pd.DataFrame, pnl_col: str, form_key: str) -> No
         return
 
     daily_grp = df.copy()
-    daily_grp["_yr"] = pd.to_datetime(daily_grp["date"]).dt.year.astype(int)
-    daily_grp["_mo"] = pd.to_datetime(daily_grp["date"]).dt.month.astype(int)
+    _dates = pd.to_datetime(daily_grp["date"], errors="coerce")
+    daily_grp["_yr"] = _dates.dt.year
+    daily_grp["_mo"] = _dates.dt.month
+    daily_grp = daily_grp.dropna(subset=["_yr", "_mo"])
+    daily_grp["_yr"] = daily_grp["_yr"].astype(int)
+    daily_grp["_mo"] = daily_grp["_mo"].astype(int)
 
     mo_agg = (
         daily_grp.groupby(["_yr","_mo"], as_index=False)[pnl_col]
@@ -5150,9 +5161,10 @@ def _render_months_calendar(df: pd.DataFrame, pnl_col: str, form_key: str) -> No
         format_func=lambda m: f"{MONTH_NAMES[m-1]} {sel_year}  ({format_money(mo_pnl.get(m,(0,0))[0])})",
         key=f"{form_key}_mo_detail",
     )
+    _dt_col = pd.to_datetime(df["date"], errors="coerce")
     mo_trades = df[
-        (pd.to_datetime(df["date"]).dt.year.astype(int) == sel_year) &
-        (pd.to_datetime(df["date"]).dt.month.astype(int) == sel_mo)
+        (_dt_col.dt.year == sel_year) &
+        (_dt_col.dt.month == sel_mo)
     ].copy()
     _show_period_trade_details(mo_trades, pnl_col, f"{MONTH_NAMES[sel_mo-1]} {sel_year}")
 
@@ -7335,8 +7347,10 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         if not daily_df.empty:
             best_row = daily_df.loc[daily_df["pnl"].idxmax()]
             worst_row = daily_df.loc[daily_df["pnl"].idxmin()]
-            best_date = best_row["date"].strftime("%Y-%m-%d")
-            worst_date = worst_row["date"].strftime("%Y-%m-%d")
+            _d = best_row["date"]
+            best_date = _d.strftime("%Y-%m-%d") if hasattr(_d, "strftime") and not pd.isnull(_d) else safe_str(_d)
+            _d = worst_row["date"]
+            worst_date = _d.strftime("%Y-%m-%d") if hasattr(_d, "strftime") and not pd.isnull(_d) else safe_str(_d)
             st.markdown(f"**Biggest winning day:** {best_date} — {format_money(best_row['pnl'])}")
             st.markdown(f"**Biggest losing day:** {worst_date} — {format_money(worst_row['pnl'])}")
 
