@@ -1936,7 +1936,7 @@ def render_landing_page() -> None:
 def render_terms_page() -> None:
     render_brand_header(center=True)
     st.title("Terms of Service")
-    st.write("Last updated: (placeholder)")
+    st.write("Last updated: April 2025")
     st.markdown(
         """
 **Software-only**
@@ -1958,7 +1958,7 @@ Do not abuse the service, attempt to access other users’ data, reverse enginee
 def render_privacy_page() -> None:
     render_brand_header(center=True)
     st.title("Privacy Policy")
-    st.write("Last updated: (placeholder)")
+    st.write("Last updated: April 2025")
     st.markdown(
         f"""
 **What we collect**
@@ -1982,7 +1982,7 @@ For privacy questions, contact: {PUBLIC_CONTACT_EMAIL}
 def render_refund_page() -> None:
     render_brand_header(center=True)
     st.title("Refund Policy")
-    st.write("Last updated: (placeholder)")
+    st.write("Last updated: April 2025")
     st.markdown(
         f"""
 **Refund window**
@@ -3522,12 +3522,11 @@ def render_journal_page(user_id: str) -> None:
                     email = safe_str(user_obj.get("email"))
                 else:
                     email = safe_str(getattr(user_obj, "email", ""))
-                if email.lower() == "omalleyjp402@gmail.com":
+                if is_admin_email(email):
                     details = safe_str(st.session_state.get("_journal_last_error"))
                     if details:
                         with st.expander("Debug details (owner only)", expanded=False):
                             st.code(details)
-                            st.caption(f"Supabase URL in app: {SUPABASE_URL}")
                 existing = ""
             st.session_state[state_key] = existing
             st.session_state[last_key] = existing
