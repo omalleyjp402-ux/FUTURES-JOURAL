@@ -47,7 +47,7 @@ header[data-testid="stHeader"] { display: none !important; }
 footer { visibility: hidden !important; }
 .stDeployButton { display: none !important; }
 
-/* Sidebar: force expanded on desktop, let it collapse normally on mobile */
+/* ── Desktop: sidebar always open, hide collapse button ── */
 @media (min-width: 768px) {
     section[data-testid="stSidebar"] {
         transform: none !important;
@@ -63,15 +63,49 @@ footer { visibility: hidden !important; }
         display: none !important;
     }
 }
-/* Mobile: keep the toggle button visible but position it so it doesn't overlap content */
+
+/* ── Mobile: sidebar slides in/out, toggle button floats independently ── */
 @media (max-width: 767px) {
-    [data-testid="collapsedControl"] {
-        top: 0.5rem !important;
-        left: 0.5rem !important;
-        z-index: 999 !important;
+    /* Sidebar slides in from left as an overlay — don't force it open */
+    section[data-testid="stSidebar"] {
+        min-width: unset !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        height: 100dvh !important;
+        z-index: 1000 !important;
+        box-shadow: 4px 0 24px rgba(0,0,0,0.5) !important;
     }
+    /* When collapsed, slide it fully off-screen */
+    section[data-testid="stSidebar"][aria-expanded="false"] {
+        transform: translateX(-110%) !important;
+        display: flex !important;
+    }
+    /* Toggle button: fixed top-left, OUTSIDE the sidebar, always visible */
+    [data-testid="collapsedControl"] {
+        display: flex !important;
+        position: fixed !important;
+        top: 0.6rem !important;
+        left: 0.6rem !important;
+        z-index: 1100 !important;
+        background: rgba(124,58,237,0.92) !important;
+        border-radius: 10px !important;
+        box-shadow: 0 2px 12px rgba(124,58,237,0.5) !important;
+        width: 2.4rem !important;
+        height: 2.4rem !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border: 1px solid rgba(167,139,250,0.4) !important;
+    }
+    [data-testid="collapsedControl"] svg {
+        color: #ffffff !important;
+        fill: #ffffff !important;
+    }
+    /* Push main content down so nothing sits under the toggle button */
     div[data-testid="stAppViewContainer"] .block-container {
-        padding-top: 3rem !important;
+        padding-top: 3.5rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
     }
 }
 
