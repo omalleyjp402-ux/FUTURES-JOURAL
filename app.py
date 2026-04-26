@@ -47,19 +47,32 @@ header[data-testid="stHeader"] { display: none !important; }
 footer { visibility: hidden !important; }
 .stDeployButton { display: none !important; }
 
-/* Sidebar: force expanded, hide collapse button */
-section[data-testid="stSidebar"] {
-    transform: none !important;
-    margin-left: 0 !important;
-    min-width: 244px !important;
+/* Sidebar: force expanded on desktop, let it collapse normally on mobile */
+@media (min-width: 768px) {
+    section[data-testid="stSidebar"] {
+        transform: none !important;
+        margin-left: 0 !important;
+        min-width: 244px !important;
+    }
+    section[data-testid="stSidebar"][aria-expanded="false"] {
+        transform: none !important;
+        min-width: 244px !important;
+        display: flex !important;
+    }
+    [data-testid="collapsedControl"] {
+        display: none !important;
+    }
 }
-section[data-testid="stSidebar"][aria-expanded="false"] {
-    transform: none !important;
-    min-width: 244px !important;
-    display: flex !important;
-}
-[data-testid="collapsedControl"] {
-    display: none !important;
+/* Mobile: keep the toggle button visible but position it so it doesn't overlap content */
+@media (max-width: 767px) {
+    [data-testid="collapsedControl"] {
+        top: 0.5rem !important;
+        left: 0.5rem !important;
+        z-index: 999 !important;
+    }
+    div[data-testid="stAppViewContainer"] .block-container {
+        padding-top: 3rem !important;
+    }
 }
 
 /* Sidebar: thin purple top accent */
