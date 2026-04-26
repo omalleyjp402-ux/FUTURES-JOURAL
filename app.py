@@ -64,61 +64,60 @@ footer { visibility: hidden !important; }
     }
 }
 
-/* ── Mobile: sidebar slides in/out, toggle button floats independently ── */
+/* ── Mobile: sidebar overlay + floating hamburger top-left ── */
 @media (max-width: 767px) {
-    /* Sidebar slides in from left as an overlay */
+    /* Sidebar is a full-height overlay sliding in from the left */
     section[data-testid="stSidebar"] {
-        min-width: 260px !important;
-        max-width: 260px !important;
-        width: 260px !important;
         position: fixed !important;
         top: 0 !important;
         left: 0 !important;
         height: 100dvh !important;
+        width: 80vw !important;
+        min-width: unset !important;
+        max-width: 300px !important;
         z-index: 1000 !important;
-        box-shadow: 4px 0 24px rgba(0,0,0,0.5) !important;
+        box-shadow: 4px 0 24px rgba(0,0,0,0.6) !important;
+        transition: transform 0.25s ease !important;
+        padding-top: 3.5rem !important;
     }
-    /* When collapsed, slide it fully off-screen */
+    /* Hidden state: slide fully off-screen to the left */
     section[data-testid="stSidebar"][aria-expanded="false"] {
         transform: translateX(-100%) !important;
         display: flex !important;
     }
-    /* Toggle button: pinned just to the RIGHT of the sidebar edge,
-       so it never sits on top of sidebar content.
-       When sidebar is closed it appears at left:0; when open it peeks
-       out at the sidebar's right edge (260px). We use left:260px always
-       so the button is always outside the sidebar regardless of state. */
+    /* Visible state */
+    section[data-testid="stSidebar"][aria-expanded="true"] {
+        transform: translateX(0) !important;
+    }
+    /* Hamburger button: fixed top-left corner, always visible, moves with sidebar */
     [data-testid="collapsedControl"] {
         display: flex !important;
         position: fixed !important;
-        top: 50% !important;
-        left: 0px !important;
-        transform: translateY(-50%) !important;
+        top: 0.7rem !important;
+        left: 0.7rem !important;
         z-index: 1100 !important;
-        background: rgba(124,58,237,0.92) !important;
-        border-radius: 0 10px 10px 0 !important;
-        box-shadow: 3px 0 12px rgba(124,58,237,0.5) !important;
-        width: 1.6rem !important;
-        height: 3rem !important;
+        background: rgba(124,58,237,0.95) !important;
+        border-radius: 8px !important;
+        box-shadow: 0 2px 10px rgba(124,58,237,0.5) !important;
+        width: 2.5rem !important;
+        height: 2.5rem !important;
         align-items: center !important;
         justify-content: center !important;
-        border: 1px solid rgba(167,139,250,0.4) !important;
-        border-left: none !important;
-        transition: left 0.3s ease !important;
+        border: 1px solid rgba(167,139,250,0.5) !important;
+        transition: left 0.25s ease !important;
     }
-    /* When sidebar is open, push the button to the right of the sidebar */
-    section[data-testid="stSidebar"][aria-expanded="true"] ~ div [data-testid="collapsedControl"],
-    section[data-testid="stSidebar"][aria-expanded="true"] ~ [data-testid="collapsedControl"] {
-        left: 260px !important;
+    /* When sidebar is open, slide the button to sit at the sidebar's right edge */
+    section[data-testid="stSidebar"][aria-expanded="true"] ~ * [data-testid="collapsedControl"],
+    body:has(section[data-testid="stSidebar"][aria-expanded="true"]) [data-testid="collapsedControl"] {
+        left: calc(min(80vw, 300px) + 0.7rem) !important;
     }
     [data-testid="collapsedControl"] svg {
-        color: #ffffff !important;
-        fill: #ffffff !important;
-        width: 1rem !important;
-        height: 1rem !important;
+        color: #fff !important;
+        fill: #fff !important;
     }
-    /* Main content: no extra top padding needed since button is on the side */
+    /* Push main content down so it clears the hamburger button */
     div[data-testid="stAppViewContainer"] .block-container {
+        padding-top: 4rem !important;
         padding-left: 1rem !important;
         padding-right: 1rem !important;
     }
