@@ -64,58 +64,45 @@ footer { visibility: hidden !important; }
     }
 }
 
-/* ── Mobile: sidebar overlay + floating hamburger top-left ── */
+/* ── Mobile: hide Streamlit's own toggle; JS injects a custom one ── */
 @media (max-width: 767px) {
-    /* Sidebar is a full-height overlay sliding in from the left */
+    [data-testid="collapsedControl"] { display: none !important; }
     section[data-testid="stSidebar"] {
         position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
+        top: 0 !important; left: 0 !important;
         height: 100dvh !important;
-        width: 80vw !important;
-        min-width: unset !important;
-        max-width: 300px !important;
         z-index: 1000 !important;
         box-shadow: 4px 0 24px rgba(0,0,0,0.6) !important;
         transition: transform 0.25s ease !important;
-        padding-top: 3.5rem !important;
     }
-    /* Hidden state: slide fully off-screen to the left */
     section[data-testid="stSidebar"][aria-expanded="false"] {
         transform: translateX(-100%) !important;
         display: flex !important;
     }
-    /* Visible state */
     section[data-testid="stSidebar"][aria-expanded="true"] {
         transform: translateX(0) !important;
     }
-    /* Hamburger button: fixed top-left corner, always visible, moves with sidebar */
-    [data-testid="collapsedControl"] {
-        display: flex !important;
+    #tradylo-hamburger {
         position: fixed !important;
         top: 0.7rem !important;
         left: 0.7rem !important;
-        z-index: 1100 !important;
+        z-index: 2000 !important;
+        width: 2.6rem !important;
+        height: 2.6rem !important;
         background: rgba(124,58,237,0.95) !important;
+        border: 1px solid rgba(167,139,250,0.5) !important;
         border-radius: 8px !important;
         box-shadow: 0 2px 10px rgba(124,58,237,0.5) !important;
-        width: 2.5rem !important;
-        height: 2.5rem !important;
+        display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        border: 1px solid rgba(167,139,250,0.5) !important;
+        cursor: pointer !important;
         transition: left 0.25s ease !important;
     }
-    /* When sidebar is open, slide the button to sit at the sidebar's right edge */
-    section[data-testid="stSidebar"][aria-expanded="true"] ~ * [data-testid="collapsedControl"],
-    body:has(section[data-testid="stSidebar"][aria-expanded="true"]) [data-testid="collapsedControl"] {
-        left: calc(min(80vw, 300px) + 0.7rem) !important;
+    #tradylo-hamburger.open {
+        left: calc(var(--sb-width, 80vw) + 0.7rem) !important;
     }
-    [data-testid="collapsedControl"] svg {
-        color: #fff !important;
-        fill: #fff !important;
-    }
-    /* Push main content down so it clears the hamburger button */
+    #tradylo-hamburger svg { pointer-events: none; }
     div[data-testid="stAppViewContainer"] .block-container {
         padding-top: 4rem !important;
         padding-left: 1rem !important;
@@ -475,6 +462,68 @@ div[data-testid="stExpander"] > div {
 .tdy-cal .cell.flat .pnl{color:#475569}
 .tdy-cal .cell.out{opacity:.3;background:#0e1117}
 </style>
+""", unsafe_allow_html=True)
+
+# ── Mobile hamburger button (JS-injected, always on top of sidebar) ──────────
+st.markdown("""
+<div id="tradylo-hamburger" aria-label="Toggle menu">
+  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect y="2" width="18" height="2" rx="1" fill="white"/>
+    <rect y="8" width="18" height="2" rx="1" fill="white"/>
+    <rect y="14" width="18" height="2" rx="1" fill="white"/>
+  </svg>
+</div>
+<script>
+(function() {
+  function init() {
+    var btn = document.getElementById('tradylo-hamburger');
+    if (!btn) return;
+    // Only show on mobile
+    if (window.innerWidth > 767) { btn.style.display = 'none'; return; }
+
+    function getSidebar() {
+      return document.querySelector('section[data-testid="stSidebar"]');
+    }
+    function isOpen() {
+      var sb = getSidebar();
+      return sb && sb.getAttribute('aria-expanded') === 'true';
+    }
+    function updateBtn() {
+      var sb = getSidebar();
+      if (!sb) return;
+      var w = sb.offsetWidth;
+      if (isOpen()) {
+        btn.classList.add('open');
+        btn.style.setProperty('--sb-width', w + 'px');
+        btn.style.left = (w + 11) + 'px';
+      } else {
+        btn.classList.remove('open');
+        btn.style.left = '0.7rem';
+      }
+    }
+    btn.addEventListener('click', function() {
+      // Click Streamlit's real hidden toggle button
+      var real = document.querySelector('[data-testid="collapsedControl"] button') ||
+                 document.querySelector('[data-testid="collapsedControl"]');
+      if (real) real.click();
+      setTimeout(updateBtn, 50);
+      setTimeout(updateBtn, 300);
+    });
+    // Watch sidebar aria-expanded changes
+    var sb = getSidebar();
+    if (sb) {
+      new MutationObserver(updateBtn).observe(sb, { attributes: true, attributeFilter: ['aria-expanded'] });
+    }
+    updateBtn();
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+    setTimeout(init, 500);
+  }
+})();
+</script>
 """, unsafe_allow_html=True)
 
 # ── Supabase client ──────────────────────────────────────────────────────────
@@ -1967,7 +2016,6 @@ def render_landing_page() -> None:
             st.markdown(" ")
             if st.button("Log in / Sign up", use_container_width=True, key="landing_login_btn"):
                 _go_auth()
-            st.caption("-> Access is free for life for now - won't last long.")
         with c3:
             st.markdown(" ")
             st.markdown(" ")
