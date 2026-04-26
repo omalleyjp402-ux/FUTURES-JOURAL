@@ -66,43 +66,31 @@ footer { visibility: hidden !important; }
 
 /* ── Mobile: hide Streamlit's own toggle; JS injects a custom one ── */
 @media (max-width: 767px) {
+    /* Hide Streamlit's built-in toggle completely */
     [data-testid="collapsedControl"] { display: none !important; }
+    /* Sidebar: fixed overlay, slides in from left */
     section[data-testid="stSidebar"] {
         position: fixed !important;
-        top: 0 !important; left: 0 !important;
+        top: 0 !important;
+        left: 0 !important;
         height: 100dvh !important;
+        min-width: 75vw !important;
+        max-width: 300px !important;
         z-index: 1000 !important;
         box-shadow: 4px 0 24px rgba(0,0,0,0.6) !important;
         transition: transform 0.25s ease !important;
+        overflow: hidden !important;
     }
+    /* Fully off-screen when collapsed — no strip */
     section[data-testid="stSidebar"][aria-expanded="false"] {
-        transform: translateX(-100%) !important;
-        display: flex !important;
+        transform: translateX(-110%) !important;
+        visibility: hidden !important;
     }
     section[data-testid="stSidebar"][aria-expanded="true"] {
         transform: translateX(0) !important;
+        visibility: visible !important;
     }
-    #tradylo-hamburger {
-        position: fixed !important;
-        top: 0.7rem !important;
-        left: 0.7rem !important;
-        z-index: 2000 !important;
-        width: 2.6rem !important;
-        height: 2.6rem !important;
-        background: rgba(124,58,237,0.95) !important;
-        border: 1px solid rgba(167,139,250,0.5) !important;
-        border-radius: 8px !important;
-        box-shadow: 0 2px 10px rgba(124,58,237,0.5) !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        cursor: pointer !important;
-        transition: left 0.25s ease !important;
-    }
-    #tradylo-hamburger.open {
-        left: calc(var(--sb-width, 80vw) + 0.7rem) !important;
-    }
-    #tradylo-hamburger svg { pointer-events: none; }
+    /* Main content: clear the hamburger button at top */
     div[data-testid="stAppViewContainer"] .block-container {
         padding-top: 4rem !important;
         padding-left: 1rem !important;
@@ -464,67 +452,75 @@ div[data-testid="stExpander"] > div {
 </style>
 """, unsafe_allow_html=True)
 
-# ── Mobile hamburger button (JS-injected, always on top of sidebar) ──────────
-st.markdown("""
-<div id="tradylo-hamburger" aria-label="Toggle menu">
-  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect y="2" width="18" height="2" rx="1" fill="white"/>
-    <rect y="8" width="18" height="2" rx="1" fill="white"/>
-    <rect y="14" width="18" height="2" rx="1" fill="white"/>
-  </svg>
-</div>
+# ── Mobile hamburger button — injected via components.html so JS actually runs ─
+import streamlit.components.v1 as _components
+_components.html("""
 <script>
 (function() {
-  function init() {
-    var btn = document.getElementById('tradylo-hamburger');
-    if (!btn) return;
-    // Only show on mobile
-    if (window.innerWidth > 767) { btn.style.display = 'none'; return; }
+  var doc = window.parent.document;
+
+  function setup() {
+    if (window.parent.innerWidth > 767) return; // desktop: do nothing
+
+    // Remove any previous button we injected
+    var old = doc.getElementById('tradylo-hamburger');
+    if (old) old.remove();
+
+    // Create the hamburger button in the PARENT page
+    var btn = doc.createElement('div');
+    btn.id = 'tradylo-hamburger';
+    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect y="2" width="18" height="2" rx="1" fill="white"/><rect y="8" width="18" height="2" rx="1" fill="white"/><rect y="14" width="18" height="2" rx="1" fill="white"/></svg>';
+    Object.assign(btn.style, {
+      position: 'fixed',
+      top: '0.7rem',
+      left: '0.7rem',
+      zIndex: '9999',
+      width: '2.6rem',
+      height: '2.6rem',
+      background: 'rgba(124,58,237,0.95)',
+      border: '1px solid rgba(167,139,250,0.5)',
+      borderRadius: '8px',
+      boxShadow: '0 2px 10px rgba(124,58,237,0.5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      cursor: 'pointer',
+      transition: 'left 0.25s ease'
+    });
+    doc.body.appendChild(btn);
 
     function getSidebar() {
-      return document.querySelector('section[data-testid="stSidebar"]');
-    }
-    function isOpen() {
-      var sb = getSidebar();
-      return sb && sb.getAttribute('aria-expanded') === 'true';
+      return doc.querySelector('section[data-testid="stSidebar"]');
     }
     function updateBtn() {
       var sb = getSidebar();
       if (!sb) return;
-      var w = sb.offsetWidth;
-      if (isOpen()) {
-        btn.classList.add('open');
-        btn.style.setProperty('--sb-width', w + 'px');
-        btn.style.left = (w + 11) + 'px';
-      } else {
-        btn.classList.remove('open');
-        btn.style.left = '0.7rem';
-      }
+      var open = sb.getAttribute('aria-expanded') === 'true';
+      btn.style.left = open ? (sb.offsetWidth + 11) + 'px' : '0.7rem';
     }
     btn.addEventListener('click', function() {
-      // Click Streamlit's real hidden toggle button
-      var real = document.querySelector('[data-testid="collapsedControl"] button') ||
-                 document.querySelector('[data-testid="collapsedControl"]');
+      var real = doc.querySelector('[data-testid="collapsedControl"] button') ||
+                 doc.querySelector('[data-testid="collapsedControl"]');
       if (real) real.click();
-      setTimeout(updateBtn, 50);
-      setTimeout(updateBtn, 300);
+      setTimeout(updateBtn, 60);
+      setTimeout(updateBtn, 320);
     });
-    // Watch sidebar aria-expanded changes
     var sb = getSidebar();
     if (sb) {
-      new MutationObserver(updateBtn).observe(sb, { attributes: true, attributeFilter: ['aria-expanded'] });
+      new MutationObserver(updateBtn).observe(sb, {attributes: true, attributeFilter: ['aria-expanded']});
     }
     updateBtn();
   }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+
+  if (doc.readyState === 'loading') {
+    doc.addEventListener('DOMContentLoaded', setup);
   } else {
-    init();
-    setTimeout(init, 500);
+    setup();
+    setTimeout(setup, 600);
   }
 })();
 </script>
-""", unsafe_allow_html=True)
+""", height=0)
 
 # ── Supabase client ──────────────────────────────────────────────────────────
 def get_secret_required(name: str, fallback_names: Optional[list] = None) -> str:
