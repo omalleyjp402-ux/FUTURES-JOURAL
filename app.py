@@ -66,9 +66,11 @@ footer { visibility: hidden !important; }
 
 /* ── Mobile: sidebar slides in/out, toggle button floats independently ── */
 @media (max-width: 767px) {
-    /* Sidebar slides in from left as an overlay — don't force it open */
+    /* Sidebar slides in from left as an overlay */
     section[data-testid="stSidebar"] {
-        min-width: unset !important;
+        min-width: 260px !important;
+        max-width: 260px !important;
+        width: 260px !important;
         position: fixed !important;
         top: 0 !important;
         left: 0 !important;
@@ -78,32 +80,45 @@ footer { visibility: hidden !important; }
     }
     /* When collapsed, slide it fully off-screen */
     section[data-testid="stSidebar"][aria-expanded="false"] {
-        transform: translateX(-110%) !important;
+        transform: translateX(-100%) !important;
         display: flex !important;
     }
-    /* Toggle button: fixed top-left, OUTSIDE the sidebar, always visible */
+    /* Toggle button: pinned just to the RIGHT of the sidebar edge,
+       so it never sits on top of sidebar content.
+       When sidebar is closed it appears at left:0; when open it peeks
+       out at the sidebar's right edge (260px). We use left:260px always
+       so the button is always outside the sidebar regardless of state. */
     [data-testid="collapsedControl"] {
         display: flex !important;
         position: fixed !important;
-        top: 0.6rem !important;
-        left: 0.6rem !important;
+        top: 50% !important;
+        left: 0px !important;
+        transform: translateY(-50%) !important;
         z-index: 1100 !important;
         background: rgba(124,58,237,0.92) !important;
-        border-radius: 10px !important;
-        box-shadow: 0 2px 12px rgba(124,58,237,0.5) !important;
-        width: 2.4rem !important;
-        height: 2.4rem !important;
+        border-radius: 0 10px 10px 0 !important;
+        box-shadow: 3px 0 12px rgba(124,58,237,0.5) !important;
+        width: 1.6rem !important;
+        height: 3rem !important;
         align-items: center !important;
         justify-content: center !important;
         border: 1px solid rgba(167,139,250,0.4) !important;
+        border-left: none !important;
+        transition: left 0.3s ease !important;
+    }
+    /* When sidebar is open, push the button to the right of the sidebar */
+    section[data-testid="stSidebar"][aria-expanded="true"] ~ div [data-testid="collapsedControl"],
+    section[data-testid="stSidebar"][aria-expanded="true"] ~ [data-testid="collapsedControl"] {
+        left: 260px !important;
     }
     [data-testid="collapsedControl"] svg {
         color: #ffffff !important;
         fill: #ffffff !important;
+        width: 1rem !important;
+        height: 1rem !important;
     }
-    /* Push main content down so nothing sits under the toggle button */
+    /* Main content: no extra top padding needed since button is on the side */
     div[data-testid="stAppViewContainer"] .block-container {
-        padding-top: 3.5rem !important;
         padding-left: 1rem !important;
         padding-right: 1rem !important;
     }
