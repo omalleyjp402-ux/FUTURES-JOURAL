@@ -498,13 +498,36 @@ _components.html("""
       var open = sb.getAttribute('aria-expanded') === 'true';
       btn.style.left = open ? (sb.offsetWidth + 11) + 'px' : '0.7rem';
     }
-    btn.addEventListener('click', function() {
-      var real = doc.querySelector('[data-testid="collapsedControl"] button') ||
-                 doc.querySelector('[data-testid="collapsedControl"]');
-      if (real) real.click();
-      setTimeout(updateBtn, 60);
-      setTimeout(updateBtn, 320);
-    });
+    function clickToggle() {
+      // Try every known selector for Streamlit's sidebar toggle
+      var candidates = [
+        '[data-testid="collapsedControl"] button',
+        '[data-testid="collapsedControl"]',
+        'button[aria-label*="sidebar"]',
+        'button[aria-label*="Sidebar"]',
+        'button[aria-label*="navigation"]',
+        'button[title*="sidebar"]',
+        'button[title*="Sidebar"]'
+      ];
+      for (var i = 0; i < candidates.length; i++) {
+        var el = doc.querySelector(candidates[i]);
+        if (el) {
+          el.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, view: window.parent}));
+          setTimeout(updateBtn, 60);
+          setTimeout(updateBtn, 350);
+          return;
+        }
+      }
+      // Fallback: toggle aria-expanded directly on the sidebar
+      var sb = getSidebar();
+      if (sb) {
+        var cur = sb.getAttribute('aria-expanded') === 'true';
+        sb.setAttribute('aria-expanded', cur ? 'false' : 'true');
+        setTimeout(updateBtn, 60);
+      }
+    }
+    btn.addEventListener('click', clickToggle);
+    btn.addEventListener('touchend', function(e) { e.preventDefault(); clickToggle(); });
     var sb = getSidebar();
     if (sb) {
       new MutationObserver(updateBtn).observe(sb, {attributes: true, attributeFilter: ['aria-expanded']});
