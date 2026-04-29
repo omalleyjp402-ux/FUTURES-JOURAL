@@ -545,6 +545,105 @@ _components.html("""
 </script>
 """, height=0)
 
+# ── High-impact economic calendar ────────────────────────────────────────────
+import datetime as _dt
+
+_FOMC_DATES = {
+    _dt.date(2025, 5, 7), _dt.date(2025, 6, 18), _dt.date(2025, 7, 30),
+    _dt.date(2025, 9, 17), _dt.date(2025, 10, 29), _dt.date(2025, 12, 10),
+    _dt.date(2026, 1, 28), _dt.date(2026, 3, 18), _dt.date(2026, 4, 29),
+    _dt.date(2026, 6, 17), _dt.date(2026, 7, 29), _dt.date(2026, 9, 16),
+    _dt.date(2026, 10, 28), _dt.date(2026, 12, 9),
+}
+_CPI_DATES = {
+    _dt.date(2025, 5, 13), _dt.date(2025, 6, 11), _dt.date(2025, 7, 15),
+    _dt.date(2025, 8, 12), _dt.date(2025, 9, 10), _dt.date(2025, 10, 14),
+    _dt.date(2025, 11, 12), _dt.date(2025, 12, 10), _dt.date(2026, 1, 14),
+    _dt.date(2026, 2, 11), _dt.date(2026, 3, 11), _dt.date(2026, 4, 14),
+    _dt.date(2026, 5, 13), _dt.date(2026, 6, 10), _dt.date(2026, 7, 14),
+    _dt.date(2026, 8, 12), _dt.date(2026, 9, 9), _dt.date(2026, 10, 14),
+    _dt.date(2026, 11, 11), _dt.date(2026, 12, 9),
+}
+_PPI_DATES = {
+    _dt.date(2025, 5, 15), _dt.date(2025, 6, 12), _dt.date(2025, 7, 15),
+    _dt.date(2025, 8, 14), _dt.date(2025, 9, 11), _dt.date(2025, 10, 15),
+    _dt.date(2025, 11, 13), _dt.date(2025, 12, 11), _dt.date(2026, 1, 15),
+    _dt.date(2026, 2, 12), _dt.date(2026, 3, 12), _dt.date(2026, 4, 14),
+    _dt.date(2026, 5, 14), _dt.date(2026, 6, 11), _dt.date(2026, 7, 14),
+    _dt.date(2026, 8, 13), _dt.date(2026, 9, 10), _dt.date(2026, 10, 15),
+    _dt.date(2026, 11, 12), _dt.date(2026, 12, 10),
+}
+_FOMC_MINUTES_DATES = {
+    _dt.date(2025, 5, 28), _dt.date(2025, 7, 9), _dt.date(2025, 8, 20),
+    _dt.date(2025, 10, 8), _dt.date(2025, 11, 19), _dt.date(2026, 1, 7),
+    _dt.date(2026, 2, 18), _dt.date(2026, 4, 8), _dt.date(2026, 5, 20),
+    _dt.date(2026, 7, 8), _dt.date(2026, 8, 19), _dt.date(2026, 10, 7),
+    _dt.date(2026, 11, 18),
+}
+
+def _get_nfp_dates(year: int):
+    dates = set()
+    for month in range(1, 13):
+        d = _dt.date(year, month, 1)
+        first_fri = d + _dt.timedelta(days=(4 - d.weekday()) % 7)
+        dates.add(first_fri)
+    return dates
+
+def _get_opex_dates(year: int):
+    dates = set()
+    for month in range(1, 13):
+        d = _dt.date(year, month, 1)
+        first_fri = d + _dt.timedelta(days=(4 - d.weekday()) % 7)
+        dates.add(first_fri + _dt.timedelta(weeks=2))
+    return dates
+
+def _get_quad_witching(year: int):
+    dates = set()
+    for month in [3, 6, 9, 12]:
+        d = _dt.date(year, month, 1)
+        first_fri = d + _dt.timedelta(days=(4 - d.weekday()) % 7)
+        dates.add(first_fri + _dt.timedelta(weeks=2))
+    return dates
+
+def get_news_events_for_date(d) -> list:
+    """Returns list of high-impact event dicts for the given date."""
+    if isinstance(d, datetime):
+        d = d.date()
+    year = d.year
+    nfp = _get_nfp_dates(year)
+    opex = _get_opex_dates(year)
+    quad = _get_quad_witching(year)
+    events = []
+    if d in _FOMC_DATES:
+        events.append({"name": "FOMC Day", "emoji": "🏦", "colour": "#f59e0b",
+            "description": "Federal Reserve interest rate decision day",
+            "prompt": "How did price action behave around FOMC today? Did the market fake a direction? Was there a 'buy the rumour sell the news' reaction? What time did volatility spike?"})
+    if d in _CPI_DATES:
+        events.append({"name": "CPI Release", "emoji": "📊", "colour": "#3b82f6",
+            "description": "Consumer Price Index inflation data release",
+            "prompt": "How did the market react to CPI today? Was the print hotter or cooler than expected? Did price reverse quickly or trend in one direction?"})
+    if d in _PPI_DATES:
+        events.append({"name": "PPI Release", "emoji": "🏭", "colour": "#6366f1",
+            "description": "Producer Price Index data release",
+            "prompt": "How did PPI affect price action today? Any correlation with recent CPI data?"})
+    if d in _FOMC_MINUTES_DATES:
+        events.append({"name": "FOMC Minutes", "emoji": "📋", "colour": "#8b5cf6",
+            "description": "Release of previous FOMC meeting minutes",
+            "prompt": "How did markets react to the FOMC minutes today? Was the reaction muted or significant? Did any hawkish/dovish surprises move price?"})
+    if d in nfp:
+        events.append({"name": "NFP Day", "emoji": "💼", "colour": "#10b981",
+            "description": "Non-Farm Payrolls employment report (first Friday)",
+            "prompt": "How did NFP affect futures today? Was the number a beat or miss? Did price spike and reverse or trend cleanly after the release?"})
+    if d in quad:
+        events.append({"name": "Quad Witching", "emoji": "⚡", "colour": "#ef4444",
+            "description": "Quarterly expiration of futures, options and stock options",
+            "prompt": "How did quad witching affect price action today? Was there unusual volume or volatility? Did price pin to a key level into close?"})
+    elif d in opex:
+        events.append({"name": "Monthly Opex", "emoji": "📅", "colour": "#f97316",
+            "description": "Monthly options expiration (third Friday)",
+            "prompt": "How did opex affect price action today? Any unusual pinning to strikes or end-of-day volatility?"})
+    return events
+
 # ── Supabase client ──────────────────────────────────────────────────────────
 def get_secret_required(name: str, fallback_names: Optional[list] = None) -> str:
     names = [name] + (fallback_names or [])
@@ -6714,6 +6813,35 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                 st.caption("Fill in your trade details manually.")
 
             with st.form(f"{form_key}_form", clear_on_submit=True):
+                # ── News event detection ──────────────────────────────────────
+                _today_date = _dt.date.today()
+                _news_events = get_news_events_for_date(_today_date)
+                if _news_events:
+                    for _evt in _news_events:
+                        st.markdown(
+                            f"""<div style="background:rgba(0,0,0,0.3);
+                            border:1px solid {_evt['colour']}40;
+                            border-left:4px solid {_evt['colour']};
+                            border-radius:10px;padding:14px 18px;margin:0 0 12px 0;">
+                            <p style="color:{_evt['colour']};font-size:0.7rem;
+                            font-weight:800;letter-spacing:1.5px;margin:0 0 4px 0;
+                            text-transform:uppercase;">
+                            {_evt['emoji']} {_evt['name'].upper()} — TODAY</p>
+                            <p style="color:#94a3b8;font-size:0.75rem;margin:0 0 10px 0;">
+                            {_evt['description']}</p>
+                            <p style="color:#e2e8f0;font-size:0.78rem;margin:0 0 8px 0;">
+                            {_evt['prompt']}</p>
+                            </div>""",
+                            unsafe_allow_html=True,
+                        )
+                        _evt_key = f"{form_key}_news_{_evt['name'].replace(' ', '_')}"
+                        st.text_area(
+                            f"Your notes on {_evt['name']} price action",
+                            placeholder="e.g. Market faked upside at 9:45, then dumped 40 points into the decision...",
+                            height=90,
+                            key=_evt_key,
+                        )
+
                 if import_mode == "Manual entry":
                     st.markdown("**Core trade info**")
                     row1 = st.columns(4)
@@ -7055,6 +7183,15 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     scale_payload = {}
 
                 notes_to_save = _append_scale_out_to_notes(notes, scale_payload)
+                # Append any news event notes
+                _news_parts = []
+                for _evt in _news_events:
+                    _nk = f"{form_key}_news_{_evt['name'].replace(' ', '_')}"
+                    _nv = st.session_state.get(_nk, "").strip()
+                    if _nv:
+                        _news_parts.append(f"[{_evt['name']}]: {_nv}")
+                if _news_parts:
+                    notes_to_save = (notes_to_save + "\n\n" + " | ".join(_news_parts)).strip()
 
                 row = {
                     "id": uuid.uuid4().hex,
@@ -7411,6 +7548,25 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
             st.image("assets/tradylo-logo.png", width=140)
         with _tc:
             st.markdown("<h1 style='font-size:1.8rem;font-weight:700;margin:4px 0 0 0;'>Dashboard</h1>", unsafe_allow_html=True)
+        # ── High-impact day banner ────────────────────────────────────────────
+        _dash_events = get_news_events_for_date(_dt.date.today())
+        for _de in _dash_events:
+            st.markdown(
+                f"""<div style="background:rgba(0,0,0,0.25);
+                border:1px solid {_de['colour']}50;
+                border-left:4px solid {_de['colour']};
+                border-radius:8px;padding:12px 16px;margin:0 0 10px 0;
+                display:flex;align-items:center;gap:12px;">
+                <span style="font-size:1.4rem;">{_de['emoji']}</span>
+                <div>
+                <p style="color:{_de['colour']};font-size:0.72rem;
+                font-weight:800;letter-spacing:1.2px;margin:0 0 2px 0;
+                text-transform:uppercase;">{_de['name']} TODAY</p>
+                <p style="color:#94a3b8;font-size:0.78rem;margin:0;">
+                {_de['description']} — consider how this may affect your trades today.</p>
+                </div></div>""",
+                unsafe_allow_html=True,
+            )
         render_metric_cards(cards)
         render_next_week_focus_panel(user_id)
 
@@ -7949,6 +8105,52 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     st.info("Not enough data to calculate Risk of Ruin.")
             else:
                 st.info("Log at least 5 trades to see your Risk of Ruin calculation.")
+
+        # ── News event notes history ──────────────────────────────────────────
+        st.markdown("---")
+        st.markdown("### 📰 News Event Notes")
+        st.caption("Your personal notes on how price action behaved on high-impact news days.")
+        if not df_view.empty and "notes" in df_view.columns:
+            _news_trades = df_view[
+                df_view["notes"].str.contains(
+                    r"\[FOMC|\[CPI|\[PPI|\[NFP|\[Opex|\[Quad|\[Monthly",
+                    case=False, na=False, regex=True,
+                )
+            ].copy()
+            if _news_trades.empty:
+                st.info("No news event notes yet. When you log a trade on a high-impact day (FOMC, CPI, NFP etc.) a notes box will appear automatically.")
+            else:
+                for _, _nr in _news_trades.iterrows():
+                    _note_text = str(_nr.get("notes", ""))
+                    _date_str = str(_nr.get("date", ""))[:10]
+                    _pnl_val = float(_nr.get(pnl_col, 0) or 0)
+                    _pnl_colour = "#22c55e" if _pnl_val >= 0 else "#ef4444"
+                    _pnl_str = f"${_pnl_val:+,.2f}"
+                    _news_lines = [ln for ln in _note_text.split("\n") if ln.strip().startswith("[")]
+                    for _part in _news_lines:
+                        if "]: " in _part:
+                            _evt_label = _part.split("]: ")[0].replace("[", "")
+                            _evt_note = _part.split("]: ", 1)[1]
+                        else:
+                            _evt_label, _evt_note = "News Event", _part
+                        st.markdown(
+                            f"""<div style="background:#1a1a2e;border:1px solid #2d2d4e;
+                            border-left:3px solid #7c3aed;border-radius:8px;
+                            padding:14px 18px;margin:0 0 8px 0;">
+                            <div style="display:flex;justify-content:space-between;
+                            align-items:center;margin-bottom:8px;">
+                            <p style="color:#a78bfa;font-size:0.7rem;font-weight:700;
+                            letter-spacing:1px;margin:0;text-transform:uppercase;">{html_lib.escape(_evt_label)}</p>
+                            <div style="display:flex;gap:12px;align-items:center;">
+                            <span style="color:#94a3b8;font-size:0.75rem;">{_date_str}</span>
+                            <span style="color:{_pnl_colour};font-size:0.8rem;font-weight:700;">{_pnl_str}</span>
+                            </div></div>
+                            <p style="color:#e2e8f0;font-size:0.87rem;line-height:1.6;margin:0;">{html_lib.escape(_evt_note)}</p>
+                            </div>""",
+                            unsafe_allow_html=True,
+                        )
+        else:
+            st.info("No trade data available.")
 
     if section != "New Trade":
         return
