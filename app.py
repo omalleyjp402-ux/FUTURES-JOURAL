@@ -6736,9 +6736,9 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                             _r0 = _df_csv.iloc[0]
                             if _date_c:
                                 try:
-                                    _dt = pd.to_datetime(_r0[_date_c])
-                                    csv_date = _dt.date()
-                                    csv_entry_time = _dt.strftime("%H:%M")
+                                    _parsed_dt = pd.to_datetime(_r0[_date_c])
+                                    csv_date = _parsed_dt.date()
+                                    csv_entry_time = _parsed_dt.strftime("%H:%M")
                                 except Exception:
                                     pass
                             if _inst_c:
