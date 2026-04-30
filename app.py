@@ -6643,6 +6643,167 @@ def _style_analytics_table(df: pd.DataFrame, pnl_col: str = "Total PnL") -> "pd.
     return styler
 
 
+# ── News Data tab renderer ────────────────────────────────────────────────────
+
+def _render_news_data_tab(df: pd.DataFrame, pnl_col: str) -> None:
+    """News Data tab — groups trades by news event type and date."""
+    if df.empty or "notes" not in df.columns:
+        st.info("No news event data yet. When you log a trade on a high-impact day (FOMC, CPI, NFP etc.) a notes box appears automatically — your observations are saved here.")
+        return
+
+    EVENT_TYPES = [
+        ("FOMC Day",      "🏦", "#f59e0b"),
+        ("FOMC Minutes",  "📋", "#8b5cf6"),
+        ("CPI Release",   "📊", "#3b82f6"),
+        ("PPI Release",   "🏭", "#6366f1"),
+        ("NFP Day",       "💼", "#10b981"),
+        ("Monthly Opex",  "📅", "#f97316"),
+        ("Quad Witching", "⚡", "#ef4444"),
+    ]
+
+    df_news = df[
+        df["notes"].fillna("").str.contains(
+            r"\[FOMC|\[CPI|\[PPI|\[NFP|\[Opex|\[Quad|\[Monthly",
+            case=False, na=False, regex=True,
+        )
+    ].copy()
+
+    if df_news.empty:
+        st.info("No news event notes yet. Log trades on high-impact days to build your personal news data history.")
+        return
+
+    df_news["_date"] = pd.to_datetime(df_news["date"], errors="coerce").dt.date
+
+    for evt_name, evt_emoji, evt_colour in EVENT_TYPES:
+        evt_trades = df_news[
+            df_news["notes"].str.contains(f"[{evt_name}]", regex=False, na=False)
+        ].copy()
+        if evt_trades.empty:
+            continue
+
+        dates = sorted(evt_trades["_date"].dropna().unique(), reverse=True)
+
+        st.markdown(
+            f"""<div style="display:flex;align-items:center;gap:10px;margin:18px 0 10px 0;">
+            <span style="font-size:1.2rem;">{evt_emoji}</span>
+            <p style="color:{evt_colour};font-size:0.8rem;font-weight:800;
+            letter-spacing:1.5px;text-transform:uppercase;margin:0;">{evt_name}</p>
+            <span style="color:#4a4a6a;font-size:0.72rem;margin-left:4px;">
+            {len(dates)} session(s) recorded</span>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+
+        for date_val in dates:
+            day_trades = evt_trades[evt_trades["_date"] == date_val].copy()
+            total_pnl = float(day_trades[pnl_col].sum())
+            trade_count = len(day_trades)
+            wins = int((day_trades[pnl_col] > 0).sum())
+            losses = int((day_trades[pnl_col] < 0).sum())
+            pnl_str = f"${total_pnl:+,.2f}"
+            try:
+                day_num = date_val.day
+                suffix = ("th" if 11 <= day_num <= 13
+                          else {1: "st", 2: "nd", 3: "rd"}.get(day_num % 10, "th"))
+                date_label = f"{day_num}{suffix} {date_val.strftime('%B %Y')}"
+            except Exception:
+                date_label = str(date_val)
+
+            result_label = f"{wins}W / {losses}L · {trade_count} trade{'s' if trade_count != 1 else ''}"
+
+            with st.expander(f"📅  {date_label}   |   {result_label}   |   {pnl_str}", expanded=False):
+                # Collect unique price-action notes for this event on this date
+                seen_notes: set = set()
+                unique_notes = []
+                for _, row in day_trades.iterrows():
+                    for line in str(row.get("notes", "") or "").split("\n"):
+                        line = line.strip()
+                        if line.startswith(f"[{evt_name}]") and "]: " in line:
+                            body = line.split("]: ", 1)[1].strip()
+                            if body and body not in seen_notes:
+                                seen_notes.add(body)
+                                unique_notes.append(body)
+
+                if unique_notes:
+                    st.markdown(
+                        "<p style='color:#a78bfa;font-size:0.7rem;font-weight:700;"
+                        "letter-spacing:1px;text-transform:uppercase;margin:0 0 8px 0;'>"
+                        "YOUR NOTES ON PRICE ACTION</p>",
+                        unsafe_allow_html=True,
+                    )
+                    for note in unique_notes:
+                        st.markdown(
+                            f"""<div style="background:#1a1a2e;border-left:3px solid {evt_colour};
+                            border-radius:6px;padding:10px 14px;margin:0 0 8px 0;">
+                            <p style="color:#e2e8f0;font-size:0.88rem;line-height:1.6;margin:0;">
+                            "{html_lib.escape(note)}"</p></div>""",
+                            unsafe_allow_html=True,
+                        )
+                else:
+                    st.caption("No price action notes recorded for this day.")
+
+                st.markdown("---")
+                st.markdown(
+                    "<p style='color:#a78bfa;font-size:0.7rem;font-weight:700;"
+                    "letter-spacing:1px;text-transform:uppercase;margin:0 0 10px 0;'>"
+                    "TRADE BREAKDOWN</p>",
+                    unsafe_allow_html=True,
+                )
+
+                for _, row in day_trades.iterrows():
+                    pnl_val = float(row.get(pnl_col, 0) or 0)
+                    p_colour = "#22c55e" if pnl_val > 0 else "#ef4444"
+                    p_str = f"${pnl_val:+,.2f}"
+                    instr = str(row.get("instrument", "") or "")
+                    dirn = str(row.get("direction", "") or "")
+                    grade = str(row.get("trade_grade", "") or "—")
+                    session = str(row.get("session", "") or "")
+                    emo = row.get("emotion_score", "")
+                    plan = str(row.get("followed_plan", "") or "")
+                    revenge = str(row.get("revenge_trade", "") or "")
+                    entry_t = str(row.get("entry_time", "") or "")
+                    clean_note = "\n".join(
+                        ln for ln in str(row.get("notes", "") or "").split("\n")
+                        if not ln.strip().startswith("[")
+                    ).strip()
+                    dirn_colour = "#22c55e" if dirn == "Long" else "#ef4444"
+                    plan_colour = "#22c55e" if plan == "Yes" else ("#ef4444" if plan == "No" else "#e2e8f0")
+                    revenge_colour = "#ef4444" if revenge == "Yes" else "#e2e8f0"
+                    note_html = (f"<p style='color:#94a3b8;font-size:0.82rem;"
+                                 f"font-style:italic;margin:6px 0 0 0;line-height:1.5;'>"
+                                 f"{html_lib.escape(clean_note)}</p>" if clean_note else "")
+                    st.markdown(
+                        f"""<div style="background:#111827;border:1px solid #2d2d4e;
+                        border-radius:8px;padding:14px 16px;margin:0 0 8px 0;">
+                        <div style="display:flex;justify-content:space-between;
+                        align-items:center;margin-bottom:10px;">
+                          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+                            <span style="color:{dirn_colour};font-weight:700;font-size:0.9rem;">{dirn}</span>
+                            <span style="color:#e2e8f0;font-weight:600;">{instr}</span>
+                            <span style="color:#94a3b8;font-size:0.8rem;">{session}</span>
+                            <span style="color:#94a3b8;font-size:0.8rem;">{entry_t}</span>
+                          </div>
+                          <div style="display:flex;gap:12px;align-items:center;">
+                            <span style="color:#a78bfa;font-size:0.8rem;font-weight:600;">{grade}</span>
+                            <span style="color:{p_colour};font-size:0.95rem;font-weight:700;">{p_str}</span>
+                          </div>
+                        </div>
+                        <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                          <span style="color:#94a3b8;font-size:0.75rem;">Emotion: <b style="color:#e2e8f0;">{emo if emo else '—'}/10</b></span>
+                          <span style="color:#94a3b8;font-size:0.75rem;">Followed plan: <b style="color:{plan_colour};">{plan if plan else '—'}</b></span>
+                          <span style="color:#94a3b8;font-size:0.75rem;">Revenge trade: <b style="color:{revenge_colour};">{revenge if revenge else '—'}</b></span>
+                        </div>
+                        {note_html}
+                        </div>""",
+                        unsafe_allow_html=True,
+                    )
+
+        st.markdown(
+            "<hr style='border:none;border-top:1px solid #2d2d4e;margin:8px 0 4px 0;'/>",
+            unsafe_allow_html=True,
+        )
+
+
 # ── Main section renderer ─────────────────────────────────────────────────────
 
 def render_section(user_id: str, account_type: str, section: str) -> None:
@@ -7836,8 +7997,8 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
             except AttributeError:
                 st.markdown(_psych_html, unsafe_allow_html=True)
 
-        a_day, a_conf, a_overall = st.tabs(
-            ["Day & Time Analysis", "Confluence Analytics", "Overall Performance"]
+        a_day, a_conf, a_overall, a_news = st.tabs(
+            ["Day & Time Analysis", "Confluence Analytics", "Overall Performance", "News Data"]
         )
 
         with a_day:
@@ -8106,51 +8267,8 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
             else:
                 st.info("Log at least 5 trades to see your Risk of Ruin calculation.")
 
-        # ── News event notes history ──────────────────────────────────────────
-        st.markdown("---")
-        st.markdown("### 📰 News Event Notes")
-        st.caption("Your personal notes on how price action behaved on high-impact news days.")
-        if not df_view.empty and "notes" in df_view.columns:
-            _news_trades = df_view[
-                df_view["notes"].str.contains(
-                    r"\[FOMC|\[CPI|\[PPI|\[NFP|\[Opex|\[Quad|\[Monthly",
-                    case=False, na=False, regex=True,
-                )
-            ].copy()
-            if _news_trades.empty:
-                st.info("No news event notes yet. When you log a trade on a high-impact day (FOMC, CPI, NFP etc.) a notes box will appear automatically.")
-            else:
-                for _, _nr in _news_trades.iterrows():
-                    _note_text = str(_nr.get("notes", ""))
-                    _date_str = str(_nr.get("date", ""))[:10]
-                    _pnl_val = float(_nr.get(pnl_col, 0) or 0)
-                    _pnl_colour = "#22c55e" if _pnl_val >= 0 else "#ef4444"
-                    _pnl_str = f"${_pnl_val:+,.2f}"
-                    _news_lines = [ln for ln in _note_text.split("\n") if ln.strip().startswith("[")]
-                    for _part in _news_lines:
-                        if "]: " in _part:
-                            _evt_label = _part.split("]: ")[0].replace("[", "")
-                            _evt_note = _part.split("]: ", 1)[1]
-                        else:
-                            _evt_label, _evt_note = "News Event", _part
-                        st.markdown(
-                            f"""<div style="background:#1a1a2e;border:1px solid #2d2d4e;
-                            border-left:3px solid #7c3aed;border-radius:8px;
-                            padding:14px 18px;margin:0 0 8px 0;">
-                            <div style="display:flex;justify-content:space-between;
-                            align-items:center;margin-bottom:8px;">
-                            <p style="color:#a78bfa;font-size:0.7rem;font-weight:700;
-                            letter-spacing:1px;margin:0;text-transform:uppercase;">{html_lib.escape(_evt_label)}</p>
-                            <div style="display:flex;gap:12px;align-items:center;">
-                            <span style="color:#94a3b8;font-size:0.75rem;">{_date_str}</span>
-                            <span style="color:{_pnl_colour};font-size:0.8rem;font-weight:700;">{_pnl_str}</span>
-                            </div></div>
-                            <p style="color:#e2e8f0;font-size:0.87rem;line-height:1.6;margin:0;">{html_lib.escape(_evt_note)}</p>
-                            </div>""",
-                            unsafe_allow_html=True,
-                        )
-        else:
-            st.info("No trade data available.")
+        with a_news:
+            _render_news_data_tab(df_view, pnl_col)
 
     if section != "New Trade":
         return
