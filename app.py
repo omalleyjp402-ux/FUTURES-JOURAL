@@ -3633,14 +3633,17 @@ LESSONS_BLOCK_END = "[[/TRADYLO_LESSONS]]"
 
 def _strip_lessons_block(notes: str) -> str:
     s = safe_str(notes)
-    if LESSONS_BLOCK_START not in s:
-        return s
-    return re.sub(
-        re.escape(LESSONS_BLOCK_START) + r".*?" + re.escape(LESSONS_BLOCK_END),
-        "",
-        s,
-        flags=re.S,
-    ).strip()
+    # Strip lessons block
+    if LESSONS_BLOCK_START in s:
+        s = re.sub(
+            re.escape(LESSONS_BLOCK_START) + r".*?" + re.escape(LESSONS_BLOCK_END),
+            "",
+            s,
+            flags=re.S,
+        ).strip()
+    # Strip hidden SCALE_OUT_JSON line (and everything after it on that line)
+    s = re.sub(r"\n*SCALE_OUT_JSON:.*$", "", s, flags=re.S).strip()
+    return s
 
 
 def _extract_lessons(notes: str) -> tuple[str, list[str]]:
