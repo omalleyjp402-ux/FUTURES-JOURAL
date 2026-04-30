@@ -7010,15 +7010,12 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     st.markdown("**Core trade info**")
                     row1 = st.columns(4)
                     date_val = row1[0].date_input("Date", key=f"{form_key}_date")
-                    use_times = row1[1].checkbox("Use entry/exit times", value=False, key=f"{form_key}_use_times")
-                    with row1[2]:
-                        ec = st.columns(2)
-                        entry_time = ec[0].selectbox("Entry time (15m)", TIME_OPTIONS, index=TIME_OPTIONS.index("09:30"), key=f"{form_key}_entry_time")
-                        entry_time_custom = ec[1].text_input("Entry time (HH:MM)", placeholder="15:44", key=f"{form_key}_entry_time_custom")
-                    with row1[3]:
-                        xc = st.columns(2)
-                        exit_time = xc[0].selectbox("Exit time (15m)", TIME_OPTIONS, index=TIME_OPTIONS.index("10:00"), key=f"{form_key}_exit_time")
-                        exit_time_custom = xc[1].text_input("Exit time (HH:MM)", placeholder="16:02", key=f"{form_key}_exit_time_custom")
+                    use_times = True  # always collect times for accurate duration
+                    entry_time_custom = row1[1].text_input("Entry time (HH:MM)", placeholder="09:31", key=f"{form_key}_entry_time_custom")
+                    exit_time_custom  = row1[2].text_input("Exit time (HH:MM)",  placeholder="10:15", key=f"{form_key}_exit_time_custom")
+                    # keep these as fallbacks in case custom is empty
+                    entry_time = "09:30"
+                    exit_time  = "10:00"
 
                     row2 = st.columns(4)
                     instrument = row2[0].selectbox("Instrument", INSTRUMENT_ORDER, key=f"{form_key}_instrument")
@@ -7544,16 +7541,35 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     expectancy = (win_rate / 100 * avg_win) + ((1 - win_rate / 100) * avg_loss) if total_trades > 0 else 0
     largest_win = df_view[pnl_col].max()
     largest_loss = df_view[pnl_col].min()
+    def _fmt_dur(mins):
+        if mins is None: return "n/a"
+        mins = int(round(mins))
+        return f"{mins//60}h {mins%60}m" if mins >= 60 else f"{mins}m"
+
     avg_duration = None
+    avg_dur_wins = None
+    avg_dur_losses = None
     if "duration_minutes" in df_view.columns:
-        _dur = pd.to_numeric(df_view["duration_minutes"], errors="coerce")
-        _dur = _dur[(_dur > 0) & (_dur <= 720)]  # only valid trades: >0 and ≤12h
-        if not _dur.empty:
-            avg_duration = float(_dur.mean())
+        _dur_all = pd.to_numeric(df_view["duration_minutes"], errors="coerce")
+        _dur_all = _dur_all[(_dur_all > 0) & (_dur_all <= 720)]
+        if not _dur_all.empty:
+            avg_duration = float(_dur_all.mean())
+        # winner/loser split
+        _dur_w = pd.to_numeric(wins_df["duration_minutes"], errors="coerce") if not wins_df.empty else pd.Series(dtype=float)
+        _dur_w = _dur_w[(_dur_w > 0) & (_dur_w <= 720)]
+        if not _dur_w.empty:
+            avg_dur_wins = float(_dur_w.mean())
+        _dur_l = pd.to_numeric(losses_df["duration_minutes"], errors="coerce") if not losses_df.empty else pd.Series(dtype=float)
+        _dur_l = _dur_l[(_dur_l > 0) & (_dur_l <= 720)]
+        if not _dur_l.empty:
+            avg_dur_losses = float(_dur_l.mean())
     plan_rate = (df_view["followed_plan"] == "Yes").mean() * 100 if "followed_plan" in df_view.columns else 0
     revenge_rate = (df_view["revenge_trade"] == "Yes").mean() * 100 if "revenge_trade" in df_view.columns else 0
 
     _pnl_color = "#22c55e" if total_pnl > 0 else ("#ef4444" if total_pnl < 0 else None)
+    _dur_sub = None
+    if avg_dur_wins is not None or avg_dur_losses is not None:
+        _dur_sub = f"W: {_fmt_dur(avg_dur_wins)} · L: {_fmt_dur(avg_dur_losses)}"
     cards = [
         ("Total trades", total_trades, None),
         ("Win rate", f"{win_rate:.1f}%", f"Wins: {wins}"),
@@ -7565,7 +7581,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         ("Expectancy", format_money(expectancy), None),
         ("Largest win", format_money(largest_win), None),
         ("Largest loss", format_money(largest_loss), None),
-        ("Avg duration", (f"{int(avg_duration//60)}h {int(avg_duration%60)}m" if avg_duration >= 60 else f"{int(avg_duration)}m") if avg_duration is not None else "n/a", None),
+        ("Avg duration", _fmt_dur(avg_duration), _dur_sub),
         ("Plan adherence", f"{plan_rate:.1f}%", f"Revenge: {revenge_rate:.1f}%"),
     ]
 
