@@ -3641,8 +3641,8 @@ def _strip_lessons_block(notes: str) -> str:
             s,
             flags=re.S,
         ).strip()
-    # Strip hidden SCALE_OUT_JSON line (and everything after it on that line)
-    s = re.sub(r"\n*SCALE_OUT_JSON:.*$", "", s, flags=re.S).strip()
+    # Strip hidden SCALE_OUT_JSON line only (not anything after it)
+    s = re.sub(r"\n*SCALE_OUT_JSON:[^\n]*", "", s).strip()
     return s
 
 
