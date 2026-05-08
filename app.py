@@ -4607,7 +4607,7 @@ def render_dashboard_component(
     _months_html, _day_lbl, _grid_html = _dash_heatmap_html(df_view)
 
     # Equity SVG
-    _eq_svg, _y_ticks, _x_ticks = _dash_equity_svg(daily_df, pnl_col)
+    _eq_svg, _y_ticks, _x_ticks = _dash_equity_svg(daily_df, "pnl")
     _y_html = "".join(f"<span>{t}</span>" for t in reversed(_y_ticks))
     _x_html = "".join(f"<span>{t}</span>" for t in _x_ticks)
 
