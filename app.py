@@ -7726,6 +7726,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     wins_df = df_view[df_view[pnl_col] > 0]
     losses_df = df_view[df_view[pnl_col] < 0]
     wins = len(wins_df)
+    losses = len(losses_df)
     win_rate = (wins / total_trades * 100) if total_trades > 0 else 0
     avg_r = df_view["r_multiple"].dropna().mean() if "r_multiple" in df_view.columns else None
     total_pnl = df_view[pnl_col].sum()
