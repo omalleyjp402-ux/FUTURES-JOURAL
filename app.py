@@ -4390,6 +4390,343 @@ def parse_custom_confluences(raw: str) -> list:
     return unique
 
 
+_DASHBOARD_CSS = """
+*{box-sizing:border-box}
+.tdy-dash{font-family:'Inter',system-ui,sans-serif;color:#e2e8f0;background:#0a0a14;padding:20px}
+.tdy-grid3{display:grid;grid-template-columns:1fr 1fr 1.15fr;gap:14px;margin-top:18px}
+@media(max-width:1100px){.tdy-grid3{grid-template-columns:1fr}}
+.tdy-mx{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:18px}
+@media(max-width:1100px){.tdy-mx{grid-template-columns:repeat(2,1fr)}}
+.tdy-mx-card{position:relative;background:#1a1a2e;border:1px solid #2d2d4e;border-radius:12px;padding:18px 20px;min-height:130px;display:flex;flex-direction:column;justify-content:space-between;gap:10px}
+.tdy-mx-card .top{display:flex;align-items:center;gap:8px;color:#94a3b8;font-size:13px;font-weight:500}
+.tdy-mx-card .top .info{display:inline-grid;place-items:center;width:14px;height:14px;border:1px solid #475569;border-radius:50%;font-size:9px;color:#64748b;font-style:italic;font-weight:700}
+.tdy-mx-card .top .count{margin-left:auto;font-size:12px;color:#94a3b8;font-family:'JetBrains Mono',monospace}
+.tdy-mx-card .body{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.tdy-mx-card .num{font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1.05;color:#e2e8f0}
+.tdy-mx-card .num.pos{color:#22c55e}.tdy-mx-card .num.neg{color:#ef4444}
+.tdy-half{position:relative;width:96px;height:54px;flex:0 0 96px;overflow:hidden}
+.tdy-half::before{content:"";position:absolute;left:0;top:0;width:96px;height:96px;border-radius:50%;
+  background:conic-gradient(from 270deg,#7c3aed 0,#7c3aed calc(var(--win)*1.8deg),#ef4444 calc(var(--win)*1.8deg),#ef4444 180deg,transparent 180deg);
+  -webkit-mask:radial-gradient(circle at 50% 50%,transparent 30px,#000 31px,#000 47px,transparent 48px);
+          mask:radial-gradient(circle at 50% 50%,transparent 30px,#000 31px,#000 47px,transparent 48px)}
+.tdy-half-bg{position:absolute;left:0;top:0;width:96px;height:96px;border-radius:50%;
+  background:conic-gradient(from 270deg,#2d2d4e 0,#2d2d4e 180deg,transparent 180deg);
+  -webkit-mask:radial-gradient(circle at 50% 50%,transparent 30px,#000 31px,#000 47px,transparent 48px);
+          mask:radial-gradient(circle at 50% 50%,transparent 30px,#000 31px,#000 47px,transparent 48px)}
+.tdy-half-counts{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:center;gap:4px;font-size:10px;font-family:'JetBrains Mono',monospace;font-weight:700;z-index:2}
+.tdy-half-counts span{padding:1px 6px;border-radius:4px;background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.06)}
+.tdy-half-counts .w{color:#a78bfa}.tdy-half-counts .b{color:#94a3b8}.tdy-half-counts .l{color:#ef4444}
+.tdy-ring{position:relative;width:72px;height:72px;flex:0 0 72px;border-radius:50%;
+  background:conic-gradient(from 0deg,#7c3aed 0,#7c3aed calc(var(--pct)*3.6deg),#2d2d4e calc(var(--pct)*3.6deg))}
+.tdy-ring::after{content:"";position:absolute;inset:8px;background:#1a1a2e;border-radius:50%}
+.tdy-pillbar{display:flex;height:24px;border-radius:6px;overflow:hidden;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:#fff;flex:1}
+.tdy-pillbar .w{background:#22c55e;display:flex;align-items:center;justify-content:center;padding:0 8px;flex:1}
+.tdy-pillbar .l{background:#ef4444;display:flex;align-items:center;justify-content:center;padding:0 8px;flex:1}
+.tdy-hd-row{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.tdy-hd-title{font-size:28px;font-weight:700;color:#fff;margin:0}
+.tdy-hd-pills{display:flex;gap:10px;flex-wrap:wrap}
+.tdy-pill{padding:8px 14px;background:#16152a;border:1px solid #2d2d4e;border-radius:999px;color:#cbd5e1;font-size:13px;font-weight:500}
+.acc-dot{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#4c1d95);font-size:10px;font-weight:700;color:#fff;margin-right:4px;vertical-align:middle}
+.tdy-hd-sub{margin-top:10px;font-size:12px;color:#94a3b8;font-family:'JetBrains Mono',monospace}
+.tdy-hd-sub a{color:#a78bfa;text-decoration:none;margin-left:8px;font-weight:600}
+.tdy-pt,.tdy-ds,.tdy-eq{background:#1a1a2e;border:1px solid #2d2d4e;border-radius:12px;padding:20px 22px}
+.tdy-pt-head,.tdy-eq-head,.tdy-ds-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.tdy-pt-head h3,.tdy-ds-head h3,.tdy-eq-head h3{margin:0;font-size:15px;font-weight:600;color:#fff}
+.tdy-pt-grid{display:grid;grid-template-columns:auto 1fr;gap:6px}
+.tdy-pt-months{grid-column:2;display:flex;font-size:10.5px;color:#94a3b8;margin-bottom:4px;font-weight:600}
+.tdy-pt-months span{flex:1}
+.tdy-pt-days{display:grid;grid-template-rows:repeat(7,1fr);gap:3px;font-size:10px;color:#94a3b8;padding-right:5px}
+.tdy-pt-days span{height:16px;display:flex;align-items:center}
+.tdy-pt-cells{display:grid;grid-template-columns:repeat(15,1fr);gap:3px}
+.tdy-pt-col{display:grid;grid-template-rows:repeat(7,1fr);gap:3px}
+.tdy-pt-cell{aspect-ratio:1/1;background:#16152a;border:1px solid #2d2d4e;border-radius:2px}
+.tdy-pt-cell.l1{background:rgba(124,58,237,.25);border-color:rgba(124,58,237,.35)}
+.tdy-pt-cell.l2{background:rgba(124,58,237,.5);border-color:rgba(124,58,237,.55)}
+.tdy-pt-cell.l3{background:rgba(124,58,237,.75);border-color:rgba(124,58,237,.8)}
+.tdy-pt-cell.l4{background:#7c3aed;border-color:#7c3aed;box-shadow:0 0 5px rgba(124,58,237,.55)}
+.tdy-pt-legend{margin-top:10px;display:flex;align-items:center;justify-content:flex-end;gap:6px;font-size:10.5px;color:#94a3b8}
+.tdy-pt-legend i{width:12px;height:12px;border-radius:2px;border:1px solid #2d2d4e;display:inline-block}
+.tdy-pt-legend i.l1{background:rgba(124,58,237,.25)}.tdy-pt-legend i.l2{background:rgba(124,58,237,.5)}
+.tdy-pt-legend i.l3{background:rgba(124,58,237,.75)}.tdy-pt-legend i.l4{background:#7c3aed}
+.tdy-pt-foot{display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding-top:14px;border-top:1px solid #2d2d4e;gap:14px;flex-wrap:wrap}
+.tdy-pt-score{flex:1;min-width:180px}
+.tdy-pt-score .lbl{font-size:12px;color:#cbd5e1;margin-bottom:6px}
+.tdy-pt-score .row{display:flex;align-items:center;gap:10px}
+.tdy-pt-score .num{font-size:22px;font-weight:700;color:#fff;font-family:'JetBrains Mono',monospace}
+.tdy-pt-score .bar{flex:1;height:7px;background:#0e1117;border:1px solid #2d2d4e;border-radius:999px;overflow:hidden;max-width:200px}
+.tdy-pt-score .bar>i{display:block;height:100%;background:linear-gradient(90deg,#7c3aed,#a78bfa);border-radius:999px}
+.tdy-ds-chart{height:260px;display:grid;place-items:center;margin:4px 0 12px}
+.tdy-ds-chart svg{width:100%;height:100%;max-width:360px}
+.tdy-ds-foot{display:flex;align-items:center;gap:16px;padding-top:14px;border-top:1px solid #2d2d4e}
+.tdy-ds-foot .lbl{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#a78bfa;font-weight:600;margin-bottom:3px}
+.tdy-ds-foot .num{font-size:28px;font-weight:800;color:#fff;font-family:'JetBrains Mono',monospace;line-height:1}
+.tdy-ds-foot .meta{flex:0 0 auto}
+.tdy-ds-foot .scale{flex:1;position:relative;padding:12px 0 20px}
+.tdy-ds-foot .gradient{height:7px;border-radius:999px;background:linear-gradient(90deg,#ef4444 0%,#f59e0b 35%,#facc15 55%,#22c55e 100%)}
+.tdy-ds-foot .marker{position:absolute;top:6px;width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid #7c3aed;box-shadow:0 0 0 2px #1a1a2e,0 0 10px rgba(124,58,237,.6);transform:translateX(-50%)}
+.tdy-ds-foot .ticks{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;font-family:'JetBrains Mono',monospace}
+.tdy-eq-chart{position:relative;height:250px;display:flex}
+.tdy-eq-y{display:flex;flex-direction:column-reverse;justify-content:space-between;padding:4px 10px 22px 0;font-size:10.5px;color:#94a3b8;font-family:'JetBrains Mono',monospace;flex:0 0 auto;text-align:right;min-width:46px}
+.tdy-eq-svg{flex:1;position:relative}
+.tdy-eq-svg svg{display:block;width:100%;height:100%;overflow:visible}
+.tdy-eq-x{position:absolute;left:56px;right:0;bottom:0;display:flex;justify-content:space-between;font-size:10.5px;color:#94a3b8;font-family:'JetBrains Mono',monospace}
+.news-banner{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:8px;margin-bottom:8px;border-left-width:4px;border-left-style:solid}
+.news-banner .nb-title{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;margin:0 0 2px 0}
+.news-banner .nb-desc{font-size:12px;color:#94a3b8;margin:0}
+"""
+
+def _dash_radar_svg(vals: dict) -> str:
+    import math
+    keys = [('win_pct','Win %'),('profit_factor','Profit Factor'),
+            ('avg_winloss','Avg Win/Loss'),('consistency','Consistency'),('max_dd','Max Drawdown')]
+    cx, cy, R, N = 160, 140, 110, 5
+    grid = axes = dots = lbls = ''
+    poly = []
+    for ring in (0.25, 0.5, 0.75, 1.0):
+        pts = [f"{cx+math.cos(-math.pi/2+i*2*math.pi/N)*R*ring:.1f},{cy+math.sin(-math.pi/2+i*2*math.pi/N)*R*ring:.1f}" for i in range(N)]
+        grid += f'<polygon points="{" ".join(pts)}" fill="none" stroke="#2d2d4e" stroke-width="1"/>'
+    for i, (k, lbl) in enumerate(keys):
+        a = -math.pi/2 + i * 2 * math.pi / N
+        ex, ey = cx + math.cos(a)*R, cy + math.sin(a)*R
+        axes += f'<line x1="{cx}" y1="{cy}" x2="{ex:.1f}" y2="{ey:.1f}" stroke="#2d2d4e" stroke-width="1"/>'
+        v = max(0, min(100, vals.get(k, 50)))
+        r = R * v / 100
+        px2, py2 = cx + math.cos(a)*r, cy + math.sin(a)*r
+        poly.append(f"{px2:.1f},{py2:.1f}")
+        dots += f'<circle cx="{px2:.1f}" cy="{py2:.1f}" r="3.5" fill="#a78bfa" stroke="#1a1a2e" stroke-width="2"/>'
+        lr = R + 22; lx, ly = cx + math.cos(a)*lr, cy + math.sin(a)*lr
+        anchor = 'middle' if abs(math.cos(a)) < 0.2 else ('start' if math.cos(a) > 0 else 'end')
+        lbls += f'<text x="{lx:.1f}" y="{ly+4:.1f}" text-anchor="{anchor}" fill="#cbd5e1" font-size="11.5" font-family="Inter,system-ui,sans-serif">{html_lib.escape(lbl)}</text>'
+    return (f'<svg viewBox="0 0 320 280" xmlns="http://www.w3.org/2000/svg">{grid}{axes}'
+            f'<polygon points="{" ".join(poly)}" fill="rgba(124,58,237,0.35)" stroke="#7c3aed" stroke-width="2" stroke-linejoin="round"/>'
+            f'{dots}{lbls}</svg>')
+
+def _dash_heatmap_html(df: pd.DataFrame) -> str:
+    today = _dt.date.today()
+    start = today - _dt.timedelta(weeks=15)
+    start = start - _dt.timedelta(days=start.weekday())
+    date_counts: dict = {}
+    if not df.empty and "date" in df.columns:
+        for d in pd.to_datetime(df["date"], errors="coerce").dt.date:
+            if d: date_counts[d] = date_counts.get(d, 0) + 1
+    max_c = max(date_counts.values()) if date_counts else 1
+    def lvl(c):
+        if c == 0: return ""
+        if c <= max(1, max_c*.25): return " l1"
+        if c <= max(1, max_c*.5):  return " l2"
+        if c <= max(1, max_c*.75): return " l3"
+        return " l4"
+    # month labels
+    months_html = ""; cur_m = None; cur_s = 0
+    spans = []
+    for w in range(15):
+        m = (start + _dt.timedelta(weeks=w)).strftime("%b")
+        if m != cur_m:
+            if cur_m: spans.append((cur_m, cur_s))
+            cur_m, cur_s = m, 1
+        else: cur_s += 1
+    if cur_m: spans.append((cur_m, cur_s))
+    months_html = "".join(f'<span style="flex:{s}">{lbl}</span>' for lbl, s in spans)
+    cols = ""
+    for w in range(15):
+        cells = ""
+        for d in range(7):
+            day = start + _dt.timedelta(weeks=w, days=d)
+            c = date_counts.get(day, 0)
+            cells += f'<div class="tdy-pt-cell{lvl(c)}" title="{day}: {c} trades"></div>'
+        cols += f'<div class="tdy-pt-col">{cells}</div>'
+    day_lbl = "".join(f"<span>{d}</span>" for d in ("Mon","Tue","Wed","Thu","Fri","Sat","Sun"))
+    return months_html, day_lbl, cols
+
+def _dash_equity_svg(daily_df: pd.DataFrame, pnl_col: str = "pnl") -> tuple:
+    if daily_df.empty: return "", [], []
+    df = daily_df.sort_values("date").copy()
+    df["eq"] = df[pnl_col].cumsum()
+    pts = df["eq"].tolist()
+    dates = pd.to_datetime(df["date"]).dt.strftime("%b %d").tolist()
+    n = len(pts)
+    if n < 2: return "", [], []
+    W, H, padB = 600, 220, 26
+    inner = H - padB
+    lo, hi = min(pts), max(pts)
+    span = (hi - lo) or 1
+    pad = span * 0.08; lo -= pad; hi += pad; rng = hi - lo
+    def px(i): return i / (n-1) * W
+    def py(v): return inner - ((v - lo) / rng) * inner
+    coords = [(px(i), py(v)) for i, v in enumerate(pts)]
+    line = "M " + " L ".join(f"{x:.1f},{y:.1f}" for x, y in coords)
+    area = line + f" L {W:.1f},{inner} L 0,{inner} Z"
+    color = "#22c55e" if pts[-1] >= 0 else "#ef4444"
+    # Y labels
+    y_ticks = [f"${lo + rng*i/4:,.0f}" for i in range(5)]
+    # X labels
+    step = max(1, (n-1)//3)
+    x_ticks = [dates[min(i*step, n-1)] for i in range(4)]
+    svg = (f'<svg viewBox="0 0 {W} {H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">'
+           f'<defs><linearGradient id="eqg" x1="0" y1="0" x2="0" y2="1">'
+           f'<stop offset="0%" stop-color="{color}" stop-opacity="0.35"/>'
+           f'<stop offset="100%" stop-color="{color}" stop-opacity="0"/></linearGradient></defs>'
+           f'<path d="{area}" fill="url(#eqg)"/>'
+           f'<path d="{line}" fill="none" stroke="{color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>')
+    return svg, y_ticks, x_ticks
+
+def render_dashboard_component(
+    total_pnl, total_trades, win_rate, wins, losses, breakeven,
+    profit_factor, avg_r, avg_win, avg_loss,
+    daily_df, df_view, pnl_col, zylo, account_type, news_events
+):
+    """Renders the full dashboard hero section via components.html (iframe, no sanitization)."""
+    _score = float(zylo["overall"])
+    _score_pct = min(100.0, max(0.0, _score))
+    _pf_pct = min(100.0, (profit_factor or 0) / 3 * 100)
+
+    # Day stats
+    _day_wins = int((daily_df["pnl"] > 0).sum()) if not daily_df.empty else 0
+    _day_losses = int((daily_df["pnl"] < 0).sum()) if not daily_df.empty else 0
+    _day_be = int((daily_df["pnl"] == 0).sum()) if not daily_df.empty else 0
+    _total_days = max(len(daily_df), 1)
+    _day_win_pct = _day_wins / _total_days * 100
+
+    # Today's trades score
+    _today = _dt.date.today()
+    _today_trades = df_view[pd.to_datetime(df_view["date"], errors="coerce").dt.date == _today] if not df_view.empty else pd.DataFrame()
+    _today_total = max(len(_today_trades), 1)
+    _today_score = int((_today_trades["followed_plan"] == "Yes").sum()) if not _today_trades.empty and "followed_plan" in _today_trades.columns else 0
+
+    # Radar
+    _rv = zylo["components"]
+    _radar = _dash_radar_svg({
+        'win_pct': _rv.get("Win %", 0),
+        'profit_factor': _rv.get("Profit Factor", 0),
+        'avg_winloss': _rv.get("Avg Win/Loss", 0),
+        'consistency': _rv.get("Consistency", 0),
+        'max_dd': _rv.get("Max Drawdown", 0),
+    })
+
+    # Heatmap
+    _months_html, _day_lbl, _grid_html = _dash_heatmap_html(df_view)
+
+    # Equity SVG
+    _eq_svg, _y_ticks, _x_ticks = _dash_equity_svg(daily_df, pnl_col)
+    _y_html = "".join(f"<span>{t}</span>" for t in reversed(_y_ticks))
+    _x_html = "".join(f"<span>{t}</span>" for t in _x_ticks)
+
+    # P&L display
+    _pnl_cls = "pos" if total_pnl >= 0 else "neg"
+    _pnl_str = f"${total_pnl:,.2f}" if total_pnl >= 0 else f"-${abs(total_pnl):,.2f}"
+    _aw = abs(avg_win or 0); _al = abs(avg_loss or 0)
+    _avg_r_str = f"{avg_r:.2f}R" if avg_r is not None else "—"
+    _today_str = _dt.date.today().strftime("%d %b %Y")
+    _acc = html_lib.escape(account_type or "Account")
+
+    # News banners
+    _news_html = ""
+    for _de in news_events:
+        _bg = f"background:rgba(0,0,0,0.25);border-color:{_de['colour']}40;border-left-color:{_de['colour']}"
+        _news_html += (f'<div class="news-banner" style="{_bg}">'
+                       f'<span style="font-size:1.3rem">{_de["emoji"]}</span>'
+                       f'<div><p class="nb-title" style="color:{_de["colour"]}">{html_lib.escape(_de["name"])} TODAY</p>'
+                       f'<p class="nb-desc">{html_lib.escape(_de["description"])}</p></div></div>')
+
+    html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>{_DASHBOARD_CSS}</style></head><body>
+<div class="tdy-dash">
+  <div class="tdy-hd-row">
+    <h1 class="tdy-hd-title">Dashboard</h1>
+    <div class="tdy-hd-pills">
+      <span class="tdy-pill"><span style="color:#a78bfa;font-weight:700">$</span></span>
+      <span class="tdy-pill">📅 {_today_str}</span>
+      <span class="tdy-pill"><span class="acc-dot">{_acc[0].upper()}</span>{_acc}</span>
+    </div>
+  </div>
+  <div class="tdy-hd-sub">Tradylo Trading Journal</div>
+  {_news_html}
+  <div class="tdy-mx">
+    <div class="tdy-mx-card">
+      <div class="top">Net P&amp;L <span class="info">i</span><span class="count">{total_trades}</span></div>
+      <div class="body"><div class="num {_pnl_cls}">{_pnl_str}</div></div>
+    </div>
+    <div class="tdy-mx-card">
+      <div class="top">Trade win % <span class="info">i</span></div>
+      <div class="body">
+        <div class="num">{win_rate:.1f}%</div>
+        <div class="tdy-half" style="--win:{win_rate:.2f}">
+          <div class="tdy-half-bg"></div>
+          <div class="tdy-half-counts"><span class="w">{wins}</span><span class="b">{breakeven}</span><span class="l">{losses}</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="tdy-mx-card">
+      <div class="top">Profit factor <span class="info">i</span></div>
+      <div class="body">
+        <div class="num">{profit_factor:.2f}</div>
+        <div class="tdy-ring" style="--pct:{_pf_pct:.1f}"></div>
+      </div>
+    </div>
+    <div class="tdy-mx-card">
+      <div class="top">Day win % <span class="info">i</span></div>
+      <div class="body">
+        <div class="num">{_day_win_pct:.1f}%</div>
+        <div class="tdy-half" style="--win:{_day_win_pct:.2f}">
+          <div class="tdy-half-bg"></div>
+          <div class="tdy-half-counts"><span class="w">{_day_wins}</span><span class="b">{_day_be}</span><span class="l">{_day_losses}</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="tdy-mx-card">
+      <div class="top">Avg win / loss <span class="info">i</span></div>
+      <div class="body">
+        <div class="num">{_avg_r_str}</div>
+        <div class="tdy-pillbar"><div class="w">${_aw:,.0f}</div><div class="l">${_al:,.0f}</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="tdy-grid3">
+    <div class="tdy-ds">
+      <div class="tdy-ds-head"><h3>Dylo score</h3></div>
+      <div class="tdy-ds-chart">{_radar}</div>
+      <div class="tdy-ds-foot">
+        <div class="meta"><div class="lbl">Your Dylo Score</div><div class="num">{_score:.1f}</div></div>
+        <div class="scale">
+          <div class="gradient"></div>
+          <span class="marker" style="left:{_score_pct:.1f}%"></span>
+          <div class="ticks"><span>0</span><span>20</span><span>40</span><span>60</span><span>80</span><span>100</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="tdy-pt">
+      <div class="tdy-pt-head"><h3>Progress tracker</h3><span style="color:#94a3b8;font-size:12px">{total_trades} trades</span></div>
+      <div class="tdy-pt-grid">
+        <div></div>
+        <div class="tdy-pt-months">{_months_html}</div>
+        <div class="tdy-pt-days">{_day_lbl}</div>
+        <div class="tdy-pt-cells">{_grid_html}</div>
+      </div>
+      <div class="tdy-pt-legend">Less <i></i><i class="l1"></i><i class="l2"></i><i class="l3"></i><i class="l4"></i> More</div>
+      <div class="tdy-pt-foot">
+        <div class="tdy-pt-score">
+          <div class="lbl">Today's plan adherence</div>
+          <div class="row">
+            <div class="num">{_today_score}/{_today_total}</div>
+            <div class="bar"><i style="width:{_today_score/_today_total*100:.0f}%"></i></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="tdy-eq">
+      <div class="tdy-eq-head"><h3>Daily net cumulative P&amp;L</h3></div>
+      <div class="tdy-eq-chart">
+        <div class="tdy-eq-y">{_y_html}</div>
+        <div class="tdy-eq-svg">{_eq_svg}</div>
+        <div class="tdy-eq-x">{_x_html}</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>"""
+    components.html(html, height=900, scrolling=False)
+
+
 def _build_equity_svg(daily_df: pd.DataFrame, pnl_col: str = "pnl") -> tuple:
     """Returns (area_d, line_d, y_labels, x_labels, line_color) for the equity SVG."""
     import math
@@ -7919,218 +8256,33 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         )
 
     if section == "Dashboard":
-        # ── Header ───────────────────────────────────────────────────────────
-        _account_name = account_type or "Account"
-        _today_str = _dt.date.today().strftime("%d %b %Y")
-        _hd_html = f"""<div class="tdy-hd">
-          <div class="tdy-hd-row">
-            <h1 class="tdy-hd-title">Dashboard</h1>
-            <div class="tdy-hd-pills">
-              <span class="tdy-pill"><span style="font-weight:700;color:#a78bfa">$</span></span>
-              <span class="tdy-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>{_today_str}</span>
-              <span class="tdy-pill"><span class="acc-dot">{_account_name[0].upper()}</span>{html_lib.escape(_account_name)}</span>
-            </div>
-          </div>
-          <div class="tdy-hd-sub">Tradylo Trading Journal</div>
-        </div>"""
-        try: st.html(_hd_html)
-        except AttributeError: st.markdown(_hd_html, unsafe_allow_html=True)
-
-        # ── News event banners ────────────────────────────────────────────────
+        zylo = compute_zylo_score(df_view, daily_df, pnl_col)
+        _be = int((df_view[pnl_col] == 0).sum())
         _dash_events = get_news_events_for_date(_dt.date.today())
-        for _de in _dash_events:
-            st.markdown(
-                f"""<div style="background:rgba(0,0,0,0.25);border:1px solid {_de['colour']}50;
-                border-left:4px solid {_de['colour']};border-radius:8px;padding:12px 16px;
-                margin:0 0 10px 0;display:flex;align-items:center;gap:12px;">
-                <span style="font-size:1.4rem;">{_de['emoji']}</span>
-                <div><p style="color:{_de['colour']};font-size:0.72rem;font-weight:800;
-                letter-spacing:1.2px;margin:0 0 2px 0;text-transform:uppercase;">{_de['name']} TODAY</p>
-                <p style="color:#94a3b8;font-size:0.78rem;margin:0;">{_de['description']} — consider how this may affect your trades today.</p>
-                </div></div>""", unsafe_allow_html=True)
-
-        # ── 5 hero metric cards ───────────────────────────────────────────────
-        _net_pnl = total_pnl
-        _pnl_cls = "pos" if _net_pnl >= 0 else "neg"
-        _pnl_str = f"${_net_pnl:,.2f}" if _net_pnl >= 0 else f"-${abs(_net_pnl):,.2f}"
-        _win_pct = round(win_rate, 2)
-        _loss_pct = round(100 - _win_pct, 2)
-        _be = int(((df_view[pnl_col] == 0).sum()))
-        _pf = profit_factor or 0.0
-        _pf_pct = min(_pf / 5.0 * 100, 100)
-        # day stats
-        _day_wins = int((daily_df["pnl"] > 0).sum()) if not daily_df.empty else 0
-        _day_losses = int((daily_df["pnl"] < 0).sum()) if not daily_df.empty else 0
-        _day_be = int((daily_df["pnl"] == 0).sum()) if not daily_df.empty else 0
-        _total_days = len(daily_df) if not daily_df.empty else 1
-        _day_win_pct = round(_day_wins / _total_days * 100, 2)
-        _day_loss_pct = round(_day_losses / _total_days * 100, 2)
-        # pill bar
-        _aw = abs(avg_win or 0); _al = abs(avg_loss or 0); _wl_tot = _aw + _al or 1
-        _ws = round(_aw / _wl_tot * 100); _ls = 100 - _ws
-        _avg_r_str = f"{avg_r:.2f}" if avg_r is not None else "—"
-        _mx_html = f"""<div class="tdy-mx">
-          <div class="tdy-mx-card">
-            <div class="top">Net P&amp;L <span class="info">i</span><span class="count">{total_trades}</span></div>
-            <div class="body"><div class="num {_pnl_cls}">{_pnl_str}</div></div>
-            <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 12h8M12 8v8"/></svg></span>
-          </div>
-          <div class="tdy-mx-card">
-            <div class="top">Trade win % <span class="info">i</span></div>
-            <div class="body">
-              <div class="num">{_win_pct:.1f}%</div>
-              <div class="tdy-gauge">
-                <svg viewBox="0 0 100 56" width="96" height="56">
-                  <path d="M8 50 A42 42 0 0 1 92 50" fill="none" stroke="#2d2d4e" stroke-width="10" stroke-linecap="round"/>
-                  <path d="M8 50 A42 42 0 0 1 92 50" fill="none" stroke="#7c3aed" stroke-width="10" stroke-linecap="round" pathLength="100" stroke-dasharray="{_win_pct} 100"/>
-                  <path d="M92 50 A42 42 0 0 0 8 50" fill="none" stroke="#ef4444" stroke-width="10" stroke-linecap="round" pathLength="100" stroke-dasharray="{_loss_pct} 100"/>
-                </svg>
-                <div class="counts"><span class="w">{wins}</span><span class="b">{_be}</span><span class="l">{losses}</span></div>
-              </div>
-            </div>
-          </div>
-          <div class="tdy-mx-card">
-            <div class="top">Profit factor <span class="info">i</span></div>
-            <div class="body">
-              <div class="num">{_pf:.2f}</div>
-              <div class="tdy-pf">
-                <svg viewBox="0 0 80 80" width="74" height="74">
-                  <circle cx="40" cy="40" r="32" fill="none" stroke="#2d2d4e" stroke-width="9"/>
-                  <circle cx="40" cy="40" r="32" fill="none" stroke="#7c3aed" stroke-width="9" stroke-linecap="round" pathLength="100" stroke-dasharray="{_pf_pct:.1f} 100"/>
-                </svg>
-              </div>
-            </div>
-          </div>
-          <div class="tdy-mx-card">
-            <div class="top">Day win % <span class="info">i</span></div>
-            <div class="body">
-              <div class="num">{_day_win_pct:.1f}%</div>
-              <div class="tdy-gauge">
-                <svg viewBox="0 0 100 56" width="96" height="56">
-                  <path d="M8 50 A42 42 0 0 1 92 50" fill="none" stroke="#2d2d4e" stroke-width="10" stroke-linecap="round"/>
-                  <path d="M8 50 A42 42 0 0 1 92 50" fill="none" stroke="#7c3aed" stroke-width="10" stroke-linecap="round" pathLength="100" stroke-dasharray="{_day_win_pct} 100"/>
-                  <path d="M92 50 A42 42 0 0 0 8 50" fill="none" stroke="#ef4444" stroke-width="10" stroke-linecap="round" pathLength="100" stroke-dasharray="{_day_loss_pct} 100"/>
-                </svg>
-                <div class="counts"><span class="w">{_day_wins}</span><span class="b">{_day_be}</span><span class="l">{_day_losses}</span></div>
-              </div>
-            </div>
-          </div>
-          <div class="tdy-mx-card">
-            <div class="top">Avg win / loss <span class="info">i</span></div>
-            <div class="body">
-              <div class="num">{_avg_r_str}R</div>
-              <div class="tdy-pillbar">
-                <div class="w" style="flex:{_ws}">${_aw:,.0f}</div>
-                <div class="l" style="flex:{_ls}">${_al:,.0f}</div>
-              </div>
-            </div>
-          </div>
-        </div>"""
-        try: st.html(_mx_html)
-        except AttributeError: st.markdown(_mx_html, unsafe_allow_html=True)
-
+        render_dashboard_component(
+            total_pnl=total_pnl, total_trades=total_trades,
+            win_rate=win_rate, wins=wins, losses=losses, breakeven=_be,
+            profit_factor=profit_factor or 0.0,
+            avg_r=avg_r, avg_win=avg_win, avg_loss=avg_loss,
+            daily_df=daily_df, df_view=df_view, pnl_col=pnl_col,
+            zylo=zylo, account_type=account_type, news_events=_dash_events,
+        )
         render_next_week_focus_panel(user_id)
 
-        # ── Progress tracker ──────────────────────────────────────────────────
-        _months_html, _day_labels_html, _grid_html = _render_progress_grid_html(df_view)
-        zylo = compute_zylo_score(df_view, daily_df, pnl_col)
-        _score = float(zylo["overall"])
-        _score_pct = min(100.0, max(0.0, _score))
-        # trades this week
-        _this_week_start = _dt.date.today() - _dt.timedelta(days=_dt.date.today().weekday())
-        _week_trades = 0
-        if not df_view.empty and "date" in df_view.columns:
-            _week_trades = int((pd.to_datetime(df_view["date"], errors="coerce").dt.date >= _this_week_start).sum())
-        _pt_html = f"""<div class="tdy-pt">
-          <div class="tdy-pt-head"><h3>Progress tracker</h3><span style="color:#94a3b8;font-size:12px;">{total_trades} trades total</span></div>
-          <div class="tdy-pt-grid">
-            <div></div>
-            <div class="tdy-pt-months">{_months_html}</div>
-            <div class="tdy-pt-days">{_day_labels_html}</div>
-            <div class="tdy-pt-cells">{_grid_html}</div>
-          </div>
-          <div class="tdy-pt-legend">Less
-            <span class="swatch"></span><span class="swatch l1"></span><span class="swatch l2"></span><span class="swatch l3"></span><span class="swatch l4"></span>
-          More</div>
-          <div class="tdy-pt-foot">
-            <div class="tdy-pt-score">
-              <div class="lbl">Dylo score</div>
-              <div class="row">
-                <div class="num">{_score:.1f}</div>
-                <div class="bar"><i style="width:{_score_pct:.1f}%"></i></div>
-              </div>
-            </div>
-            <span style="color:#94a3b8;font-size:13px;">{_week_trades} trade{'s' if _week_trades != 1 else ''} this week</span>
-          </div>
-        </div>"""
-        try: st.html(_pt_html)
-        except AttributeError: st.markdown(_pt_html, unsafe_allow_html=True)
-
-        # ── Dylo score radar + recent trades ─────────────────────────────────
-        c_score, c_recent = st.columns([1.2, 1])
-        with c_score:
-            _radar_svg = _build_zylo_radar_svg(zylo["components"])
-            _ds_html = f"""<div class="tdy-ds">
-              <div class="tdy-ds-head"><h3>Dylo score</h3></div>
-              {_radar_svg if _radar_svg else ""}
-              <div class="tdy-ds-foot">
-                <div class="meta"><div class="lbl">Your Dylo Score</div><div class="num">{_score:.1f}</div></div>
-                <div class="scale">
-                  <div class="gradient"></div>
-                  <span class="marker" style="left:{_score_pct:.1f}%;"></span>
-                  <div class="ticks"><span>0</span><span>20</span><span>40</span><span>60</span><span>80</span><span>100</span></div>
-                </div>
-              </div>
-            </div>"""
-            try: st.html(_ds_html)
-            except AttributeError: st.markdown(_ds_html, unsafe_allow_html=True)
-
-        with c_recent:
-            st.markdown("**Recent trades**")
-            recent = (
-                df_view.sort_values(["date", "entry_time"], ascending=[False, False], na_position="last")
-                .head(10).copy()
-            )
-            recent["Date"] = recent["date"].dt.strftime("%Y-%m-%d")
-            recent["PnL"] = recent[pnl_col].apply(format_money)
-            if "trade_grade" in recent.columns:
-                recent["trade_grade"] = recent["trade_grade"].fillna("—").replace("None", "—")
-            show_cols = [c for c in ("Date", "instrument", "direction", "session", "trade_grade", "PnL") if c in recent.columns]
-            if show_cols:
-                _tbl_html = _render_trades_table(recent, pnl_col)
-                try: st.html(_tbl_html)
-                except AttributeError: st.markdown(_tbl_html, unsafe_allow_html=True)
-            else:
-                st.info("No trades yet.")
-
-        # ── Equity curve (styled card) ────────────────────────────────────────
-        _area_d, _line_d, _y_labels, _x_labels, _eq_color = _build_equity_svg(daily_df, "pnl")
-        if _area_d:
-            _fill_id = "tdy-eq-grad"
-            _eq_html = f"""<div class="tdy-eq">
-              <div class="tdy-eq-head"><h3>Daily net cumulative P&amp;L</h3></div>
-              <div style="display:flex;height:260px;">
-                <div class="tdy-eq-y">{"".join(f"<span>{y}</span>" for y in reversed(_y_labels))}</div>
-                <div class="tdy-eq-svg-wrap">
-                  <svg viewBox="0 0 600 220" preserveAspectRatio="none" style="width:100%;height:220px;">
-                    <defs>
-                      <linearGradient id="{_fill_id}" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stop-color="{_eq_color}" stop-opacity="0.35"/>
-                        <stop offset="100%" stop-color="{_eq_color}" stop-opacity="0"/>
-                      </linearGradient>
-                    </defs>
-                    <path d="{_area_d}" fill="url(#{_fill_id})"/>
-                    <path d="{_line_d}" fill="none" stroke="{_eq_color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-                  </svg>
-                </div>
-              </div>
-              <div class="tdy-eq-x">{"".join(f"<span>{x}</span>" for x in _x_labels)}</div>
-            </div>"""
-            try: st.html(_eq_html)
-            except AttributeError: st.markdown(_eq_html, unsafe_allow_html=True)
+        # ── Recent trades ────────────────────────────────────────────────────
+        st.markdown("**Recent trades**")
+        recent = (df_view.sort_values(["date", "entry_time"], ascending=[False, False], na_position="last").head(10).copy())
+        recent["Date"] = recent["date"].dt.strftime("%Y-%m-%d")
+        recent["PnL"] = recent[pnl_col].apply(format_money)
+        if "trade_grade" in recent.columns:
+            recent["trade_grade"] = recent["trade_grade"].fillna("—").replace("None", "—")
+        show_cols = [c for c in ("Date", "instrument", "direction", "session", "trade_grade", "PnL") if c in recent.columns]
+        if show_cols:
+            _tbl_html = _render_trades_table(recent, pnl_col)
+            try: st.html(_tbl_html)
+            except AttributeError: st.markdown(_tbl_html, unsafe_allow_html=True)
         else:
-            st.markdown("**Equity curve**")
-            st.altair_chart(style_altair_chart(equity_chart), use_container_width=True)
+            st.info("No trades yet.")
 
         st.markdown("**Daily P&L**")
         st.altair_chart(style_altair_chart(daily_chart), use_container_width=True)
