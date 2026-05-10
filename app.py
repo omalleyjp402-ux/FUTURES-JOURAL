@@ -676,6 +676,35 @@ def _get_quad_witching(year: int):
         dates.add(first_fri + _dt.timedelta(weeks=2))
     return dates
 
+def _fetch_prev_nfp_journal_note(user_id: str, today=None):
+    """Return (date_label, content) of the most recent [NFP Day]: journal entry
+    from the previous calendar month, or (None, None) if not found."""
+    try:
+        if today is None:
+            today = _dt.date.today()
+        first_of_this = today.replace(day=1)
+        last_of_prev  = first_of_this - _dt.timedelta(days=1)
+        first_of_prev = last_of_prev.replace(day=1)
+        sb = authed_supabase()
+        resp = (sb.table("journal_entries")
+                .select("content,entry_date")
+                .eq("user_id", user_id)
+                .gte("entry_date", str(first_of_prev))
+                .lte("entry_date", str(last_of_prev))
+                .ilike("content", "%[NFP Day]:%")
+                .order("entry_date", desc=True)
+                .limit(1)
+                .execute())
+        if resp.data:
+            d_lbl = _dt.date.fromisoformat(resp.data[0]["entry_date"]).strftime("%b %d")
+            raw    = resp.data[0]["content"]
+            # Strip the [NFP Day]: tag for display
+            note   = re.sub(r"^\[NFP Day\]:\s*", "", raw).strip()
+            return d_lbl, note
+    except Exception:
+        pass
+    return None, None
+
 def get_news_events_for_date(d) -> list:
     """Returns list of high-impact event dicts for the given date."""
     if isinstance(d, datetime):
@@ -7514,6 +7543,22 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                 _news_events = get_news_events_for_date(_today_date)
                 if _news_events:
                     for _evt in _news_events:
+                        # Build optional "last time" reminder block for NFP
+                        _prev_reminder_html = ""
+                        if _evt["name"] == "NFP Day":
+                            _pnfp_lbl, _pnfp_note = _fetch_prev_nfp_journal_note(user_id, _today_date)
+                            if _pnfp_lbl and _pnfp_note:
+                                _pnfp_note_esc = html_lib.escape(_pnfp_note)
+                                _prev_reminder_html = (
+                                    f'<div style="background:rgba(16,185,129,0.07);'
+                                    f'border:1px solid #10b98140;border-radius:6px;'
+                                    f'padding:10px 14px;margin:8px 0 0 0;">'
+                                    f'<p style="color:#10b981;font-size:0.65rem;font-weight:800;'
+                                    f'letter-spacing:1px;margin:0 0 4px 0;text-transform:uppercase;">'
+                                    f'📝 YOUR LAST NFP NOTE ({_pnfp_lbl})</p>'
+                                    f'<p style="color:#cbd5e1;font-size:0.75rem;margin:0;">'
+                                    f'{_pnfp_note_esc}</p></div>'
+                                )
                         st.markdown(
                             f"""<div style="background:rgba(0,0,0,0.3);
                             border:1px solid {_evt['colour']}40;
@@ -7527,6 +7572,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                             {_evt['description']}</p>
                             <p style="color:#e2e8f0;font-size:0.78rem;margin:0 0 8px 0;">
                             {_evt['prompt']}</p>
+                            {_prev_reminder_html}
                             </div>""",
                             unsafe_allow_html=True,
                         )
@@ -8267,6 +8313,21 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
             daily_df=daily_df, df_view=df_view, pnl_col=pnl_col,
             zylo=zylo, account_type=account_type, news_events=_dash_events,
         )
+        # NFP reminder — show last month's NFP journal note on NFP days
+        if any(e["name"] == "NFP Day" for e in _dash_events):
+            _pnfp_lbl, _pnfp_note = _fetch_prev_nfp_journal_note(user_id)
+            if _pnfp_lbl and _pnfp_note:
+                st.markdown(
+                    f"""<div style="background:rgba(16,185,129,0.07);
+                    border:1px solid #10b98150;border-left:4px solid #10b981;
+                    border-radius:10px;padding:14px 18px;margin:8px 0 16px 0;">
+                    <p style="color:#10b981;font-size:0.7rem;font-weight:800;
+                    letter-spacing:1.5px;margin:0 0 6px 0;text-transform:uppercase;">
+                    📝 YOUR LAST NFP NOTE ({_pnfp_lbl})</p>
+                    <p style="color:#cbd5e1;font-size:0.82rem;margin:0;">
+                    {html_lib.escape(_pnfp_note)}</p></div>""",
+                    unsafe_allow_html=True,
+                )
         render_next_week_focus_panel(user_id)
 
         # ── Recent trades ────────────────────────────────────────────────────
