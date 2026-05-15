@@ -8872,51 +8872,140 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                 except Exception:
                     cols[i % 4].warning(f"Could not load image")
 
-        # ── All trades table ──────────────────────────────────────────────────────
+        # ── All trades table — styled HTML matching dashboard recent trades ─────────
         st.markdown("---")
         st.subheader("All trades")
-        st.dataframe(df_view, use_container_width=True, hide_index=True)
+        if not df_view.empty:
+            _sorted_view = df_view.sort_values("date", ascending=False)
+            _all_tbl_html = _render_trades_table(_sorted_view, pnl_col)
+            try:
+                st.html(_all_tbl_html)
+            except AttributeError:
+                st.markdown(_all_tbl_html, unsafe_allow_html=True)
+        else:
+            st.info("No trades yet.")
         st.download_button("Download CSV", df_view.to_csv(index=False).encode("utf-8"),
-                            file_name=f"{form_key}_trades.csv", mime="text/csv", key=f"{form_key}_dl")
+                           file_name=f"{form_key}_trades.csv", mime="text/csv", key=f"{form_key}_dl")
 
-        # ── Edit / delete ─────────────────────────────────────────────────────────
+        # ── Edit / delete — single-trade selector form, no data_editor glitches ───
         st.markdown("---")
-        st.subheader("Edit or delete trades")
-        editable = df_raw.copy()
-        editable["delete"] = False
-        edited = st.data_editor(editable, disabled=COMPUTED_COLUMNS + ["id", "images"],
-                                 use_container_width=True, hide_index=True, key=f"{form_key}_editor")
-        if st.button("Apply edits and deletions", key=f"{form_key}_apply"):
-            to_delete = edited[edited["delete"] == True]["id"].tolist()
-            for tid in to_delete:
-                delete_trade(tid)
-            to_update = edited[edited["delete"] != True].drop(columns=["delete"])
-            for _, r in to_update.iterrows():
-                row_dict = r.to_dict()
-                if "entry_time" in row_dict:
-                    row_dict["entry_time"] = normalize_time_input(row_dict["entry_time"])
-                if "exit_time" in row_dict:
-                    row_dict["exit_time"] = normalize_time_input(row_dict["exit_time"])
-                metrics = compute_metrics(
-                    instrument=normalize_instrument(row_dict.get("instrument")),
-                    direction=normalize_direction(row_dict.get("direction")),
-                    entry=to_float(row_dict.get("entry_price")),
-                    stop=to_float(row_dict.get("stop_loss")),
-                    exit_price=to_float(row_dict.get("exit_price")),
-                    take_profit=to_float(row_dict.get("take_profit")),
-                    contracts=to_int(row_dict.get("contracts")),
-                    commission=to_float(row_dict.get("commission")),
-                    slippage=to_float(row_dict.get("slippage")),
-                    max_favorable=to_float(row_dict.get("max_favorable_price")),
-                    max_adverse=to_float(row_dict.get("max_adverse_price")),
-                    account_size=to_float(row_dict.get("account_size")),
-                    date_str=row_dict.get("date"),
-                    entry_time_str=row_dict.get("entry_time"),
-                    exit_time_str=row_dict.get("exit_time"),
-                )
-                row_dict.update(metrics)
-                update_trade(row_dict)
-            st.success("Changes saved. Refresh to see updated data.")
+        st.subheader("Edit or delete a trade")
+        if df_raw.empty:
+            st.info("No trades to edit.")
+        else:
+            # Build dropdown labels: newest first
+            _edit_df = df_raw.copy()
+            if "date" in _edit_df.columns:
+                _edit_df = _edit_df.sort_values("date", ascending=False)
+            _edit_ids    = _edit_df["id"].tolist()
+            _edit_labels = []
+            for _, _er in _edit_df.iterrows():
+                _ed = str(_er.get("date", ""))[:10]
+                _ei = str(_er.get("instrument") or "")
+                _edir = str(_er.get("direction") or "")
+                _epnl = to_float(_er.get("pnl_net") or _er.get("pnl_gross"))
+                _epnl_str = f"  {'+' if (_epnl or 0) >= 0 else ''}${abs(_epnl or 0):,.0f}" if _epnl is not None else ""
+                _edit_labels.append(f"{_ed} | {_ei} {_edir}{_epnl_str}")
+            _opts = ["— select a trade to edit —"] + _edit_labels
+            _opt_ids = [None] + _edit_ids
+
+            _sel = st.selectbox("Select trade", range(len(_opts)),
+                                format_func=lambda i: _opts[i],
+                                key=f"{form_key}_edit_sel")
+
+            if _sel and _sel > 0:
+                _tid  = _opt_ids[_sel]
+                _row  = _edit_df[_edit_df["id"] == _tid].iloc[0].to_dict()
+
+                # Parse date safely for date_input
+                try:
+                    _row_date = pd.to_datetime(_row.get("date")).date()
+                except Exception:
+                    _row_date = _dt.date.today()
+
+                with st.form(f"{form_key}_edit_form"):
+                    _ec1, _ec2, _ec3, _ec4 = st.columns(4)
+                    _e_date  = _ec1.date_input("Date",        value=_row_date,                      key=f"{form_key}_ef_date")
+                    _e_inst  = _ec2.text_input("Instrument",  value=str(_row.get("instrument") or ""), key=f"{form_key}_ef_inst")
+                    _dir_opts = ["Long", "Short"]
+                    _dir_idx  = 1 if str(_row.get("direction", "")).strip() == "Short" else 0
+                    _e_dir   = _ec3.selectbox("Direction",    _dir_opts, index=_dir_idx,              key=f"{form_key}_ef_dir")
+                    _e_sess  = _ec4.text_input("Session",     value=str(_row.get("session") or ""),   key=f"{form_key}_ef_sess")
+
+                    _ec5, _ec6, _ec7, _ec8 = st.columns(4)
+                    _e_entry = _ec5.number_input("Entry price", value=float(to_float(_row.get("entry_price")) or 0), format="%.2f", key=f"{form_key}_ef_entry")
+                    _e_exit  = _ec6.number_input("Exit price",  value=float(to_float(_row.get("exit_price"))  or 0), format="%.2f", key=f"{form_key}_ef_exit")
+                    _e_sl    = _ec7.number_input("Stop loss",   value=float(to_float(_row.get("stop_loss"))    or 0), format="%.2f", key=f"{form_key}_ef_sl")
+                    _e_tp    = _ec8.number_input("Take profit", value=float(to_float(_row.get("take_profit"))  or 0), format="%.2f", key=f"{form_key}_ef_tp")
+
+                    _ec9, _ec10, _ec11 = st.columns(3)
+                    _e_qty   = _ec9.number_input("Contracts",  value=int(to_int(_row.get("contracts")) or 1), min_value=1, step=1, key=f"{form_key}_ef_qty")
+                    _e_comm  = _ec10.number_input("Commission", value=float(to_float(_row.get("commission")) or 0), format="%.2f", key=f"{form_key}_ef_comm")
+                    _e_slip  = _ec11.number_input("Slippage",   value=float(to_float(_row.get("slippage"))   or 0), format="%.2f", key=f"{form_key}_ef_slip")
+
+                    _grade_opts_list = ["", "A++", "A+", "A", "B+", "B", "C", "D"]
+                    _curr_gr = str(_row.get("trade_grade") or "").strip()
+                    _gr_idx  = _grade_opts_list.index(_curr_gr) if _curr_gr in _grade_opts_list else 0
+                    _e_grade = st.selectbox("Trade grade", _grade_opts_list, index=_gr_idx, key=f"{form_key}_ef_grade")
+                    _e_notes = st.text_area("Notes", value=str(_row.get("notes") or ""), height=80, key=f"{form_key}_ef_notes")
+
+                    _form_saved = st.form_submit_button("Save changes", use_container_width=True, type="primary")
+
+                # Delete — two-step confirmation via session state, outside form to avoid conflicts
+                _del_pend_key = f"{form_key}_del_pending"
+                if st.session_state.get(_del_pend_key) == _tid:
+                    st.warning("Are you sure? This cannot be undone.")
+                    _dca, _dcb = st.columns(2)
+                    if _dca.button("Yes, delete trade", key=f"{form_key}_del_confirm", type="primary"):
+                        delete_trade(_tid)
+                        st.session_state.pop(_del_pend_key, None)
+                        st.success("Trade deleted.")
+                        st.rerun()
+                    if _dcb.button("Cancel", key=f"{form_key}_del_cancel"):
+                        st.session_state.pop(_del_pend_key, None)
+                        st.rerun()
+                else:
+                    if st.button("Delete this trade", key=f"{form_key}_del_btn"):
+                        st.session_state[_del_pend_key] = _tid
+                        st.rerun()
+
+                # Save handler
+                if _form_saved:
+                    _updated = _row.copy()
+                    _updated["date"]        = str(_e_date)
+                    _updated["instrument"]  = normalize_instrument(_e_inst)
+                    _updated["direction"]   = normalize_direction(_e_dir)
+                    _updated["session"]     = _e_sess or None
+                    _updated["entry_price"] = _e_entry or None
+                    _updated["exit_price"]  = _e_exit  or None
+                    _updated["stop_loss"]   = _e_sl    or None
+                    _updated["take_profit"] = _e_tp    or None
+                    _updated["contracts"]   = _e_qty
+                    _updated["commission"]  = _e_comm  or None
+                    _updated["slippage"]    = _e_slip  or None
+                    _updated["trade_grade"] = _e_grade or None
+                    _updated["notes"]       = _e_notes or None
+                    _upd_metrics = compute_metrics(
+                        instrument=_updated["instrument"],
+                        direction=_updated["direction"],
+                        entry=_e_entry or None,
+                        stop=_e_sl or None,
+                        exit_price=_e_exit or None,
+                        take_profit=_e_tp or None,
+                        contracts=_e_qty,
+                        commission=_e_comm or None,
+                        slippage=_e_slip or None,
+                        max_favorable=to_float(_row.get("max_favorable_price")),
+                        max_adverse=to_float(_row.get("max_adverse_price")),
+                        account_size=to_float(_row.get("account_size")),
+                        date_str=str(_e_date),
+                        entry_time_str=normalize_time_input(_row.get("entry_time")),
+                        exit_time_str=normalize_time_input(_row.get("exit_time")),
+                    )
+                    _updated.update(_upd_metrics)
+                    update_trade(_updated)
+                    st.success("Trade updated!")
+                    st.rerun()
 
 # ── App entry point ───────────────────────────────────────────────────────────
 
