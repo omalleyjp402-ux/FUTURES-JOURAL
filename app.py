@@ -7559,23 +7559,16 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                                     f'<p style="color:#cbd5e1;font-size:0.75rem;margin:0;">'
                                     f'{_pnfp_note_esc}</p></div>'
                                 )
-                        st.markdown(
-                            f"""<div style="background:rgba(0,0,0,0.3);
-                            border:1px solid {_evt['colour']}40;
-                            border-left:4px solid {_evt['colour']};
-                            border-radius:10px;padding:14px 18px;margin:0 0 12px 0;">
-                            <p style="color:{_evt['colour']};font-size:0.7rem;
-                            font-weight:800;letter-spacing:1.5px;margin:0 0 4px 0;
-                            text-transform:uppercase;">
-                            {_evt['emoji']} {_evt['name'].upper()} — TODAY</p>
-                            <p style="color:#94a3b8;font-size:0.75rem;margin:0 0 10px 0;">
-                            {_evt['description']}</p>
-                            <p style="color:#e2e8f0;font-size:0.78rem;margin:0 0 8px 0;">
-                            {_evt['prompt']}</p>
-                            {_prev_reminder_html}
-                            </div>""",
-                            unsafe_allow_html=True,
+                        _banner_html = (
+                            f'<div style="background:rgba(0,0,0,0.3);border:1px solid {_evt["colour"]}40;'
+                            f'border-left:4px solid {_evt["colour"]};border-radius:10px;padding:14px 18px;margin:0 0 12px 0;">'
+                            f'<p style="color:{_evt["colour"]};font-size:0.7rem;font-weight:800;letter-spacing:1.5px;margin:0 0 4px 0;text-transform:uppercase;">'
+                            f'{_evt["emoji"]} {html_lib.escape(_evt["name"].upper())} — TODAY</p>'
+                            f'<p style="color:#94a3b8;font-size:0.75rem;margin:0 0 10px 0;">{html_lib.escape(_evt["description"])}</p>'
+                            f'<p style="color:#e2e8f0;font-size:0.78rem;margin:0 0 8px 0;">{html_lib.escape(_evt["prompt"])}</p>'
+                            f'{_prev_reminder_html}</div>'
                         )
+                        st.markdown(_banner_html, unsafe_allow_html=True)
                         _evt_key = f"{form_key}_news_{_evt['name'].replace(' ', '_')}"
                         st.text_area(
                             f"Your notes on {_evt['name']} price action",
