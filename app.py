@@ -438,9 +438,9 @@ div[data-testid="stExpander"] > div {
 .tdy-cal-wrap{font-family:'Inter',system-ui,sans-serif}
 .tdy-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;max-width:100%}
 .tdy-cal .hd{font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;color:#a78bfa;font-weight:600;text-align:center;padding:6px 0;margin-bottom:4px}
-.tdy-cal .cell{position:relative;border-radius:9px;padding:8px 10px;min-height:72px;display:flex;flex-direction:column;justify-content:space-between;border:1px solid #2d2d4e;background:#16152a;overflow:hidden}
+.tdy-cal .cell{position:relative;border-radius:9px;padding:8px 10px;min-height:80px;display:flex;flex-direction:column;justify-content:space-between;border:1px solid #2d2d4e;background:#16152a;overflow:hidden}
 .tdy-cal .cell .dn{font-size:11px;color:#94a3b8;font-family:'JetBrains Mono',monospace;font-weight:600}
-.tdy-cal .cell .pnl{text-align:center;font-size:13px;font-weight:800;letter-spacing:-.01em;font-family:'JetBrains Mono',monospace}
+.tdy-cal .cell .pnl{text-align:center;font-size:20px;font-weight:800;letter-spacing:-.01em;font-family:'JetBrains Mono',monospace}
 .tdy-cal .cell .tc{font-size:10px;color:#94a3b8;text-align:center;letter-spacing:.08em;text-transform:uppercase}
 .tdy-cal .cell.win{background:rgba(34,197,94,.10);border-top:2px solid #22c55e}
 .tdy-cal .cell.win .pnl{color:#22c55e}
@@ -451,8 +451,8 @@ div[data-testid="stExpander"] > div {
 .tdy-cal .cell.out{opacity:.3;background:#0e1117}
 /* ── New dashboard design system ── */
 .tdy-mx{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;font-family:'Inter',system-ui,sans-serif;margin-bottom:18px}
-.tdy-mx-card{position:relative;background:#1a1a2e;border:1px solid #2d2d4e;border-radius:12px;padding:18px 20px;min-height:118px;display:flex;flex-direction:column;justify-content:space-between}
-.tdy-mx-card .top{display:flex;align-items:center;gap:8px;color:#94a3b8;font-size:13px;font-weight:500}
+.tdy-mx-card{position:relative;background:#1a1a2e;border:1px solid #2d2d4e;border-left:3px solid #7c3aed;border-radius:12px;padding:18px 20px;min-height:118px;display:flex;flex-direction:column;justify-content:space-between}
+.tdy-mx-card .top{display:flex;align-items:center;gap:8px;color:#a78bfa;font-size:10.5px;font-weight:700;letter-spacing:.22em;text-transform:uppercase}
 .tdy-mx-card .top .info{display:inline-grid;place-items:center;width:14px;height:14px;border:1px solid #475569;border-radius:50%;font-size:9px;color:#64748b;font-style:italic;font-weight:700}
 .tdy-mx-card .top .count{margin-left:6px;font-size:12px;color:#94a3b8;font-family:'JetBrains Mono',monospace}
 .tdy-mx-card .body{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:8px}
@@ -4468,15 +4468,15 @@ _DASHBOARD_CSS = """
 .tdy-pt-days span{height:16px;display:flex;align-items:center}
 .tdy-pt-cells{display:grid;grid-template-columns:repeat(15,1fr);gap:3px}
 .tdy-pt-col{display:grid;grid-template-rows:repeat(7,1fr);gap:3px}
-.tdy-pt-cell{aspect-ratio:1/1;background:#16152a;border:1px solid #2d2d4e;border-radius:2px}
-.tdy-pt-cell.l1{background:rgba(124,58,237,.25);border-color:rgba(124,58,237,.35)}
-.tdy-pt-cell.l2{background:rgba(124,58,237,.5);border-color:rgba(124,58,237,.55)}
-.tdy-pt-cell.l3{background:rgba(124,58,237,.75);border-color:rgba(124,58,237,.8)}
-.tdy-pt-cell.l4{background:#7c3aed;border-color:#7c3aed;box-shadow:0 0 5px rgba(124,58,237,.55)}
+.tdy-pt-cell{aspect-ratio:1/1;background:#1a1a2e;border:1px solid #2d2d4e;border-radius:3px}
+.tdy-pt-cell.l1{background:#3b1d8a;border-color:#3b1d8a}
+.tdy-pt-cell.l2{background:#5b21b6;border-color:#5b21b6}
+.tdy-pt-cell.l3{background:#7c3aed;border-color:#7c3aed}
+.tdy-pt-cell.l4{background:#a78bfa;border-color:#a78bfa;box-shadow:0 0 5px rgba(167,139,250,.55)}
 .tdy-pt-legend{margin-top:10px;display:flex;align-items:center;justify-content:flex-end;gap:6px;font-size:10.5px;color:#94a3b8}
-.tdy-pt-legend i{width:12px;height:12px;border-radius:2px;border:1px solid #2d2d4e;display:inline-block}
-.tdy-pt-legend i.l1{background:rgba(124,58,237,.25)}.tdy-pt-legend i.l2{background:rgba(124,58,237,.5)}
-.tdy-pt-legend i.l3{background:rgba(124,58,237,.75)}.tdy-pt-legend i.l4{background:#7c3aed}
+.tdy-pt-legend i{width:13px;height:13px;border-radius:3px;border:1px solid #2d2d4e;display:inline-block}
+.tdy-pt-legend i.l1{background:#3b1d8a}.tdy-pt-legend i.l2{background:#5b21b6}
+.tdy-pt-legend i.l3{background:#7c3aed}.tdy-pt-legend i.l4{background:#a78bfa}
 .tdy-pt-foot{display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding-top:14px;border-top:1px solid #2d2d4e;gap:14px;flex-wrap:wrap}
 .tdy-pt-score{flex:1;min-width:180px}
 .tdy-pt-score .lbl{font-size:12px;color:#cbd5e1;margin-bottom:6px}
@@ -4538,12 +4538,12 @@ def _dash_heatmap_html(df: pd.DataFrame) -> str:
     if not df.empty and "date" in df.columns:
         for d in pd.to_datetime(df["date"], errors="coerce").dt.date:
             if d: date_counts[d] = date_counts.get(d, 0) + 1
-    max_c = max(date_counts.values()) if date_counts else 1
+    # Fixed 5-tier thresholds matching Component-4 design: 0, 1-2, 3-4, 5-6, 7+
     def lvl(c):
         if c == 0: return ""
-        if c <= max(1, max_c*.25): return " l1"
-        if c <= max(1, max_c*.5):  return " l2"
-        if c <= max(1, max_c*.75): return " l3"
+        if c <= 2: return " l1"
+        if c <= 4: return " l2"
+        if c <= 6: return " l3"
         return " l4"
     # month labels
     months_html = ""; cur_m = None; cur_s = 0
@@ -4642,9 +4642,12 @@ def render_dashboard_component(
 
     # P&L display
     _pnl_cls = "pos" if total_pnl >= 0 else "neg"
+    _pnl_color = "#22c55e" if total_pnl >= 0 else "#ef4444"
     _pnl_str = f"${total_pnl:,.2f}" if total_pnl >= 0 else f"-${abs(total_pnl):,.2f}"
     _aw = abs(avg_win or 0); _al = abs(avg_loss or 0)
     _avg_r_str = f"{avg_r:.2f}R" if avg_r is not None else "—"
+    _loss_pct = max(0.0, 100.0 - win_rate)
+    _day_loss_pct = max(0.0, 100.0 - _day_win_pct)
     _today_str = _dt.date.today().strftime("%d %b %Y")
     _acc = html_lib.escape(account_type or "Account")
 
@@ -4671,42 +4674,76 @@ def render_dashboard_component(
   <div class="tdy-hd-sub">Tradylo Trading Journal</div>
   {_news_html}
   <div class="tdy-mx">
+    <!-- 1. NET P&L — purple left border, trade count right, large coloured value -->
     <div class="tdy-mx-card">
-      <div class="top">Net P&amp;L <span class="info">i</span><span class="count">{total_trades}</span></div>
-      <div class="body"><div class="num {_pnl_cls}">{_pnl_str}</div></div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span class="top" style="margin:0">Net P&amp;L</span>
+        <span style="font-size:11px;color:#94a3b8;font-family:ui-monospace,monospace">{total_trades} trades</span>
+      </div>
+      <div style="font-size:32px;font-weight:800;color:{_pnl_color};letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums;margin:6px 0">{_pnl_str}</div>
+      <div style="font-size:11px;color:#94a3b8;font-weight:500">Net (after fees)</div>
     </div>
+    <!-- 2. TRADE WIN % — SVG semicircle arc gauge -->
     <div class="tdy-mx-card">
-      <div class="top">Trade win % <span class="info">i</span></div>
-      <div class="body">
-        <div class="num">{win_rate:.1f}%</div>
-        <div class="tdy-half" style="--win:{win_rate:.2f}">
-          <div class="tdy-half-bg"></div>
-          <div class="tdy-half-counts"><span class="w">{wins}</span><span class="b">{breakeven}</span><span class="l">{losses}</span></div>
+      <span class="top">Trade Win %</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <span style="font-size:30px;font-weight:800;color:#fff;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums">{win_rate:.1f}%</span>
+        <svg width="68" height="42" viewBox="0 0 100 56" style="flex:0 0 auto;overflow:visible">
+          <path d="M8 50 A42 42 0 0 1 92 50" fill="none" stroke="#2d2d4e" stroke-width="10" stroke-linecap="round"/>
+          <path d="M8 50 A42 42 0 0 1 50 8" fill="none" stroke="#7c3aed" stroke-width="10" stroke-linecap="round" pathLength="100" stroke-dasharray="{win_rate:.1f} 100"/>
+          <path d="M92 50 A42 42 0 0 0 50 8" fill="none" stroke="#ef4444" stroke-width="10" stroke-linecap="round" pathLength="100" stroke-dasharray="{_loss_pct:.1f} 100"/>
+        </svg>
+      </div>
+      <div style="font-size:10.5px;color:#94a3b8;font-family:ui-monospace,monospace;font-weight:700;letter-spacing:.02em">
+        <span style="color:#a78bfa">{wins}W</span>
+        <span style="color:#475569;margin:0 4px">·</span>
+        <span style="color:#94a3b8">{breakeven}BE</span>
+        <span style="color:#475569;margin:0 4px">·</span>
+        <span style="color:#ef4444">{losses}L</span>
+      </div>
+    </div>
+    <!-- 3. PROFIT FACTOR — SVG full-circle ring gauge -->
+    <div class="tdy-mx-card">
+      <span class="top">Profit Factor</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <span style="font-size:30px;font-weight:800;color:#fff;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums">{profit_factor:.2f}</span>
+        <svg width="56" height="56" viewBox="0 0 80 80" style="flex:0 0 auto;transform:rotate(-90deg)">
+          <circle cx="40" cy="40" r="32" fill="none" stroke="#2d2d4e" stroke-width="8"/>
+          <circle cx="40" cy="40" r="32" fill="none" stroke="#7c3aed" stroke-width="8" stroke-linecap="round" pathLength="100" stroke-dasharray="{_pf_pct:.1f} 100"/>
+        </svg>
+      </div>
+      <div style="font-size:11px;color:#94a3b8;font-weight:500">Gross wins / gross losses</div>
+    </div>
+    <!-- 4. DAY WIN % — same semicircle arc as trade win% -->
+    <div class="tdy-mx-card">
+      <span class="top">Day Win %</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <span style="font-size:30px;font-weight:800;color:#fff;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums">{_day_win_pct:.1f}%</span>
+        <svg width="68" height="42" viewBox="0 0 100 56" style="flex:0 0 auto;overflow:visible">
+          <path d="M8 50 A42 42 0 0 1 92 50" fill="none" stroke="#2d2d4e" stroke-width="10" stroke-linecap="round"/>
+          <path d="M8 50 A42 42 0 0 1 50 8" fill="none" stroke="#7c3aed" stroke-width="10" stroke-linecap="round" pathLength="100" stroke-dasharray="{_day_win_pct:.1f} 100"/>
+          <path d="M92 50 A42 42 0 0 0 50 8" fill="none" stroke="#ef4444" stroke-width="10" stroke-linecap="round" pathLength="100" stroke-dasharray="{_day_loss_pct:.1f} 100"/>
+        </svg>
+      </div>
+      <div style="font-size:10.5px;color:#94a3b8;font-family:ui-monospace,monospace;font-weight:700">
+        <span style="color:#a78bfa">{_day_wins}W</span>
+        <span style="color:#475569;margin:0 4px">·</span>
+        <span style="color:#ef4444">{_day_losses}L</span>
+      </div>
+    </div>
+    <!-- 5. AVG WIN / LOSS — R value + green/red bar pills -->
+    <div class="tdy-mx-card">
+      <span class="top">Avg Win / Loss</span>
+      <div style="font-size:30px;font-weight:800;color:#fff;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums">{_avg_r_str}</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <div style="display:flex;align-items:center;gap:6px;font-family:ui-monospace,monospace;font-size:11px;font-weight:700">
+          <span style="flex:0 0 50%;height:15px;background:#22c55e;border-radius:3px;color:#fff;display:flex;align-items:center;padding:0 6px">+${_aw:,.0f}</span>
+          <span style="color:#94a3b8;font-weight:500">avg win</span>
         </div>
-      </div>
-    </div>
-    <div class="tdy-mx-card">
-      <div class="top">Profit factor <span class="info">i</span></div>
-      <div class="body">
-        <div class="num">{profit_factor:.2f}</div>
-        <div class="tdy-ring" style="--pct:{_pf_pct:.1f}"></div>
-      </div>
-    </div>
-    <div class="tdy-mx-card">
-      <div class="top">Day win % <span class="info">i</span></div>
-      <div class="body">
-        <div class="num">{_day_win_pct:.1f}%</div>
-        <div class="tdy-half" style="--win:{_day_win_pct:.2f}">
-          <div class="tdy-half-bg"></div>
-          <div class="tdy-half-counts"><span class="w">{_day_wins}</span><span class="b">{_day_be}</span><span class="l">{_day_losses}</span></div>
+        <div style="display:flex;align-items:center;gap:6px;font-family:ui-monospace,monospace;font-size:11px;font-weight:700">
+          <span style="flex:0 0 45%;height:15px;background:#ef4444;border-radius:3px;color:#fff;display:flex;align-items:center;padding:0 6px">-${_al:,.0f}</span>
+          <span style="color:#94a3b8;font-weight:500">avg loss</span>
         </div>
-      </div>
-    </div>
-    <div class="tdy-mx-card">
-      <div class="top">Avg win / loss <span class="info">i</span></div>
-      <div class="body">
-        <div class="num">{_avg_r_str}</div>
-        <div class="tdy-pillbar"><div class="w">${_aw:,.0f}</div><div class="l">${_al:,.0f}</div></div>
       </div>
     </div>
   </div>
@@ -5523,6 +5560,45 @@ def _rc_metric_card(label: str, value: str, color: str = "rgba(248,250,252,0.95)
         f'<div style="font-size:22px;font-weight:700;color:{color};">{html_lib.escape(value)}</div>'
         f'</div>'
     )
+
+
+@st.dialog("Welcome to Tradylo 👋", width="large")
+def _show_onboarding_dialog() -> None:
+    """First-login onboarding modal — shown once to new users with 0 trades."""
+    _ob_html = (
+        '<div style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;color:#e2e8f0">'
+        '<p style="margin:0 0 20px;font-size:15px;color:#94a3b8;text-align:center;line-height:1.55">'
+        'Your trading journal is ready. Here\'s how to get the most out of it.</p>'
+        '<div style="display:flex;flex-direction:column;gap:12px">'
+        # Step 1
+        '<div style="display:flex;gap:16px;padding:16px;background:rgba(124,58,237,0.06);border:1px solid #2d2d4e;border-radius:12px">'
+        '<div style="flex:0 0 auto;width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#6d28d9);display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;font-weight:800;box-shadow:0 0 14px rgba(124,58,237,0.45)">1</div>'
+        '<div><div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:4px">Log Your First Trade</div>'
+        '<div style="font-size:13.5px;color:#94a3b8;line-height:1.55">Hit <span style="color:#a78bfa;font-weight:600">+ Add Trade</span> in the sidebar. Fill in confluences, grade and psychology — this is what makes the analysis powerful.</div></div>'
+        '</div>'
+        # Step 2
+        '<div style="display:flex;gap:16px;padding:16px;background:rgba(124,58,237,0.06);border:1px solid #2d2d4e;border-radius:12px">'
+        '<div style="flex:0 0 auto;width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#6d28d9);display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;font-weight:800;box-shadow:0 0 14px rgba(124,58,237,0.45)">2</div>'
+        '<div><div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:4px">Import from Tradovate</div>'
+        '<div style="font-size:13.5px;color:#94a3b8;line-height:1.55">Already have trades? Import your CSV from Tradovate, NinjaTrader or Rithmic in one click using <span style="color:#a78bfa;font-weight:600">New Trade → Import CSV</span>.</div></div>'
+        '</div>'
+        # Step 3
+        '<div style="display:flex;gap:16px;padding:16px;background:rgba(124,58,237,0.06);border:1px solid #2d2d4e;border-radius:12px">'
+        '<div style="flex:0 0 auto;width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#6d28d9);display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;font-weight:800;box-shadow:0 0 14px rgba(124,58,237,0.45)">3</div>'
+        '<div><div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:4px">Explore Your Dashboard</div>'
+        '<div style="font-size:13.5px;color:#94a3b8;line-height:1.55">After 5+ trades your <span style="color:#a78bfa;font-weight:600">Dylo Score</span>, coach insights and pattern alerts come to life.</div></div>'
+        '</div>'
+        '</div>'
+        '<div style="text-align:center;margin-top:16px;font-size:11px;color:#475569">This won\'t show again once you log your first trade.</div>'
+        '</div>'
+    )
+    try:
+        st.html(_ob_html)
+    except AttributeError:
+        st.markdown(_ob_html, unsafe_allow_html=True)
+    if st.button("Got it, let's go!", use_container_width=True, type="primary"):
+        st.session_state["_onboarding_done"] = True
+        st.rerun()
 
 
 @st.dialog("Weekly Report", width="large")
@@ -6691,28 +6767,67 @@ def render_prop_sim_page(user_id: str) -> None:
     days_ok     = trading_days >= min_trading_days
     overall_pass = profit_ok and daily_ok and total_dd_ok and days_ok
 
-    if overall_pass:
-        st.success("CHALLENGE PASSED — All rules met!")
-    elif not daily_ok or not total_dd_ok:
-        st.error("CHALLENGE FAILED — A loss rule was breached.")
-    else:
-        st.warning("Challenge in progress — keep going.")
-
-    r1, r2, r3, r4 = st.columns(4)
-
-    def _prog_card(col, label, current, target, is_loss=False):
-        pct = min(abs(current) / abs(target) * 100, 100) if target else 0
-        ok  = current >= target
-        col.metric(label, f"${current:,.2f}", f"Target: ${target:,.2f}",
-                   delta_color="normal" if ok else "inverse")
-        col.progress(min(int(pct), 100))
-
-    _prog_card(r1, "Profit Progress", total_pnl, profit_target_amt)
-    _prog_card(r2, "Worst Day Loss",  worst_day, -max_daily_loss_amt, is_loss=True)
-    _prog_card(r3, "Max Drawdown",    max_dd,    -max_total_dd_amt,   is_loss=True)
-    r4.metric("Trading Days", f"{trading_days} / {min_trading_days}",
-              "Met" if days_ok else f"{min_trading_days - trading_days} more needed")
-    r4.progress(min(int(trading_days / max(min_trading_days, 1) * 100), 100))
+    # ── Styled challenge card (Component 6 design) ───────────────────────────
+    _sim_status_color = "#22c55e" if overall_pass else ("#ef4444" if (not daily_ok or not total_dd_ok) else "#f59e0b")
+    _sim_status_label = "PASSED" if overall_pass else ("FAILED" if (not daily_ok or not total_dd_ok) else "IN PROGRESS")
+    _sim_glow = f"0 0 0 1px {_sim_status_color}40,0 0 40px {_sim_status_color}18"
+    _profit_pct  = min(max(total_pnl / profit_target_amt * 100, 0), 100) if profit_target_amt else 0
+    _daily_pct   = min(abs(worst_day) / max_daily_loss_amt * 100, 100) if max_daily_loss_amt else 0
+    _dd_pct      = min(abs(max_dd) / max_total_dd_amt * 100, 100) if max_total_dd_amt else 0
+    _days_pct    = min(trading_days / max(min_trading_days, 1) * 100, 100) if min_trading_days > 0 else 100
+    _daily_bar_color = "#22c55e" if _daily_pct < 80 else ("#f59e0b" if _daily_pct < 95 else "#ef4444")
+    _dd_bar_color    = "#22c55e" if _dd_pct < 60 else ("#f59e0b" if _dd_pct < 80 else "#ef4444")
+    def _pbar(pct, color):
+        return (f'<div style="height:10px;background:#0e1117;border:1px solid #2d2d4e;border-radius:999px;overflow:hidden">'
+                f'<span style="display:block;height:100%;width:{pct:.1f}%;background:{color};border-radius:999px;'
+                f'box-shadow:0 0 8px {color}80"></span></div>')
+    _sim_card_html = (
+        f'<div style="background:#1a1a2e;border:1px solid {_sim_status_color}66;border-radius:14px;'
+        f'padding:24px 28px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;'
+        f'color:#e2e8f0;box-shadow:{_sim_glow};margin-bottom:16px">'
+        # Top bar
+        f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px">'
+        f'<div style="display:inline-flex;align-items:center;gap:8px;padding:7px 14px;background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.4);border-radius:999px">'
+        f'<span style="font-size:13px;font-weight:700;color:#fff">{html_lib.escape(firm)}</span></div>'
+        f'<span style="display:inline-flex;align-items:center;gap:8px;padding:6px 14px;'
+        f'background:{_sim_status_color}26;border:1px solid {_sim_status_color}80;border-radius:999px;'
+        f'font-size:11px;font-weight:800;color:{_sim_status_color};letter-spacing:.18em;text-transform:uppercase">'
+        f'<span style="width:7px;height:7px;border-radius:50%;background:{_sim_status_color};box-shadow:0 0 8px {_sim_status_color}"></span>'
+        f'{_sim_status_label}</span></div>'
+        # Progress bars
+        f'<div style="display:flex;flex-direction:column;gap:16px">'
+        # Profit target
+        f'<div><div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px">'
+        f'<span style="font-size:10.5px;font-weight:700;color:#a78bfa;letter-spacing:.22em;text-transform:uppercase">Profit Target</span>'
+        f'<span style="font-size:13px;font-weight:700;color:#fff;font-family:ui-monospace,monospace">'
+        f'{"+" if total_pnl>=0 else ""}${total_pnl:,.0f} / ${profit_target_amt:,.0f}</span></div>'
+        + _pbar(_profit_pct, "linear-gradient(90deg,#7c3aed,#a78bfa)") +
+        # Daily loss
+        f'</div><div><div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px">'
+        f'<span style="font-size:10.5px;font-weight:700;color:#a78bfa;letter-spacing:.22em;text-transform:uppercase">Daily Loss Limit</span>'
+        f'<span style="font-size:13px;font-weight:700;color:#fff;font-family:ui-monospace,monospace">'
+        f'${abs(worst_day):,.0f} / ${max_daily_loss_amt:,.0f} used</span></div>'
+        + _pbar(_daily_pct, _daily_bar_color) +
+        # Max drawdown
+        f'</div><div><div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px">'
+        f'<span style="font-size:10.5px;font-weight:700;color:#a78bfa;letter-spacing:.22em;text-transform:uppercase">Max Drawdown</span>'
+        f'<span style="font-size:13px;font-weight:700;color:#fff;font-family:ui-monospace,monospace">'
+        f'${abs(max_dd):,.0f} / ${max_total_dd_amt:,.0f} used</span></div>'
+        + _pbar(_dd_pct, _dd_bar_color) +
+        # Trading days
+        f'</div><div><div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px">'
+        f'<span style="font-size:10.5px;font-weight:700;color:#a78bfa;letter-spacing:.22em;text-transform:uppercase">Min Trading Days</span>'
+        f'<span style="font-size:13px;font-weight:700;color:#fff;font-family:ui-monospace,monospace">'
+        f'{trading_days} / {min_trading_days}'
+        + (f' <span style="color:#22c55e;margin-left:6px">✓ Met</span>' if days_ok else '') +
+        f'</span></div>'
+        + _pbar(_days_pct, "linear-gradient(90deg,#7c3aed,#a78bfa)") +
+        f'</div></div></div>'
+    )
+    try:
+        st.html(_sim_card_html)
+    except AttributeError:
+        st.markdown(_sim_card_html, unsafe_allow_html=True)
 
     # ── Build x-axis labels (real dates when available, else Day N) ──────────
     _has_dates = "_date" in sim_df.columns
@@ -8295,6 +8410,10 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         )
 
     if section == "Dashboard":
+        # Show onboarding modal once to new users who have no trades yet
+        if df_raw.empty and not st.session_state.get("_onboarding_done"):
+            _show_onboarding_dialog()
+
         zylo = compute_zylo_score(df_view, daily_df, pnl_col)
         _be = int((df_view[pnl_col] == 0).sum())
         _dash_events = get_news_events_for_date(_dt.date.today())
