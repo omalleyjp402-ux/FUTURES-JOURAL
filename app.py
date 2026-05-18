@@ -4426,28 +4426,10 @@ _DASHBOARD_CSS = """
 @media(max-width:1100px){.tdy-grid3{grid-template-columns:1fr}}
 .tdy-mx{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:18px}
 @media(max-width:1100px){.tdy-mx{grid-template-columns:repeat(2,1fr)}}
-.tdy-mx-card{position:relative;background:#1a1a2e;border:1px solid #2d2d4e;border-radius:12px;padding:18px 20px;min-height:130px;display:flex;flex-direction:column;justify-content:space-between;gap:10px}
-.tdy-mx-card .top{display:flex;align-items:center;gap:8px;color:#94a3b8;font-size:13px;font-weight:500}
-.tdy-mx-card .top .info{display:inline-grid;place-items:center;width:14px;height:14px;border:1px solid #475569;border-radius:50%;font-size:9px;color:#64748b;font-style:italic;font-weight:700}
-.tdy-mx-card .top .count{margin-left:auto;font-size:12px;color:#94a3b8;font-family:'JetBrains Mono',monospace}
-.tdy-mx-card .body{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.tdy-mx-card{position:relative;background:#1a1a2e;border:1px solid #2d2d4e;border-left:3px solid #7c3aed;border-radius:12px;padding:18px 20px;min-height:118px;display:flex;flex-direction:column;justify-content:space-between}
+.tdy-mx-card .top{color:#a78bfa;font-size:10.5px;font-weight:700;letter-spacing:.22em;text-transform:uppercase}
 .tdy-mx-card .num{font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1.05;color:#e2e8f0}
 .tdy-mx-card .num.pos{color:#22c55e}.tdy-mx-card .num.neg{color:#ef4444}
-.tdy-half{position:relative;width:96px;height:54px;flex:0 0 96px;overflow:hidden}
-.tdy-half::before{content:"";position:absolute;left:0;top:0;width:96px;height:96px;border-radius:50%;
-  background:conic-gradient(from 270deg,#7c3aed 0,#7c3aed calc(var(--win)*1.8deg),#ef4444 calc(var(--win)*1.8deg),#ef4444 180deg,transparent 180deg);
-  -webkit-mask:radial-gradient(circle at 50% 50%,transparent 30px,#000 31px,#000 47px,transparent 48px);
-          mask:radial-gradient(circle at 50% 50%,transparent 30px,#000 31px,#000 47px,transparent 48px)}
-.tdy-half-bg{position:absolute;left:0;top:0;width:96px;height:96px;border-radius:50%;
-  background:conic-gradient(from 270deg,#2d2d4e 0,#2d2d4e 180deg,transparent 180deg);
-  -webkit-mask:radial-gradient(circle at 50% 50%,transparent 30px,#000 31px,#000 47px,transparent 48px);
-          mask:radial-gradient(circle at 50% 50%,transparent 30px,#000 31px,#000 47px,transparent 48px)}
-.tdy-half-counts{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:center;gap:4px;font-size:10px;font-family:'JetBrains Mono',monospace;font-weight:700;z-index:2}
-.tdy-half-counts span{padding:1px 6px;border-radius:4px;background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.06)}
-.tdy-half-counts .w{color:#a78bfa}.tdy-half-counts .b{color:#94a3b8}.tdy-half-counts .l{color:#ef4444}
-.tdy-ring{position:relative;width:72px;height:72px;flex:0 0 72px;border-radius:50%;
-  background:conic-gradient(from 0deg,#7c3aed 0,#7c3aed calc(var(--pct)*3.6deg),#2d2d4e calc(var(--pct)*3.6deg))}
-.tdy-ring::after{content:"";position:absolute;inset:8px;background:#1a1a2e;border-radius:50%}
 .tdy-pillbar{display:flex;height:24px;border-radius:6px;overflow:hidden;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:#fff;flex:1}
 .tdy-pillbar .w{background:#22c55e;display:flex;align-items:center;justify-content:center;padding:0 8px;flex:1}
 .tdy-pillbar .l{background:#ef4444;display:flex;align-items:center;justify-content:center;padding:0 8px;flex:1}
