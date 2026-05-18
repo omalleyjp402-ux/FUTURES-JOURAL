@@ -5393,48 +5393,193 @@ def render_reports_page(df_view: pd.DataFrame, pnl_col: str, account_type: str) 
     tab_week, tab_month = st.tabs(["Weekly", "Monthly"])
 
     def render_period(title: str, period_df: pd.DataFrame, subtitle: str) -> None:
+        if period_df.empty:
+            st.info("No trades in this period.")
+            return
+
         stats = summarize_performance(period_df, pnl_col)
         pf = stats["profit_factor"]
         pf_txt = "Perfect" if pf == float("inf") else (f"{pf:.2f}" if isinstance(pf, (int, float)) else "n/a")
 
-        metrics = [
-            ("Total PnL", format_money(stats["total_pnl"])),
-            ("Trades", str(stats["total_trades"])),
-            ("Win Rate", f"{stats['win_rate']:.1f}%"),
+        _total_pnl = stats["total_pnl"]
+        _total_trades = stats["total_trades"]
+        _win_rate = stats["win_rate"]
+        _pnl_color = "#22c55e" if _total_pnl >= 0 else "#ef4444"
+        _pnl_str = (f"+${_total_pnl:,.2f}" if _total_pnl >= 0 else f"-${abs(_total_pnl):,.2f}")
+        _wins = int((period_df[pnl_col] > 0).sum())
+        _losses = int((period_df[pnl_col] < 0).sum())
+
+        # Avg trades per day
+        _trade_days = max(1, period_df["date"].dt.normalize().nunique())
+        _avg_per_day = _total_trades / _trade_days
+
+        # Best trade
+        _bt_idx = period_df[pnl_col].idxmax() if not period_df.empty else None
+        if _bt_idx is not None:
+            _bt = period_df.loc[_bt_idx]
+            _bt_pnl = _bt[pnl_col]
+            _bt_pnl_str = (f"+${_bt_pnl:,.2f}" if _bt_pnl >= 0 else f"-${abs(_bt_pnl):,.2f}")
+            _bt_parts = [str(_bt.get("instrument","") or ""), str(_bt.get("direction","") or "").capitalize(), str(_bt.get("grade","") or "")]
+            _bt_meta = " · ".join(p for p in _bt_parts if p.strip())
+        else:
+            _bt_pnl_str, _bt_meta = "—", ""
+
+        # Top instruments
+        _inst_pnl = period_df.groupby("instrument")[pnl_col].sum().sort_values(ascending=False)
+        _inst_html = ""
+        for _inst, _ipnl in _inst_pnl.head(4).items():
+            _ic = "#22c55e" if _ipnl >= 0 else "#ef4444"
+            _ips = (f"+${_ipnl:,.2f}" if _ipnl >= 0 else f"-${abs(_ipnl):,.2f}")
+            _inst_html += (f'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #1e2240">'
+                           f'<span style="color:#cbd5e1;font-size:13px;font-weight:600">{html_lib.escape(str(_inst))}</span>'
+                           f'<span style="color:{_ic};font-size:13px;font-weight:700">{_ips}</span></div>')
+
+        # By session
+        _sess_dot = {"NY": "#22c55e", "London": "#a78bfa", "Asia": "#38bdf8"}
+        _sess_html = ""
+        if "session" in period_df.columns:
+            _sg = period_df.groupby("session").agg({pnl_col: "sum", "instrument": "count"}).rename(columns={"instrument": "cnt"})
+            for _sn in ["NY", "London", "Asia"]:
+                _sp = float(_sg.loc[_sn, pnl_col]) if _sn in _sg.index else 0.0
+                _sc = int(_sg.loc[_sn, "cnt"]) if _sn in _sg.index else 0
+                _sps = (f"+${_sp:,.2f}" if _sp >= 0 else f"-${abs(_sp):,.2f}")
+                _spc = "#22c55e" if _sp > 0 else ("#ef4444" if _sp < 0 else "#64748b")
+                _dot = _sess_dot.get(_sn, "#94a3b8")
+                _sess_html += (f'<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid #1e2240">'
+                               f'<div style="display:flex;align-items:center;gap:8px">'
+                               f'<span style="width:8px;height:8px;border-radius:50%;background:{_dot};flex-shrink:0;display:inline-block"></span>'
+                               f'<span style="color:#cbd5e1;font-size:13px">{_sn}</span></div>'
+                               f'<div style="text-align:right">'
+                               f'<span style="color:{_spc};font-size:13px;font-weight:700">{_sps}</span>'
+                               f'<span style="color:#475569;font-size:11px;margin-left:8px">{_sc} trades</span>'
+                               f'</div></div>')
+
+        # Trade grades
+        _grade_order = ["A++", "A+", "A", "B+", "B", "C", "D"]
+        _gc = period_df["grade"].value_counts() if "grade" in period_df.columns else pd.Series(dtype=int)
+        _gmax = int(_gc.max()) if not _gc.empty else 1
+        _grades_html = ""
+        for _g in _grade_order:
+            _gn = int(_gc.get(_g, 0))
+            if _gn:
+                _gpct = _gn / _gmax * 100
+                _grades_html += (f'<div style="display:flex;align-items:center;gap:8px;padding:3px 0">'
+                                 f'<span style="color:#94a3b8;font-size:11px;font-weight:700;width:30px;text-align:right">{html_lib.escape(_g)}</span>'
+                                 f'<div style="flex:1;height:7px;background:#1e2240;border-radius:4px;overflow:hidden">'
+                                 f'<div style="height:100%;width:{_gpct:.0f}%;background:linear-gradient(90deg,#7c3aed,#a78bfa);border-radius:4px"></div></div>'
+                                 f'<span style="color:#94a3b8;font-size:11px;width:18px">{_gn}</span></div>')
+        if not _grades_html:
+            _grades_html = '<div style="color:#475569;font-size:12px">No graded trades</div>'
+
+        # Assemble card HTML
+        _card = (
+            '<div style="width:100%;background:#0d0f1a;border-radius:16px;overflow:hidden;'
+            'font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;border:1px solid #1e2240">'
+            # ── Header ──
+            '<div style="display:flex;align-items:center;justify-content:space-between;padding:18px 28px;border-bottom:1px solid #1e2240">'
+            '<div style="display:flex;align-items:center;gap:12px">'
+            '<div style="width:36px;height:36px;background:#7c3aed;border-radius:9px;display:flex;align-items:center;'
+            'justify-content:center;font-size:17px">📊</div>'
+            '<div><div style="color:#fff;font-weight:800;font-size:15px;letter-spacing:.08em">TRADYLO</div>'
+            '<div style="color:#7c3aed;font-size:9px;letter-spacing:.2em;font-weight:700">TRADING JOURNAL</div></div></div>'
+            '<div style="color:#94a3b8;font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase">WEEKLY PERFORMANCE REPORT</div>'
+            f'<div style="background:#1e2240;border:1px solid #2d3360;border-radius:8px;padding:6px 14px;color:#a78bfa;font-size:12px;font-weight:600">'
+            f'📅 {html_lib.escape(subtitle)}</div>'
+            '</div>'
+            # ── Main grid ──
+            '<div style="display:grid;grid-template-columns:1fr 1fr 1.15fr;gap:16px;padding:20px 28px">'
+            # Left col
+            '<div style="display:flex;flex-direction:column;gap:14px">'
+            # NET P&L
+            f'<div style="background:#111827;border:1px solid #1e2240;border-left:3px solid {_pnl_color};border-radius:12px;padding:20px">'
+            '<div style="color:#94a3b8;font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;margin-bottom:10px">NET P&amp;L</div>'
+            f'<div style="color:{_pnl_color};font-size:40px;font-weight:800;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums">{_pnl_str}</div>'
+            f'<div style="color:#64748b;font-size:11px;margin-top:8px">{html_lib.escape(subtitle)}</div>'
+            '</div>'
+            # TOTAL TRADES
+            '<div style="background:#111827;border:1px solid #1e2240;border-radius:12px;padding:20px">'
+            '<div style="color:#94a3b8;font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;margin-bottom:10px">TOTAL TRADES</div>'
+            f'<div style="color:#fff;font-size:40px;font-weight:800;line-height:1">{_total_trades}</div>'
+            f'<div style="color:#64748b;font-size:11px;margin-top:8px">Avg {_avg_per_day:.1f}/day</div>'
+            '</div>'
+            '</div>'
+            # Middle col
+            '<div style="display:flex;flex-direction:column;gap:14px">'
+            # WIN RATE
+            '<div style="background:#111827;border:1px solid #1e2240;border-left:3px solid #7c3aed;border-radius:12px;padding:20px">'
+            '<div style="color:#94a3b8;font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;margin-bottom:10px">WIN RATE</div>'
+            f'<div style="color:#fff;font-size:40px;font-weight:800;line-height:1">{_win_rate:.1f}%</div>'
+            f'<div style="font-size:11px;margin-top:8px"><span style="color:#a78bfa;font-weight:700">{_wins}W</span>'
+            ' <span style="color:#475569;margin:0 4px">·</span>'
+            f'<span style="color:#ef4444;font-weight:700">{_losses}L</span></div>'
+            '</div>'
+            # BEST TRADE
+            '<div style="background:#111827;border:1px solid #1e2240;border-radius:12px;padding:20px">'
+            '<div style="color:#94a3b8;font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;margin-bottom:10px">BEST TRADE</div>'
+            f'<div style="color:#22c55e;font-size:40px;font-weight:800;line-height:1">{_bt_pnl_str}</div>'
+            f'<div style="color:#64748b;font-size:11px;margin-top:8px">{html_lib.escape(_bt_meta)}</div>'
+            '</div>'
+            '</div>'
+            # Right col
+            '<div style="display:flex;flex-direction:column;gap:14px">'
+            # TOP INSTRUMENTS
+            '<div style="background:#111827;border:1px solid #1e2240;border-radius:12px;padding:18px">'
+            '<div style="color:#94a3b8;font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;margin-bottom:10px">TOP INSTRUMENTS</div>'
+            f'{_inst_html}'
+            '</div>'
+            # BY SESSION
+            '<div style="background:#111827;border:1px solid #1e2240;border-radius:12px;padding:18px">'
+            '<div style="color:#94a3b8;font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;margin-bottom:10px">BY SESSION</div>'
+            f'{_sess_html}'
+            '</div>'
+            # TRADE GRADES
+            '<div style="background:#111827;border:1px solid #1e2240;border-radius:12px;padding:18px">'
+            '<div style="color:#94a3b8;font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;margin-bottom:10px">TRADE GRADES</div>'
+            f'{_grades_html}'
+            '</div>'
+            '</div>'  # end right col
+            '</div>'  # end grid
+            # ── Footer ──
+            '<div style="padding:12px 28px;border-top:1px solid #1e2240;display:flex;justify-content:space-between;align-items:center">'
+            '<span style="color:#475569;font-size:11px">tradylotradingjournal.streamlit.app</span>'
+            '<span style="color:#7c3aed;font-size:11px;font-weight:700;letter-spacing:.1em">✦ TRADYLO</span>'
+            '<span style="color:#475569;font-size:11px">TRACK YOUR EDGE. TRADE WITH PURPOSE.</span>'
+            '</div>'
+            '</div>'
+        )
+        try:
+            st.html(_card)
+        except AttributeError:
+            st.markdown(_card, unsafe_allow_html=True)
+
+        # PNG download
+        st.markdown("")
+        metrics_png = [
+            ("Total PnL", _pnl_str),
+            ("Trades", str(_total_trades)),
+            ("Win Rate", f"{_win_rate:.1f}%"),
             ("Profit Factor", pf_txt),
             ("Avg Win", format_money(stats["avg_win"])),
             ("Avg Loss", format_money(stats["avg_loss"])),
             ("Max Drawdown", format_money(-abs(stats["max_drawdown"]))),
             ("Best Day", format_money(stats["best_day"]["pnl"]) if stats["best_day"] else "—"),
         ]
-
-        # On-screen cards
-        cols = st.columns(4)
-        for i, (k, v) in enumerate(metrics[:8]):
-            cols[i % 4].metric(k, v)
-
-        # Shareable certificate
-        st.markdown("---")
-        st.subheader("Shareable card")
-        footer = f"{BRAND_NAME} · {account_type} · Generated {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"
+        footer_png = f"{BRAND_NAME} · {account_type} · Generated {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"
         png = build_report_card_png(
             title=f"{BRAND_NAME} {title}",
             subtitle=subtitle,
-            metrics=metrics[:8],
+            metrics=metrics_png,
             logo_path=LOGO_PATH,
-            footer=footer,
+            footer=footer_png,
         )
         if png:
-            st.image(png, use_container_width=True)
             st.download_button(
-                "Download PNG",
+                "⬇️ Download PNG",
                 data=png,
-                file_name=f"{BRAND_NAME.lower()}_{title.lower().replace(' ','_')}_{account_type.lower().replace(' ','_')}.png",
+                file_name=f"tradylo_{title.lower().replace(' ','_')}_{account_type.lower().replace(' ','_')}.png",
                 mime="image/png",
                 use_container_width=True,
             )
-        else:
-            st.info("PNG export requires Pillow. Add `pillow` to requirements to enable it.")
 
     with tab_week:
         wk = daily.set_index("date")["pnl"].resample("W-SUN").sum().reset_index()
