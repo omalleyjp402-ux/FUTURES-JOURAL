@@ -3159,6 +3159,39 @@ def _load_user_tags_from_trades(user_id: str) -> list[str]:
         return []
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def load_custom_confluences(user_id: str) -> list[str]:
+    """Load user-saved custom confluences from public.custom_confluences."""
+    try:
+        sb = authed_supabase()
+        res = sb.table("custom_confluences").select("name").eq("user_id", user_id).order("name").execute()
+        return [r["name"] for r in (res.data or []) if r.get("name")]
+    except Exception:
+        return []
+
+
+def save_new_custom_confluences(user_id: str, other_text: str) -> None:
+    """Parse the 'Other' text field and upsert each entry into custom_confluences."""
+    if not other_text or not other_text.strip():
+        return
+    names = [n.strip() for n in other_text.split(",") if n.strip()]
+    if not names:
+        return
+    sb = authed_supabase()
+    for name in names:
+        try:
+            sb.table("custom_confluences").upsert(
+                {"user_id": user_id, "name": name},
+                on_conflict="user_id,name",
+            ).execute()
+        except Exception:
+            pass
+    try:
+        load_custom_confluences.clear()  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
+
 # ── Affiliates (feature-tolerant) ─────────────────────────────────────────────
 
 PUBLIC_APP_URL = str(get_secret("PUBLIC_APP_URL", "https://TradyloTradingJournal.streamlit.app") or "").strip()
@@ -7925,6 +7958,19 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                 for idx, name in enumerate(CONFLUENCES):
                     if conf_cols[idx % 4].checkbox(name, key=f"{form_key}_conf_{idx}"):
                         selected_confluences.append(name)
+                # ── Your saved custom confluences ──────────────────────────────
+                _saved_confs_in_form = load_custom_confluences(st.session_state.user.id)
+                if _saved_confs_in_form:
+                    st.markdown(
+                        "<div style='font-size:12px;color:#a78bfa;margin-top:8px;"
+                        "margin-bottom:4px;letter-spacing:0.05em;font-weight:700'>"
+                        "YOUR CONFLUENCES</div>",
+                        unsafe_allow_html=True,
+                    )
+                    _custom_conf_cols = st.columns(4)
+                    for _cidx, name in enumerate(_saved_confs_in_form):
+                        if _custom_conf_cols[_cidx % 4].checkbox(name, key=f"{form_key}_custom_conf_{_cidx}"):
+                            selected_confluences.append(name)
                 other_cols = st.columns([1, 3])
                 with other_cols[0]:
                     other_conf = st.checkbox("Other (custom)", key=f"{form_key}_conf_other")
@@ -7933,7 +7979,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                         "Custom confluences (comma-separated)",
                         placeholder="Liquidity sweep, VWAP reclaim",
                         key=f"{form_key}_conf_other_text",
-                        help="Type one or more, separated by commas.",
+                        help="Comma-separated. New entries are saved as your own confluences and will appear as clickable checkboxes next time.",
                     )
                 if other_conf or other_conf_text.strip():
                     for name in parse_custom_confluences(other_conf_text):
@@ -8209,6 +8255,8 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     save_trade(user_id, account_type, row)
                     st.success("Trade saved!")
                     st.session_state[f"{form_key}_last_saved_id"] = row["id"]
+                    # Save any new custom confluences typed in the "Other" field
+                    save_new_custom_confluences(user_id, other_conf_text)
                     # Tags UI is dynamic (and can be backed by a cache). Clear + rerun so newly added tags
                     # immediately appear in the dropdown without the user needing to refresh manually.
                     try:
@@ -8219,7 +8267,31 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     df_raw = load_trades(user_id, account_type)
                 except Exception as e:
                     st.error(f"Failed to save trade: {e}")
-    
+
+    # ── Manage saved confluences (outside form, safe for st.button) ───────────
+    if section == "New Trade":
+        _manage_confs = load_custom_confluences(user_id)
+        if _manage_confs:
+            with st.expander("⚙️ Manage your saved confluences"):
+                _del_choice = st.selectbox(
+                    "Select a confluence to remove",
+                    options=[""] + _manage_confs,
+                    key="delete_conf_select",
+                )
+                if st.button("Remove", key="delete_conf_btn"):
+                    if _del_choice:
+                        try:
+                            authed_supabase().table("custom_confluences") \
+                                .delete() \
+                                .eq("user_id", user_id) \
+                                .eq("name", _del_choice) \
+                                .execute()
+                            load_custom_confluences.clear()  # type: ignore[attr-defined]
+                            st.success(f"Removed: {_del_choice}")
+                            st.rerun()
+                        except Exception as _de:
+                            st.error(f"Could not remove: {_de}")
+
     if df_raw.empty:
         if section == "Dashboard":
             st.markdown("---")
@@ -8877,34 +8949,54 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         with a_conf:
             conf_df = explode_tags(chart_df, "confluences")
             if conf_df.empty:
-                st.info("No confluence data yet.")
+                st.info("Log at least 2 trades with the same confluence to see analysis here.")
             else:
-                conf_stats = (
+                _cf_stats = (
                     conf_df.groupby("confluences")[pnl_col]
-                    .agg(["sum", "mean", "count"])
-                    .rename(columns={"sum": "Total PnL", "mean": "Avg PnL", "count": "Trades"})
+                    .agg(trades=("count"), total_pnl=("sum"), avg_pnl=("mean"))
                 )
-                conf_stats["Win rate %"] = conf_df.groupby("confluences")[pnl_col].apply(lambda s: (s > 0).mean() * 100)
-                conf_stats = conf_stats.sort_values("Win rate %", ascending=False)
-                conf_stats = conf_stats[conf_stats["Trades"] >= 2]
-                if conf_stats.empty:
-                    st.info("Not enough confluence data yet.")
+                _cf_stats["win_rate_pct"] = (
+                    conf_df.groupby("confluences")[pnl_col]
+                    .apply(lambda s: round((s > 0).mean() * 100, 1))
+                )
+                _cf_stats = _cf_stats[_cf_stats["trades"] >= 2].copy()
+                _cf_stats["total_pnl"] = _cf_stats["total_pnl"].round(2)
+                _cf_stats["avg_pnl"] = _cf_stats["avg_pnl"].round(2)
+                _cf_stats = _cf_stats.sort_values("total_pnl", ascending=False).reset_index()
+                if _cf_stats.empty:
+                    st.info("Log at least 2 trades with the same confluence to see analysis here.")
                 else:
-                    top_win = conf_stats.head(3).copy()
-                    top_loss = conf_stats.sort_values("Win rate %", ascending=True).head(3).copy()
-                    for df_stats in (top_win, top_loss):
-                        df_stats["Total PnL"] = df_stats["Total PnL"].round(2)
-                        df_stats["Avg PnL"] = df_stats["Avg PnL"].round(2)
-                        df_stats["Win rate %"] = df_stats["Win rate %"].round(1)
-                        df_stats["Trades"] = df_stats["Trades"].fillna(0).astype(int)
+                    st.markdown("### Confluence Performance")
+                    st.caption("Shows confluences with 2+ trades. Covers all default and custom confluences.")
+                    col_best, col_worst = st.columns(2)
 
-                    c_top, c_bot = st.columns(2)
-                    with c_top:
-                        st.markdown("**Top 3 win rate confluences**")
-                        st.dataframe(top_win, use_container_width=True)
-                    with c_bot:
-                        st.markdown("**Top 3 lose rate confluences**")
-                        st.dataframe(top_loss, use_container_width=True)
+                    def _conf_card(row, border_color):
+                        _pc = "#22c55e" if row["total_pnl"] >= 0 else "#ef4444"
+                        _ps = (f"+${row['total_pnl']:.2f}" if row["total_pnl"] >= 0
+                               else f"-${abs(row['total_pnl']):.2f}")
+                        return (
+                            f"<div style='background:#1a1a2e;border-left:3px solid {border_color};"
+                            f"border-radius:8px;padding:10px 14px;margin-bottom:8px'>"
+                            f"<div style='font-weight:700;color:#e2e8f0'>{html_lib.escape(str(row['confluences']))}</div>"
+                            f"<div style='color:#94a3b8;font-size:13px'>"
+                            f"{int(row['trades'])} trades · {row['win_rate_pct']:.1f}% win rate · "
+                            f"<span style='color:{_pc}'>{_ps}</span></div></div>"
+                        )
+
+                    with col_best:
+                        st.markdown("**✅ Best Confluences**")
+                        for _, _r in _cf_stats.head(5).iterrows():
+                            st.markdown(_conf_card(_r, "#22c55e"), unsafe_allow_html=True)
+
+                    with col_worst:
+                        st.markdown("**❌ Worst Confluences**")
+                        for _, _r in _cf_stats.tail(5).sort_values("total_pnl").iterrows():
+                            st.markdown(_conf_card(_r, "#ef4444"), unsafe_allow_html=True)
+
+                    st.markdown("**All Confluences**")
+                    _disp = _cf_stats[["confluences", "trades", "win_rate_pct", "avg_pnl", "total_pnl"]].copy()
+                    _disp.columns = ["Confluence", "Trades", "Win %", "Avg P&L ($)", "Total P&L ($)"]
+                    st.dataframe(_disp, use_container_width=True, hide_index=True)
 
         with a_overall:
             st.markdown("**Highlights**")
