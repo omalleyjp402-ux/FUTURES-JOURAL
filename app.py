@@ -1080,8 +1080,11 @@ div[data-testid="stForm"] .stCheckbox > label:has([aria-checked="true"]) [data-b
   background:#7c3aed !important; border-color:#7c3aed !important;
 }
 
-/* ── ALL RADIOS: base pill button style ── */
-div[data-testid="stForm"] div[data-testid="stRadio"] label {
+/* ── ALL RADIOS: base pill button style (targets option labels only via role=radiogroup) ── */
+div[data-testid="stForm"] div[data-testid="stRadio"] [role="radiogroup"] {
+  display:grid !important; gap:8px !important;
+}
+div[data-testid="stForm"] div[data-testid="stRadio"] [role="radiogroup"] > label {
   height:42px !important; border-radius:10px !important;
   border:1.5px solid #2d2d4e !important; background:#0e1117 !important;
   display:flex !important; align-items:center !important; justify-content:center !important;
@@ -1090,60 +1093,57 @@ div[data-testid="stForm"] div[data-testid="stRadio"] label {
   cursor:pointer !important; margin:0 !important; transition:all .12s !important;
 }
 div[data-testid="stForm"] div[data-testid="stRadio"] [data-baseweb="radio"] { display:none !important; }
-div[data-testid="stForm"] div[data-testid="stRadio"] > div { display:grid !important; gap:8px !important; }
 
-/* ── DIRECTION radio: 2 options → 2-col, tall buttons ── */
-div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(2)):not(:has(> label:nth-of-type(3))) {
+/* ── DIRECTION: 2 options → 2-col tall green/red ── */
+div[data-testid="stForm"] div[data-testid="stRadio"] [role="radiogroup"]:has(> label:nth-of-type(2)):not(:has(> label:nth-of-type(3))) {
   grid-template-columns:1fr 1fr !important;
 }
-div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(2)):not(:has(> label:nth-of-type(3))) label {
+div[data-testid="stForm"] div[data-testid="stRadio"] [role="radiogroup"]:has(> label:nth-of-type(2)):not(:has(> label:nth-of-type(3))) > label {
   height:60px !important; font-size:14px !important; font-weight:800 !important; letter-spacing:.18em !important;
 }
-/* Long (1st) checked → green */
-div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(2)):not(:has(> label:nth-of-type(3))) label:nth-of-type(1):has([aria-checked="true"]) {
+div[data-testid="stForm"] div[data-testid="stRadio"] [role="radiogroup"]:has(> label:nth-of-type(2)):not(:has(> label:nth-of-type(3))) > label:nth-of-type(1):has([aria-checked="true"]) {
   background:linear-gradient(135deg,rgba(34,197,94,.22),rgba(34,197,94,.06)) !important;
   border-color:#22c55e !important; color:#fff !important;
   box-shadow:0 0 0 1px rgba(34,197,94,.4),0 0 24px rgba(34,197,94,.25) !important;
 }
-/* Short (2nd) checked → red */
-div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(2)):not(:has(> label:nth-of-type(3))) label:nth-of-type(2):has([aria-checked="true"]) {
+div[data-testid="stForm"] div[data-testid="stRadio"] [role="radiogroup"]:has(> label:nth-of-type(2)):not(:has(> label:nth-of-type(3))) > label:nth-of-type(2):has([aria-checked="true"]) {
   background:linear-gradient(135deg,rgba(239,68,68,.22),rgba(239,68,68,.06)) !important;
   border-color:#ef4444 !important; color:#fff !important;
   box-shadow:0 0 0 1px rgba(239,68,68,.4),0 0 24px rgba(239,68,68,.25) !important;
 }
 
-/* ── GRADE radio: 7 options → 7-col grid ── */
-div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(7)) {
+/* ── GRADE: 7 options → 7-col amber/purple ── */
+div[data-testid="stForm"] div[data-testid="stRadio"] [role="radiogroup"]:has(> label:nth-of-type(7)) {
   grid-template-columns:repeat(7,1fr) !important;
 }
-div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(7)) label {
+div[data-testid="stForm"] div[data-testid="stRadio"] [role="radiogroup"]:has(> label:nth-of-type(7)) > label {
   height:46px !important; font-size:15px !important; font-weight:800 !important; letter-spacing:0 !important;
 }
-div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(7)) label:has([aria-checked="true"]) {
+div[data-testid="stForm"] div[data-testid="stRadio"] [role="radiogroup"]:has(> label:nth-of-type(7)) > label:has([aria-checked="true"]) {
   background:rgba(124,58,237,.22) !important; border-color:#7c3aed !important;
   color:#fff !important; box-shadow:0 0 0 1px rgba(124,58,237,.4),0 0 18px rgba(124,58,237,.22) !important;
 }
-div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(7)) label:nth-of-type(1):has([aria-checked="true"]),
-div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(7)) label:nth-of-type(2):has([aria-checked="true"]) {
+div[data-testid="stForm"] div[data-testid="stRadio"] [role="radiogroup"]:has(> label:nth-of-type(7)) > label:nth-of-type(1):has([aria-checked="true"]),
+div[data-testid="stForm"] div[data-testid="stRadio"] [role="radiogroup"]:has(> label:nth-of-type(7)) > label:nth-of-type(2):has([aria-checked="true"]) {
   background:linear-gradient(135deg,rgba(245,158,11,.28),rgba(245,158,11,.06)) !important;
   border-color:#f59e0b !important;
   box-shadow:0 0 0 1px rgba(245,158,11,.4),0 0 22px rgba(245,158,11,.25) !important;
 }
 
-/* ── PLAN radio: 3 options → 3-col grid ── */
-div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(3)):not(:has(> label:nth-of-type(4))) {
+/* ── PLAN: 3 options → 3-col yes/partial/no ── */
+div[data-testid="stForm"] div[data-testid="stRadio"] [role="radiogroup"]:has(> label:nth-of-type(3)):not(:has(> label:nth-of-type(4))) {
   grid-template-columns:repeat(3,1fr) !important;
 }
-div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(3)):not(:has(> label:nth-of-type(4))) label {
+div[data-testid="stForm"] div[data-testid="stRadio"] [role="radiogroup"]:has(> label:nth-of-type(3)):not(:has(> label:nth-of-type(4))) > label {
   height:42px !important; font-size:12.5px !important;
 }
-div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(3)):not(:has(> label:nth-of-type(4))) label:nth-of-type(1):has([aria-checked="true"]) {
+div[data-testid="stForm"] div[data-testid="stRadio"] [role="radiogroup"]:has(> label:nth-of-type(3)):not(:has(> label:nth-of-type(4))) > label:nth-of-type(1):has([aria-checked="true"]) {
   background:rgba(34,197,94,.18) !important; border-color:#22c55e !important; color:#fff !important;
 }
-div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(3)):not(:has(> label:nth-of-type(4))) label:nth-of-type(2):has([aria-checked="true"]) {
+div[data-testid="stForm"] div[data-testid="stRadio"] [role="radiogroup"]:has(> label:nth-of-type(3)):not(:has(> label:nth-of-type(4))) > label:nth-of-type(2):has([aria-checked="true"]) {
   background:rgba(245,158,11,.18) !important; border-color:#f59e0b !important; color:#fff !important;
 }
-div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(3)):not(:has(> label:nth-of-type(4))) label:nth-of-type(3):has([aria-checked="true"]) {
+div[data-testid="stForm"] div[data-testid="stRadio"] [role="radiogroup"]:has(> label:nth-of-type(3)):not(:has(> label:nth-of-type(4))) > label:nth-of-type(3):has([aria-checked="true"]) {
   background:rgba(239,68,68,.18) !important; border-color:#ef4444 !important; color:#fff !important;
 }
 
