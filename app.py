@@ -932,6 +932,254 @@ CONFLUENCES = [
     "Very cheap RR trade", "SMT", "AMD", "Manipulation leg",
 ]
 
+_ADDTRADE_CSS = """
+/* ── Tradylo Add Trade form styling ─────────────────────────────────────────
+   Scoped to div[data-testid="stForm"] so it only applies inside the trade form.
+   Radio types differentiated by option count using :has() CSS selector.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* ROOT TOKENS */
+:root {
+  --tl-bg:#0e1117; --tl-panel:#1a1a2e; --tl-border:#2d2d4e;
+  --tl-purple:#7c3aed; --tl-purple-lt:#a78bfa;
+  --tl-green:#22c55e; --tl-red:#ef4444; --tl-amber:#f59e0b;
+  --tl-text:#e2e8f0; --tl-muted:#94a3b8;
+}
+
+/* SECTION HEADER */
+.tl-sec-head {
+  display:flex; align-items:center; gap:14px; margin:28px 0 12px;
+}
+.tl-sec-head .tl-ix {
+  display:inline-flex; align-items:center; justify-content:center;
+  min-width:24px; height:24px; padding:0 7px; border-radius:6px;
+  background:linear-gradient(135deg,#7c3aed,#6d28d9);
+  color:#fff; font-size:10.5px; font-weight:800; letter-spacing:.08em;
+  box-shadow:0 0 14px rgba(124,58,237,.4); font-family:ui-monospace,monospace;
+}
+.tl-sec-head .tl-lbl {
+  font-size:11px; font-weight:700; letter-spacing:.24em;
+  text-transform:uppercase; color:#a78bfa; font-family:ui-monospace,monospace;
+}
+.tl-sec-head .tl-rule {
+  flex:1; height:1px;
+  background:linear-gradient(90deg,rgba(124,58,237,.55),rgba(124,58,237,0));
+}
+.tl-sec-head .tl-meta { color:#94a3b8; font-size:11.5px; font-family:ui-monospace,monospace; }
+
+/* SUB LABEL */
+.tl-sub-lbl {
+  font-size:10.5px; font-weight:700; letter-spacing:.24em;
+  text-transform:uppercase; color:#a78bfa; margin:18px 0 8px;
+  font-family:ui-monospace,monospace;
+}
+
+/* PAGE HEADER */
+.tl-ph { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; margin-bottom:24px; }
+.tl-ph h1 { margin:0; font-size:28px; font-weight:800; letter-spacing:-.02em; color:#fff; }
+.tl-ph .tl-crumb { display:inline-flex; align-items:center; gap:8px; font-size:11px; font-weight:700;
+  color:#a78bfa; letter-spacing:.22em; text-transform:uppercase; margin-bottom:8px; font-family:ui-monospace,monospace; }
+.tl-ph .tl-ph-sub { margin-top:6px; color:#94a3b8; font-size:13px; }
+.tl-acct-badge { display:inline-flex; align-items:center; gap:8px; padding:7px 14px; border-radius:999px;
+  background:rgba(124,58,237,.15); border:1px solid rgba(124,58,237,.45);
+  color:#fff; font-size:11px; font-weight:700; letter-spacing:.22em; text-transform:uppercase;
+  font-family:ui-monospace,monospace; white-space:nowrap; }
+.tl-acct-badge .tl-dot { width:7px; height:7px; border-radius:50%; background:#a78bfa; box-shadow:0 0 8px #a78bfa; }
+
+/* ── LABELS ── */
+div[data-testid="stForm"] label p,
+div[data-testid="stForm"] .stTextInput label,
+div[data-testid="stForm"] .stNumberInput label,
+div[data-testid="stForm"] .stSelectbox label,
+div[data-testid="stForm"] .stMultiSelect label,
+div[data-testid="stForm"] .stDateInput label,
+div[data-testid="stForm"] .stTextArea label,
+div[data-testid="stForm"] .stFileUploader label,
+div[data-testid="stForm"] .stSlider label,
+div[data-testid="stForm"] .stRadio > label {
+  font-size:11px !important; font-weight:700 !important; letter-spacing:.18em !important;
+  text-transform:uppercase !important; color:#a78bfa !important;
+  font-family:ui-monospace,SF Mono,Menlo,monospace !important;
+}
+
+/* ── TEXT / NUMBER / DATE / TIME inputs ── */
+div[data-testid="stForm"] .stTextInput input,
+div[data-testid="stForm"] .stNumberInput input,
+div[data-testid="stForm"] .stDateInput input {
+  background:#0e1117 !important; border:1px solid #2d2d4e !important;
+  border-radius:10px !important; color:#fff !important;
+  font-family:ui-monospace,SF Mono,Menlo,monospace !important;
+  font-weight:600 !important; font-variant-numeric:tabular-nums !important;
+  height:42px !important; padding:0 14px !important;
+  transition:border-color .12s,box-shadow .12s !important;
+}
+div[data-testid="stForm"] .stTextInput input:focus,
+div[data-testid="stForm"] .stNumberInput input:focus,
+div[data-testid="stForm"] .stDateInput input:focus {
+  border-color:#7c3aed !important;
+  box-shadow:0 0 0 3px rgba(124,58,237,.18) !important; outline:none !important;
+}
+div[data-testid="stForm"] .stNumberInput button {
+  background:#1a1a2e !important; border:1px solid #2d2d4e !important;
+  color:#a78bfa !important; border-radius:6px !important;
+}
+div[data-testid="stForm"] .stNumberInput button:hover {
+  border-color:#7c3aed !important; background:rgba(124,58,237,.15) !important;
+}
+
+/* ── SELECTBOX / MULTISELECT ── */
+div[data-testid="stForm"] .stSelectbox [data-baseweb="select"] > div,
+div[data-testid="stForm"] .stMultiSelect [data-baseweb="select"] > div {
+  background:#0e1117 !important; border:1px solid #2d2d4e !important;
+  border-radius:10px !important; min-height:42px !important; color:#fff !important;
+}
+div[data-testid="stForm"] .stSelectbox [data-baseweb="select"]:hover > div,
+div[data-testid="stForm"] .stMultiSelect [data-baseweb="select"]:hover > div {
+  border-color:#7c3aed !important;
+}
+div[data-testid="stForm"] .stMultiSelect [data-baseweb="tag"] {
+  background:rgba(124,58,237,.22) !important; border:1px solid #7c3aed !important;
+  color:#fff !important; border-radius:999px !important;
+}
+
+/* ── TEXTAREA ── */
+div[data-testid="stForm"] .stTextArea textarea {
+  background:#0e1117 !important; border:1px solid #2d2d4e !important;
+  border-radius:10px !important; color:#fff !important;
+  font-size:13.5px !important; line-height:1.55 !important;
+  padding:14px 16px !important; min-height:100px !important;
+}
+div[data-testid="stForm"] .stTextArea textarea:focus {
+  border-color:#7c3aed !important;
+  box-shadow:0 0 0 3px rgba(124,58,237,.18) !important; outline:none !important;
+}
+
+/* ── CHECKBOXES → pill toggles ── */
+div[data-testid="stForm"] .stCheckbox > label {
+  display:inline-flex !important; align-items:center !important; gap:8px !important;
+  padding:7px 14px !important; background:#0e1117 !important;
+  border:1px solid #2d2d4e !important; border-radius:999px !important;
+  color:#94a3b8 !important; font-size:13px !important; font-weight:500 !important;
+  letter-spacing:0 !important; text-transform:none !important;
+  cursor:pointer !important; transition:all .12s !important;
+  font-family:system-ui,-apple-system,sans-serif !important;
+}
+div[data-testid="stForm"] .stCheckbox > label:hover {
+  border-color:rgba(124,58,237,.55) !important; color:#e2e8f0 !important;
+}
+div[data-testid="stForm"] .stCheckbox [data-baseweb="checkbox"] > div:first-child {
+  width:14px !important; height:14px !important; border-radius:4px !important;
+  border:1.5px solid #2d2d4e !important; background:transparent !important;
+}
+div[data-testid="stForm"] .stCheckbox > label:has([aria-checked="true"]) {
+  background:rgba(124,58,237,.18) !important; border-color:#7c3aed !important;
+  color:#fff !important; font-weight:600 !important;
+  box-shadow:0 0 14px rgba(124,58,237,.18) !important;
+}
+div[data-testid="stForm"] .stCheckbox > label:has([aria-checked="true"]) [data-baseweb="checkbox"] > div:first-child {
+  background:#7c3aed !important; border-color:#7c3aed !important;
+}
+
+/* ── ALL RADIOS: base pill button style ── */
+div[data-testid="stForm"] div[data-testid="stRadio"] label {
+  height:42px !important; border-radius:10px !important;
+  border:1.5px solid #2d2d4e !important; background:#0e1117 !important;
+  display:flex !important; align-items:center !important; justify-content:center !important;
+  font-weight:700 !important; font-size:13px !important; letter-spacing:.08em !important;
+  text-transform:uppercase !important; color:#94a3b8 !important;
+  cursor:pointer !important; margin:0 !important; transition:all .12s !important;
+}
+div[data-testid="stForm"] div[data-testid="stRadio"] [data-baseweb="radio"] { display:none !important; }
+div[data-testid="stForm"] div[data-testid="stRadio"] > div { display:grid !important; gap:8px !important; }
+
+/* ── DIRECTION radio: 2 options → 2-col, tall buttons ── */
+div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(2)):not(:has(> label:nth-of-type(3))) {
+  grid-template-columns:1fr 1fr !important;
+}
+div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(2)):not(:has(> label:nth-of-type(3))) label {
+  height:60px !important; font-size:14px !important; font-weight:800 !important; letter-spacing:.18em !important;
+}
+/* Long (1st) checked → green */
+div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(2)):not(:has(> label:nth-of-type(3))) label:nth-of-type(1):has([aria-checked="true"]) {
+  background:linear-gradient(135deg,rgba(34,197,94,.22),rgba(34,197,94,.06)) !important;
+  border-color:#22c55e !important; color:#fff !important;
+  box-shadow:0 0 0 1px rgba(34,197,94,.4),0 0 24px rgba(34,197,94,.25) !important;
+}
+/* Short (2nd) checked → red */
+div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(2)):not(:has(> label:nth-of-type(3))) label:nth-of-type(2):has([aria-checked="true"]) {
+  background:linear-gradient(135deg,rgba(239,68,68,.22),rgba(239,68,68,.06)) !important;
+  border-color:#ef4444 !important; color:#fff !important;
+  box-shadow:0 0 0 1px rgba(239,68,68,.4),0 0 24px rgba(239,68,68,.25) !important;
+}
+
+/* ── GRADE radio: 7 options → 7-col grid ── */
+div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(7)) {
+  grid-template-columns:repeat(7,1fr) !important;
+}
+div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(7)) label {
+  height:46px !important; font-size:15px !important; font-weight:800 !important; letter-spacing:0 !important;
+}
+div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(7)) label:has([aria-checked="true"]) {
+  background:rgba(124,58,237,.22) !important; border-color:#7c3aed !important;
+  color:#fff !important; box-shadow:0 0 0 1px rgba(124,58,237,.4),0 0 18px rgba(124,58,237,.22) !important;
+}
+div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(7)) label:nth-of-type(1):has([aria-checked="true"]),
+div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(7)) label:nth-of-type(2):has([aria-checked="true"]) {
+  background:linear-gradient(135deg,rgba(245,158,11,.28),rgba(245,158,11,.06)) !important;
+  border-color:#f59e0b !important;
+  box-shadow:0 0 0 1px rgba(245,158,11,.4),0 0 22px rgba(245,158,11,.25) !important;
+}
+
+/* ── PLAN radio: 3 options → 3-col grid ── */
+div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(3)):not(:has(> label:nth-of-type(4))) {
+  grid-template-columns:repeat(3,1fr) !important;
+}
+div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(3)):not(:has(> label:nth-of-type(4))) label {
+  height:42px !important; font-size:12.5px !important;
+}
+div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(3)):not(:has(> label:nth-of-type(4))) label:nth-of-type(1):has([aria-checked="true"]) {
+  background:rgba(34,197,94,.18) !important; border-color:#22c55e !important; color:#fff !important;
+}
+div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(3)):not(:has(> label:nth-of-type(4))) label:nth-of-type(2):has([aria-checked="true"]) {
+  background:rgba(245,158,11,.18) !important; border-color:#f59e0b !important; color:#fff !important;
+}
+div[data-testid="stForm"] div[data-testid="stRadio"] > div:has(> label:nth-of-type(3)):not(:has(> label:nth-of-type(4))) label:nth-of-type(3):has([aria-checked="true"]) {
+  background:rgba(239,68,68,.18) !important; border-color:#ef4444 !important; color:#fff !important;
+}
+
+/* ── SLIDER ── */
+div[data-testid="stForm"] .stSlider [data-baseweb="slider"] > div:nth-child(1) > div {
+  background:#2d2d4e !important;
+}
+div[data-testid="stForm"] .stSlider [data-baseweb="slider"] [role="slider"] {
+  background:#7c3aed !important; border:2px solid #fff !important;
+  box-shadow:0 0 14px rgba(124,58,237,.5) !important;
+}
+
+/* ── FILE UPLOADER ── */
+div[data-testid="stForm"] .stFileUploader > section {
+  background:#0e1117 !important; border:1.5px dashed #2d2d4e !important;
+  border-radius:12px !important; padding:18px 20px !important;
+}
+div[data-testid="stForm"] .stFileUploader > section:hover { border-color:#7c3aed !important; }
+
+/* ── SUBMIT BUTTON ── */
+div[data-testid="stForm"] .stFormSubmitButton > button {
+  width:100% !important; height:58px !important;
+  background:linear-gradient(135deg,#7c3aed,#6d28d9) !important;
+  color:#fff !important; border:0 !important; border-radius:12px !important;
+  font-size:15px !important; font-weight:800 !important; letter-spacing:.16em !important;
+  text-transform:uppercase !important;
+  box-shadow:0 10px 30px rgba(124,58,237,.35),inset 0 1px 0 rgba(255,255,255,.15) !important;
+  transition:all .15s !important;
+}
+div[data-testid="stForm"] .stFormSubmitButton > button:hover {
+  box-shadow:0 14px 38px rgba(124,58,237,.45),inset 0 1px 0 rgba(255,255,255,.2) !important;
+  transform:translateY(-1px) !important;
+}
+"""
+
+
 NUMERIC_COLUMNS = [
     "entry_price", "stop_loss", "take_profit", "exit_price", "contracts",
     "emotion_score", "account_size", "risk_percent_planned", "commission",
@@ -5404,6 +5652,40 @@ def compute_streaks(daily_pnl: pd.DataFrame) -> Dict[str, Any]:
     return out
 
 
+# ── Add Trade form design helpers ─────────────────────────────────────────────
+
+def _tl_md(html: str) -> None:
+    st.markdown(html, unsafe_allow_html=True)
+
+
+def tl_section(num: str, label: str, meta: str = "") -> None:
+    """Section header with purple index pill + gradient rule."""
+    _tl_md(
+        f'<div class="tl-sec-head">'
+        f'<span class="tl-ix">{num}</span>'
+        f'<span class="tl-lbl">{label}</span>'
+        f'<span class="tl-rule"></span>'
+        f'<span class="tl-meta">{meta}</span>'
+        f'</div>'
+    )
+
+
+def tl_sub_label(text: str) -> None:
+    _tl_md(f'<div class="tl-sub-lbl">{text}</div>')
+
+
+def tl_page_header_html(account_type: str) -> str:
+    return (
+        f'<div class="tl-ph">'
+        f'<div><div class="tl-crumb">▲ Tradylo Trading Journal</div>'
+        f'<h1>Add Trade</h1>'
+        f'<div class="tl-ph-sub">Log a trade with confluences, grade and psychology.</div></div>'
+        f'<span class="tl-acct-badge"><span class="tl-dot"></span>'
+        f'Logging to · {html_lib.escape(account_type)}</span>'
+        f'</div>'
+    )
+
+
 def render_reports_page(df_view: pd.DataFrame, pnl_col: str, account_type: str) -> None:
     _lc, _tc = st.columns([1, 8])
     with _lc:
@@ -7651,6 +7933,9 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
     df_raw = load_trades(user_id, account_type)
 
     if section == "New Trade":
+        # ── Inject Add Trade design system CSS ───────────────────────────────────
+        st.markdown(f"<style>{_ADDTRADE_CSS}</style>", unsafe_allow_html=True)
+        _tl_md(tl_page_header_html(account_type))
         # ── Add new trade form ────────────────────────────────────────────────────
         with st.expander("Add new trade", expanded=True):
             # Entry mode toggle — button-based to avoid session loss on radio rerun
@@ -7853,7 +8138,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                         )
 
                 if import_mode == "Manual entry":
-                    st.markdown("**Core trade info**")
+                    tl_section("01", "Core Trade Info", "Required")
                     row1 = st.columns(4)
                     date_val = row1[0].date_input("Date", key=f"{form_key}_date")
                     use_times = True  # always collect times for accurate duration
@@ -7952,6 +8237,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     st.caption("Note: tags will still work and will be pulled from your trade history, but you can also enable a dedicated tags table by running `sql/user_tags.sql` in Supabase.")
                 setup_tag = ""  # will be filled on Save
 
+                tl_section("03", "Confluences", "Check all that apply")
                 st.markdown("**Confluences (check all that apply)**")
                 conf_cols = st.columns(4)
                 selected_confluences = []
@@ -7987,6 +8273,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                             selected_confluences.append(name)
     
                 if import_mode == "Manual entry":
+                    tl_section("02", "Price & Risk", "USD · per contract")
                     row3 = st.columns(4)
                     entry = row3[0].number_input("Entry price", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_entry")
                     stop = row3[1].number_input("Stop loss", min_value=0.0, step=0.25, format="%.2f", key=f"{form_key}_stop")
@@ -8057,12 +8344,22 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     avg_exit = None
                     avg_target = None
     
-                row4 = st.columns(4)
-                emotion = row4[0].slider("Emotion score (1–10)", 1, 10, 5, key=f"{form_key}_emotion")
-                followed_plan = row4[1].selectbox("Followed plan?", ["Yes", "No"], key=f"{form_key}_followed_plan")
-                revenge_trade = row4[2].selectbox("Revenge trade?", ["No", "Yes"], key=f"{form_key}_revenge_trade")
-                trade_grade = row4[3].selectbox("Trade grade", TRADE_GRADES, key=f"{form_key}_grade")
+                tl_section("04", "Grade & Psychology", "How well was this executed?")
+                _g_cols = st.columns([3, 1])
+                with _g_cols[0]:
+                    trade_grade = st.radio("Trade grade", TRADE_GRADES[1:], index=2, key=f"{form_key}_grade", horizontal=False)
+                with _g_cols[1]:
+                    emotion = st.slider("Emotion (1–10)", 1, 10, 5, key=f"{form_key}_emotion")
+
+                _p_cols = st.columns(3)
+                with _p_cols[0]:
+                    followed_plan = st.radio("Followed plan?", ["Yes", "Partial", "No"], key=f"{form_key}_followed_plan")
+                with _p_cols[1]:
+                    revenge_trade = st.selectbox("Revenge trade?", ["No", "Yes"], key=f"{form_key}_revenge_trade")
+                with _p_cols[2]:
+                    pass
     
+                tl_section("05", "Notes & Journal", "Optional")
                 notes = st.text_area("Notes", key=f"{form_key}_notes")
 
                 st.markdown("**Lessons / mistakes (3)**")
