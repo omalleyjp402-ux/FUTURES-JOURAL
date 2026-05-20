@@ -190,54 +190,34 @@ section[data-testid="stSidebar"] > div {
               #0B0F14;
   border-right: 1px solid rgba(255,255,255,0.06);
 }
-/* Sidebar nav buttons — flat, blends with sidebar */
 section[data-testid="stSidebar"] .stButton > button {
     width: 100% !important;
     background: transparent !important;
     border: none !important;
     outline: none !important;
     box-shadow: none !important;
-    color: rgba(148, 163, 184, 0.85) !important;
-    font-size: 13.5px !important;
-    font-weight: 400 !important;
+    color: #e2e8f0 !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
     text-align: left !important;
-    padding: 9px 14px !important;
+    padding: 10px 14px !important;
     border-radius: 8px !important;
-    margin-bottom: 1px !important;
-    transition: background 0.15s ease, color 0.15s ease !important;
-    cursor: pointer !important;
+    margin-bottom: 2px !important;
 }
 section[data-testid="stSidebar"] .stButton > button:hover {
-    background: rgba(255, 255, 255, 0.05) !important;
-    color: rgba(226, 232, 240, 0.95) !important;
+    background: rgba(124, 58, 237, 0.12) !important;
     border: none !important;
     box-shadow: none !important;
+    color: #a78bfa !important;
 }
-section[data-testid="stSidebar"] .stButton > button:focus {
+section[data-testid="stSidebar"] .stButton > button:focus,
+section[data-testid="stSidebar"] .stButton > button:active,
+section[data-testid="stSidebar"] .stButton > button:focus:not(:active) {
+    background: transparent !important;
     border: none !important;
     outline: none !important;
     box-shadow: none !important;
-}
-section[data-testid="stSidebar"] .stButton > button:active {
-    background: rgba(124, 58, 237, 0.12) !important;
-    color: #c4b5fd !important;
-    border-left: 2px solid rgba(124, 58, 237, 0.6) !important;
-    border-right: none !important;
-    border-top: none !important;
-    border-bottom: none !important;
-    box-shadow: none !important;
-}
-/* + Add Trade button — keep filled purple */
-section[data-testid="stSidebar"] .stButton:first-of-type > button {
-    background: #7c3aed !important;
-    color: white !important;
-    font-weight: 600 !important;
-    border: none !important;
-    box-shadow: none !important;
-}
-section[data-testid="stSidebar"] .stButton:first-of-type > button:hover {
-    background: #6d28d9 !important;
-    color: white !important;
+    color: #e2e8f0 !important;
 }
 section[data-testid="stSidebar"] div[role="radiogroup"] label[data-baseweb="radio"] {
   border-radius: 12px;
