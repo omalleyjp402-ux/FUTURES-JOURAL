@@ -190,8 +190,54 @@ section[data-testid="stSidebar"] > div {
               #0B0F14;
   border-right: 1px solid rgba(255,255,255,0.06);
 }
+/* Sidebar nav buttons — flat, no border */
 section[data-testid="stSidebar"] .stButton > button {
-  border-radius: 12px !important;
+    width: 100% !important;
+    background: transparent !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    color: #e2e8f0 !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    text-align: left !important;
+    padding: 10px 14px !important;
+    border-radius: 8px !important;
+    margin-bottom: 2px !important;
+    transition: background 0.15s ease, color 0.15s ease !important;
+    cursor: pointer !important;
+}
+section[data-testid="stSidebar"] .stButton > button:hover {
+    background: rgba(124, 58, 237, 0.15) !important;
+    color: #a78bfa !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+section[data-testid="stSidebar"] .stButton > button:focus {
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+section[data-testid="stSidebar"] .stButton > button:active {
+    background: rgba(124, 58, 237, 0.25) !important;
+    color: #a78bfa !important;
+    border-left: 3px solid #7c3aed !important;
+    border-right: none !important;
+    border-top: none !important;
+    border-bottom: none !important;
+    box-shadow: none !important;
+}
+/* + Add Trade button — keep filled purple */
+section[data-testid="stSidebar"] .stButton:first-of-type > button {
+    background: #7c3aed !important;
+    color: white !important;
+    font-weight: 600 !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+section[data-testid="stSidebar"] .stButton:first-of-type > button:hover {
+    background: #6d28d9 !important;
+    color: white !important;
 }
 section[data-testid="stSidebar"] div[role="radiogroup"] label[data-baseweb="radio"] {
   border-radius: 12px;
