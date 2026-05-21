@@ -677,6 +677,14 @@ _FOMC_MINUTES_DATES = {
     _dt.date(2026, 7, 8), _dt.date(2026, 8, 19), _dt.date(2026, 10, 7),
     _dt.date(2026, 11, 18),
 }
+# Day-after NVDA earnings dates (trading day after the after-hours report)
+_NVDA_EARNINGS_AFTER_DATES = {
+    _dt.date(2026, 2, 27),   # day after Q4 FY2026 earnings (reported ~Feb 26 2026)
+    _dt.date(2026, 5, 21),   # day after Q1 FY2027 earnings (reported May 20 2026)
+    _dt.date(2026, 8, 28),   # day after Q2 FY2027 earnings (est. ~Aug 27 2026)
+    _dt.date(2026, 11, 20),  # day after Q3 FY2027 earnings (est. ~Nov 19 2026)
+    _dt.date(2027, 2, 26),   # day after Q4 FY2027 earnings (est. ~Feb 25 2027)
+}
 
 def _get_nfp_dates(year: int):
     dates = set()
@@ -731,6 +739,32 @@ def _fetch_prev_nfp_journal_note(user_id: str, today=None):
         pass
     return None, None
 
+def _fetch_prev_nvda_journal_note(user_id: str, today=None):
+    """Return (date_label, content) of the most recent [NVDA Earnings Day]: journal entry
+    within the last 90 days, or (None, None) if not found."""
+    try:
+        if today is None:
+            today = _dt.date.today()
+        lookback = today - _dt.timedelta(days=90)
+        sb = authed_supabase()
+        resp = (sb.table("journal_entries")
+                .select("content,entry_date")
+                .eq("user_id", user_id)
+                .gte("entry_date", str(lookback))
+                .lt("entry_date", str(today))
+                .ilike("content", "%[NVDA Earnings Day]:%")
+                .order("entry_date", desc=True)
+                .limit(1)
+                .execute())
+        if resp.data:
+            d_lbl = _dt.date.fromisoformat(resp.data[0]["entry_date"]).strftime("%b %d")
+            raw   = resp.data[0]["content"]
+            note  = re.sub(r"^\[NVDA Earnings Day\]:\s*", "", raw).strip()
+            return d_lbl, note
+    except Exception:
+        pass
+    return None, None
+
 def get_news_events_for_date(d) -> list:
     """Returns list of high-impact event dicts for the given date."""
     if isinstance(d, datetime):
@@ -756,6 +790,10 @@ def get_news_events_for_date(d) -> list:
         events.append({"name": "FOMC Minutes", "emoji": "📋", "colour": "#8b5cf6",
             "description": "Release of previous FOMC meeting minutes",
             "prompt": "How did markets react to the FOMC minutes today? Was the reaction muted or significant? Did any hawkish/dovish surprises move price?"})
+    if d in _NVDA_EARNINGS_AFTER_DATES:
+        events.append({"name": "NVDA Earnings Day", "emoji": "🟢", "colour": "#76b900",
+            "description": "Day after NVIDIA earnings — options players tend to pin price between major levels",
+            "prompt": "How did NVDA earnings affect the broader market today? Was PA choppy and range-bound? Did big options players defend key levels? Any clean trends or just seek-and-destroy action?"})
     if d in nfp:
         events.append({"name": "NFP Day", "emoji": "💼", "colour": "#10b981",
             "description": "Non-Farm Payrolls employment report (first Friday)",
@@ -8173,7 +8211,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                 _news_events = get_news_events_for_date(_today_date)
                 if _news_events:
                     for _evt in _news_events:
-                        # Build optional "last time" reminder block for NFP
+                        # Build optional "last time" reminder block for NFP / NVDA
                         _prev_reminder_html = ""
                         if _evt["name"] == "NFP Day":
                             _pnfp_lbl, _pnfp_note = _fetch_prev_nfp_journal_note(user_id, _today_date)
@@ -8188,6 +8226,20 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                                     f'📝 YOUR LAST NFP NOTE ({_pnfp_lbl})</p>'
                                     f'<p style="color:#cbd5e1;font-size:0.75rem;margin:0;">'
                                     f'{_pnfp_note_esc}</p></div>'
+                                )
+                        elif _evt["name"] == "NVDA Earnings Day":
+                            _pnvda_lbl, _pnvda_note = _fetch_prev_nvda_journal_note(user_id, _today_date)
+                            if _pnvda_lbl and _pnvda_note:
+                                _pnvda_note_esc = html_lib.escape(_pnvda_note)
+                                _prev_reminder_html = (
+                                    f'<div style="background:rgba(118,185,0,0.07);'
+                                    f'border:1px solid #76b90040;border-radius:6px;'
+                                    f'padding:10px 14px;margin:8px 0 0 0;">'
+                                    f'<p style="color:#76b900;font-size:0.65rem;font-weight:800;'
+                                    f'letter-spacing:1px;margin:0 0 4px 0;text-transform:uppercase;">'
+                                    f'📝 YOUR LAST NVDA EARNINGS NOTE ({_pnvda_lbl})</p>'
+                                    f'<p style="color:#cbd5e1;font-size:0.75rem;margin:0;">'
+                                    f'{_pnvda_note_esc}</p></div>'
                                 )
                         _banner_html = (
                             f'<div style="background:rgba(0,0,0,0.3);border:1px solid {_evt["colour"]}40;'
@@ -9004,6 +9056,21 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     📝 YOUR LAST NFP NOTE ({_pnfp_lbl})</p>
                     <p style="color:#cbd5e1;font-size:0.82rem;margin:0;">
                     {html_lib.escape(_pnfp_note)}</p></div>""",
+                    unsafe_allow_html=True,
+                )
+        # NVDA earnings reminder — show previous NVDA earnings day note
+        if any(e["name"] == "NVDA Earnings Day" for e in _dash_events):
+            _pnvda_lbl, _pnvda_note = _fetch_prev_nvda_journal_note(user_id)
+            if _pnvda_lbl and _pnvda_note:
+                st.markdown(
+                    f"""<div style="background:rgba(118,185,0,0.07);
+                    border:1px solid #76b90050;border-left:4px solid #76b900;
+                    border-radius:10px;padding:14px 18px;margin:8px 0 16px 0;">
+                    <p style="color:#76b900;font-size:0.7rem;font-weight:800;
+                    letter-spacing:1.5px;margin:0 0 6px 0;text-transform:uppercase;">
+                    📝 YOUR LAST NVDA EARNINGS NOTE ({_pnvda_lbl})</p>
+                    <p style="color:#cbd5e1;font-size:0.82rem;margin:0;">
+                    {html_lib.escape(_pnvda_note)}</p></div>""",
                     unsafe_allow_html=True,
                 )
         render_next_week_focus_panel(user_id)
