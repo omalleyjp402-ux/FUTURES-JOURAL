@@ -2313,7 +2313,7 @@ def render_demo_dashboard() -> None:
 
     st.markdown("---")
     st.subheader("PnL calendar")
-    render_pnl_calendar(df[["date", pnl_col]].copy(), pnl_col)
+    render_pnl_calendar(df.copy(), pnl_col)
 
     st.markdown("---")
     st.subheader("Recent trades")
@@ -2369,7 +2369,7 @@ def render_tour_page() -> None:
         st.altair_chart(style_altair_chart(curve), use_container_width=True)
     with c2:
         st.markdown("**PnL calendar (preview)**")
-        render_pnl_calendar(df[["date", pnl_col]].copy(), pnl_col)
+        render_pnl_calendar(df.copy(), pnl_col)
 
     st.markdown("---")
     st.subheader("Preview: analytics")
@@ -5749,6 +5749,8 @@ def render_reports_page(df_view: pd.DataFrame, pnl_col: str, account_type: str) 
         _pnl_str = (f"+${_total_pnl:,.2f}" if _total_pnl >= 0 else f"-${abs(_total_pnl):,.2f}")
         _wins = int((period_df[pnl_col] > 0).sum())
         _losses = int((period_df[pnl_col] < 0).sum())
+        _total_pts = _calc_points_series(period_df).sum()
+        _pts_str = (f"+{_total_pts:.1f}pts" if _total_pts >= 0 else f"{_total_pts:.1f}pts")
 
         # Avg trades per day
         _trade_days = max(1, period_df["date"].dt.normalize().nunique())
@@ -5765,15 +5767,22 @@ def render_reports_page(df_view: pd.DataFrame, pnl_col: str, account_type: str) 
         else:
             _bt_pnl_str, _bt_meta = "—", ""
 
-        # Top instruments
-        _inst_pnl = period_df.groupby("instrument")[pnl_col].sum().sort_values(ascending=False)
+        # Top instruments (with points)
+        period_df["_pts"] = _calc_points_series(period_df)
+        _inst_agg = period_df.groupby("instrument").agg(**{pnl_col: (pnl_col, "sum"), "pts": ("_pts", "sum")}).sort_values(pnl_col, ascending=False)
         _inst_html = ""
-        for _inst, _ipnl in _inst_pnl.head(4).items():
+        for _inst, _irow in _inst_agg.head(4).iterrows():
+            _ipnl = _irow[pnl_col]
+            _ipts = _irow["pts"]
             _ic = "#22c55e" if _ipnl >= 0 else "#ef4444"
             _ips = (f"+${_ipnl:,.2f}" if _ipnl >= 0 else f"-${abs(_ipnl):,.2f}")
+            _iptss = (f"+{_ipts:.1f}pts" if _ipts >= 0 else f"{_ipts:.1f}pts")
             _inst_html += (f'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #1e2240">'
                            f'<span style="color:#cbd5e1;font-size:13px;font-weight:600">{html_lib.escape(str(_inst))}</span>'
-                           f'<span style="color:{_ic};font-size:13px;font-weight:700">{_ips}</span></div>')
+                           f'<span style="display:flex;flex-direction:column;align-items:flex-end">'
+                           f'<span style="color:{_ic};font-size:13px;font-weight:700">{_ips}</span>'
+                           f'<span style="color:#94a3b8;font-size:10px;font-family:ui-monospace,monospace">{_iptss}</span>'
+                           f'</span></div>')
 
         # By session
         _sess_dot = {"NY": "#22c55e", "London": "#a78bfa", "Asia": "#38bdf8"}
@@ -5835,7 +5844,10 @@ def render_reports_page(df_view: pd.DataFrame, pnl_col: str, account_type: str) 
             f'<div style="background:#111827;border:1px solid #1e2240;border-left:3px solid {_pnl_color};border-radius:12px;padding:20px">'
             '<div style="color:#94a3b8;font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;margin-bottom:10px">NET P&amp;L</div>'
             f'<div style="color:{_pnl_color};font-size:40px;font-weight:800;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums">{_pnl_str}</div>'
-            f'<div style="color:#64748b;font-size:11px;margin-top:8px">{html_lib.escape(subtitle)}</div>'
+            f'<div style="display:flex;align-items:center;gap:10px;margin-top:8px">'
+            f'<span style="color:#64748b;font-size:11px">{html_lib.escape(subtitle)}</span>'
+            f'<span style="color:#94a3b8;font-size:11px;font-family:ui-monospace,monospace;font-weight:600">{_pts_str}</span>'
+            f'</div>'
             '</div>'
             # TOTAL TRADES
             '<div style="background:#111827;border:1px solid #1e2240;border-radius:12px;padding:20px">'
@@ -6142,13 +6154,34 @@ def _show_week_dialog(week_label: str, week_trades: pd.DataFrame, pnl_col: str) 
         st.caption(f"Breakeven trades: {breakeven}")
 
 
+def _calc_points_series(df: pd.DataFrame) -> pd.Series:
+    """Return a per-row points series (price move × contracts, direction-adjusted)."""
+    pts = pd.Series(0.0, index=df.index)
+    if not {"entry_price", "exit_price", "direction", "contracts"}.issubset(df.columns):
+        return pts
+    ep = pd.to_numeric(df["entry_price"], errors="coerce").fillna(0)
+    xp = pd.to_numeric(df["exit_price"], errors="coerce").fillna(0)
+    ct = pd.to_numeric(df["contracts"], errors="coerce").fillna(1).clip(lower=1)
+    move = xp - ep
+    short_mask = df["direction"].astype(str).str.lower() == "short"
+    move[short_mask] = -move[short_mask]
+    valid = (ep > 0) & (xp > 0)
+    pts[valid] = move[valid] * ct[valid]
+    return pts
+
+
 def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
     if df.empty:
         st.info("No daily PnL yet.")
         return
+
+    # Compute per-row points then aggregate by date alongside PnL
+    df = df.copy()
+    df["_pts"] = _calc_points_series(df)
+
     daily = (
-        df.groupby("date", as_index=False)[pnl_col]
-        .agg(pnl="sum", trades="count")
+        df.groupby("date", as_index=False)
+        .agg(**{pnl_col: (pnl_col, "sum"), "trades": (pnl_col, "count"), "pts": ("_pts", "sum")})
         .rename(columns={pnl_col: "pnl"})
     )
     daily["date"] = pd.to_datetime(daily["date"]).dt.date
@@ -6163,20 +6196,22 @@ def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
     selected_period = months[month_labels.index(month_choice)]
     year, month = selected_period.year, selected_period.month
     month_df = daily[daily["month"] == selected_period]
-    month_daily = {row["date"]: (row["pnl"], row["trades"]) for _, row in month_df.iterrows()}
+    month_daily = {row["date"]: (row["pnl"], row["trades"], row.get("pts", 0.0)) for _, row in month_df.iterrows()}
     max_abs = max((abs(v[0]) for v in month_daily.values()), default=0) or 1
 
     month_total = month_df["pnl"].sum() if not month_df.empty else 0
+    month_pts = month_df["pts"].sum() if not month_df.empty and "pts" in month_df.columns else 0.0
     green_days = (month_df["pnl"] > 0).sum() if not month_df.empty else 0
     red_days = (month_df["pnl"] < 0).sum() if not month_df.empty else 0
     flat_days = (month_df["pnl"] == 0).sum() if not month_df.empty else 0
+    _mpts_str = f"+{month_pts:.1f}pts" if month_pts >= 0 else f"{month_pts:.1f}pts"
 
     stats_cols = st.columns([2, 3])
     with stats_cols[0]:
         st.markdown(f"**{month_choice}**")
     with stats_cols[1]:
         st.markdown(
-            f"**Monthly stats:** {format_money(month_total)} · "
+            f"**Monthly stats:** {format_money(month_total)} · {_mpts_str} · "
             f"{green_days} green · {red_days} red · {flat_days} flat"
         )
 
@@ -6201,43 +6236,52 @@ def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
         week_total = 0
         week_trades = 0
         week_dates = []
+        week_pts = 0.0
         for day in week:
             in_month = day.month == month
-            value, trades = month_daily.get(day, (0, 0)) if in_month else (0, 0)
+            value, trades, day_pts = month_daily.get(day, (0, 0, 0.0)) if in_month else (0, 0, 0.0)
             if in_month:
                 week_total += value
                 week_trades += trades
+                week_pts += day_pts
                 week_dates.append(day)
             if not in_month:
                 cell_cls = "cell out"
                 pnl_text = ""
+                pts_text = ""
                 trades_text = ""
             elif value > 0:
                 cell_cls = "cell win"
                 pnl_text = format_money(value)
-                trades_text = f"{trades} trades"
+                pts_text = f"+{day_pts:.1f}pts" if day_pts >= 0 else f"{day_pts:.1f}pts"
+                trades_text = f"{trades} trade{'s' if trades != 1 else ''}"
             elif value < 0:
                 cell_cls = "cell loss"
                 pnl_text = format_money(value)
-                trades_text = f"{trades} trades"
+                pts_text = f"+{day_pts:.1f}pts" if day_pts >= 0 else f"{day_pts:.1f}pts"
+                trades_text = f"{trades} trade{'s' if trades != 1 else ''}"
             else:
                 cell_cls = "cell flat"
                 pnl_text = ""
+                pts_text = ""
                 trades_text = ""
             cell_html.append(
                 f"<div class='{cell_cls}'>"
                 f"<div class='dn'>{day.day if in_month else ''}</div>"
                 f"<div class='pnl'>{pnl_text}</div>"
+                f"<div style='font-size:11px;color:#94a3b8;font-family:ui-monospace,monospace;font-weight:600;text-align:center;line-height:1.2'>{pts_text}</div>"
                 f"<div class='tc'>{trades_text}</div>"
                 f"</div>"
             )
         week_label = f"Week {week_idx}"
         week_total_text = format_money(week_total) if week_total != 0 else "$0"
+        _wpts_str = (f"+{week_pts:.1f}pts" if week_pts >= 0 else f"{week_pts:.1f}pts") if week_pts != 0 else ""
         week_date_map[str(week_idx)] = [d.strftime("%Y-%m-%d") for d in week_dates]
         week_html.append(
             "<div class='cal-week'>"
             f"<div class='cal-week-label'>{week_label}</div>"
             f"<div class='cal-week-total'>{week_total_text}</div>"
+            f"<div style='font-size:11px;color:#94a3b8;font-family:ui-monospace,monospace'>{_wpts_str}</div>"
             f"<div class='cal-week-trades'>{week_trades} trades</div>"
             "</div>"
         )
