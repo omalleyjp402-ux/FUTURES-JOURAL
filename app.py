@@ -4451,157 +4451,191 @@ def render_journal_page(user_id: str) -> None:
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
 def show_auth():
-    # ── Design-system CSS ────────────────────────────────────────────────────
-    st.markdown("""
-<style>
-[data-testid="stAppViewContainer"]{background:#0e1117 !important;}
+    # ── CSS: page background + stForm card (stForm IS a real DOM wrapper) ────
+    st.markdown("""<style>
+/* page */
+[data-testid="stAppViewContainer"]{background:#0b0f14 !important;}
 [data-testid="stAppViewContainer"]::before{
   content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
-  background:radial-gradient(ellipse 900px 600px at 50% 25%,rgba(124,58,237,.14),transparent 60%) !important;
+  background:radial-gradient(ellipse 900px 700px at 50% 18%,
+    rgba(124,58,237,.2),transparent 62%);
 }
-.tdy-login-wrap .stImage,.tdy-login-wrap .stImage > div,.tdy-login-wrap [data-testid="stImage"]{
-  background:transparent !important;display:flex !important;justify-content:center !important;
-}
-.tdy-login-wrap .stImage img{
-  background:transparent !important;border-radius:16px !important;
-  box-shadow:0 10px 30px rgba(124,58,237,.45) !important;max-width:64px !important;
-}
-.tdy-login-brand{
-  display:flex;flex-direction:column;align-items:center;gap:6px;margin:4px 0 22px;
-  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-}
-.tdy-login-brand .wm{font-size:22px;font-weight:700;color:#fff;letter-spacing:-.01em}
-.tdy-login-brand .tag{font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#a78bfa}
-.tdy-login-card{
-  max-width:460px;margin:0 auto;background:#1a1a2e;
-  border:1px solid #2d2d4e;border-left:3px solid #7c3aed;border-radius:16px;
-  padding:34px 36px 30px;
-  box-shadow:0 0 0 1px rgba(124,58,237,.08),0 30px 60px rgba(0,0,0,.45),0 0 60px rgba(124,58,237,.12);
-  position:relative;z-index:1;
-}
-.tdy-login-card [data-baseweb="tab-list"]{
-  border-bottom:1px solid #2d2d4e !important;background:transparent !important;gap:24px !important;
-}
-.tdy-login-card [data-baseweb="tab"]{
-  background:transparent !important;color:#94a3b8 !important;font-weight:600 !important;
-  padding:0 0 14px !important;font-size:14px !important;
-}
-.tdy-login-card [data-baseweb="tab"][aria-selected="true"]{color:#a78bfa !important;font-weight:700 !important;}
-.tdy-login-card [data-baseweb="tab-highlight"],.tdy-login-card [data-baseweb="tab-border"]{
-  background:#7c3aed !important;height:2px !important;
-}
-.tdy-login-card label,
-.tdy-login-card .stTextInput label,
-.tdy-login-card [data-testid="stWidgetLabel"] p{
-  color:#a78bfa !important;font-size:11px !important;font-weight:600 !important;
-  letter-spacing:.14em !important;text-transform:uppercase !important;margin-bottom:8px !important;
-}
-.tdy-login-card .stTextInput input,
-.tdy-login-card [data-baseweb="input"] input,
-.tdy-login-card input[type="email"],
-.tdy-login-card input[type="password"],
-.tdy-login-card input[type="text"]{
-  background:#0e1117 !important;border:1px solid #2d2d4e !important;border-radius:8px !important;
-  color:#e2e8f0 !important;padding:12px 14px !important;font-size:14px !important;
-  height:auto !important;box-shadow:none !important;
-  transition:border-color .15s,box-shadow .15s !important;
-}
-.tdy-login-card .stTextInput input:focus,
-.tdy-login-card [data-baseweb="input"] input:focus,
-.tdy-login-card input:focus{
-  border-color:#7c3aed !important;box-shadow:0 0 0 3px rgba(124,58,237,.18) !important;outline:none !important;
-}
-.tdy-login-card [data-baseweb="input"]{background:transparent !important;border:none !important;}
-.tdy-login-card .stButton > button,
-.tdy-login-card button[kind="primary"],
-.tdy-login-card button[type="submit"]{
-  width:100% !important;background:#7c3aed !important;color:#fff !important;
-  border:none !important;border-radius:10px !important;padding:14px 16px !important;
-  font-size:15px !important;font-weight:600 !important;
-  box-shadow:0 8px 24px rgba(124,58,237,.35) !important;
-  transition:background .15s,box-shadow .15s !important;
-}
-.tdy-login-card .stButton > button:hover,
-.tdy-login-card button[kind="primary"]:hover{
-  background:#6d28d9 !important;box-shadow:0 10px 30px rgba(124,58,237,.5) !important;
-}
-[data-testid="stHeader"]{background:transparent !important}
-</style>
-""", unsafe_allow_html=True)
+[data-testid="stHeader"]{background:transparent !important;border:none !important;}
+[data-testid="stMain"] .block-container{padding-top:0 !important;padding-bottom:0 !important;}
 
-    # ── Layout: centred card ─────────────────────────────────────────────────
-    _login_c1, _login_c2, _login_c3 = st.columns([2, 3, 2])
-    with _login_c2:
-        st.markdown('<div class="tdy-login-wrap">', unsafe_allow_html=True)
-        st.image("assets/tradylo-logo.png", width=64)
+/* card = the stForm wrapper — this IS a real DOM ancestor, CSS cascades */
+div[data-testid="stForm"]{
+  background:#1a1a2e !important;
+  border:1px solid #2d2d4e !important;
+  border-left:3px solid #7c3aed !important;
+  border-radius:16px !important;
+  padding:30px 32px 26px !important;
+  box-shadow:
+    0 0 0 1px rgba(124,58,237,.08),
+    0 32px 64px rgba(0,0,0,.55),
+    0 0 80px rgba(124,58,237,.16) !important;
+}
+
+/* tabs */
+[data-baseweb="tab-list"]{
+  background:transparent !important;
+  border-bottom:1px solid #2d2d4e !important;
+  gap:28px !important; margin-bottom:6px !important;
+}
+[data-baseweb="tab"]{
+  background:transparent !important; color:#64748b !important;
+  font-size:14px !important; font-weight:600 !important;
+  padding:0 0 12px !important; border:none !important;
+}
+[data-baseweb="tab"][aria-selected="true"]{color:#a78bfa !important; font-weight:700 !important;}
+[data-baseweb="tab-highlight"],[data-baseweb="tab-border"]{
+  background:#7c3aed !important; height:2px !important;
+}
+
+/* field labels */
+div[data-testid="stForm"] [data-testid="stWidgetLabel"] p,
+div[data-testid="stForm"] label{
+  color:#a78bfa !important; font-size:10.5px !important;
+  font-weight:700 !important; letter-spacing:.16em !important;
+  text-transform:uppercase !important;
+}
+
+/* inputs */
+div[data-testid="stForm"] input[type="text"],
+div[data-testid="stForm"] input[type="email"],
+div[data-testid="stForm"] input[type="password"]{
+  background:#0b0f14 !important;
+  border:1px solid #2d2d4e !important;
+  border-radius:8px !important;
+  color:#e2e8f0 !important;
+  font-size:14px !important;
+  padding:11px 14px !important;
+  height:44px !important;
+  box-shadow:none !important;
+  transition:border-color .15s, box-shadow .15s !important;
+}
+div[data-testid="stForm"] input:focus{
+  border-color:#7c3aed !important;
+  box-shadow:0 0 0 3px rgba(124,58,237,.2) !important;
+  outline:none !important;
+}
+div[data-testid="stForm"] [data-baseweb="input"],
+div[data-testid="stForm"] [data-baseweb="base-input"]{
+  background:transparent !important;
+  border:none !important; box-shadow:none !important;
+}
+
+/* checkbox label */
+div[data-testid="stForm"] [data-testid="stCheckbox"] p{
+  color:#94a3b8 !important; font-size:13px !important;
+  font-weight:400 !important; letter-spacing:0 !important;
+  text-transform:none !important;
+}
+
+/* submit button */
+div[data-testid="stForm"] [data-testid="stFormSubmitButton"] button{
+  width:100% !important;
+  background:linear-gradient(135deg,#7c3aed 0%,#6d28d9 100%) !important;
+  color:#fff !important; border:none !important;
+  border-radius:10px !important;
+  padding:14px 16px !important;
+  font-size:15px !important; font-weight:600 !important;
+  letter-spacing:.02em !important;
+  box-shadow:0 8px 24px rgba(124,58,237,.42) !important;
+  transition:opacity .15s, box-shadow .15s, transform .1s !important;
+  margin-top:6px !important;
+}
+div[data-testid="stForm"] [data-testid="stFormSubmitButton"] button:hover{
+  opacity:.92 !important;
+  box-shadow:0 12px 32px rgba(124,58,237,.6) !important;
+  transform:translateY(-1px) !important;
+}
+</style>""", unsafe_allow_html=True)
+
+    # ── Logo + brand (base64 so it works in st.markdown, no iframe needed) ───
+    _, _lc, _ = st.columns([1, 1, 1])
+    with _lc:
+        try:
+            import base64 as _b64
+            _logo_bytes = Path("assets/tradylo-logo.png").read_bytes()
+            _logo_src = "data:image/png;base64," + _b64.b64encode(_logo_bytes).decode()
+            _logo_img = (f'<img src="{_logo_src}" style="width:62px;height:62px;'
+                         f'object-fit:contain;border-radius:14px;'
+                         f'box-shadow:0 8px 28px rgba(124,58,237,.55);" />')
+        except Exception:
+            _logo_img = '<div style="font-size:38px;line-height:1;color:#a78bfa;">▲</div>'
+        st.markdown(f"""
+<div style="display:flex;flex-direction:column;align-items:center;gap:10px;
+  padding:48px 0 20px;font-family:system-ui,-apple-system,sans-serif;">
+  {_logo_img}
+  <div style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-.01em;
+    margin-top:6px;">TRADYLO</div>
+  <div style="font-size:10.5px;font-weight:700;letter-spacing:.22em;
+    text-transform:uppercase;color:#a78bfa;">Trading Journal</div>
+</div>""", unsafe_allow_html=True)
+
+    # ── Auth forms ────────────────────────────────────────────────────────────
+    _, _fc, _ = st.columns([1, 1, 1])
+    with _fc:
+        tab_login, tab_signup = st.tabs(["Log in", "Sign up"])
+
+        def _clean_cred(s: str, *, lower: bool = False) -> str:
+            s = safe_str(s).replace(" ", " ").strip()
+            return s.lower() if lower else s
+
+        with tab_login:
+            with st.form("tdy_login_form", border=False):
+                _email_l    = st.text_input("Email", placeholder="you@email.com", key="tdy_login_email")
+                _password_l = st.text_input("Password", type="password", placeholder="••••••••", key="tdy_login_password")
+                _remember   = st.checkbox("Remember me on this device", value=True, key="tdy_remember_me")
+                _submitted_l = st.form_submit_button("Log in →", use_container_width=True)
+            if _submitted_l:
+                try:
+                    _ec = _clean_cred(_email_l, lower=True)
+                    _pc = _clean_cred(_password_l)
+                    res = supabase.auth.sign_in_with_password({"email": _ec, "password": _pc})
+                    st.session_state["user"] = res.user
+                    st.session_state["access_token"] = res.session.access_token
+                    st.session_state["refresh_token"] = res.session.refresh_token
+                    if _remember:
+                        cm = _cookie_manager()
+                        if cm:
+                            cm["tradylo_remember"] = "true"
+                            cm["tradylo_refresh_token"] = res.session.refresh_token
+                            cm.save()
+                    st.rerun()
+                except Exception as e:
+                    msg = safe_str(e)
+                    if "Invalid API key" in msg or "invalid api key" in msg:
+                        st.error("Login failed: Invalid Supabase API key.")
+                        st.caption("Fix: Supabase Dashboard → Settings → API → copy Anon public key → set Streamlit secret `SUPABASE_KEY`.")
+                    else:
+                        st.error(f"Login failed: {e}")
+
+        with tab_signup:
+            with st.form("tdy_signup_form", border=False):
+                _email_s    = st.text_input("Email", placeholder="you@email.com", key="tdy_signup_email")
+                _password_s = st.text_input("Password (min 6 chars)", type="password", placeholder="••••••••", key="tdy_signup_password")
+                _submitted_s = st.form_submit_button("Create account →", use_container_width=True)
+            if _submitted_s:
+                try:
+                    _ec = _clean_cred(_email_s, lower=True)
+                    _pc = _clean_cred(_password_s)
+                    supabase.auth.sign_up({"email": _ec, "password": _pc})
+                    st.success("Account created! Switch to Log in to get started.")
+                except Exception as e:
+                    st.error(f"Sign up failed: {e}")
+            st.caption("No confirmation email? Check spam. If still missing, reach out and we’ll resend.")
+
         st.markdown("""
-<div class="tdy-login-brand">
-  <div class="wm">TRADYLO</div>
-  <div class="tag">Trading Journal</div>
-</div>
-<div class="tdy-login-card">
-""", unsafe_allow_html=True)
-
-    tab_login, tab_signup = st.tabs(["Log in", "Sign up"])
-
-    def _clean_cred(s: str, *, lower: bool = False) -> str:
-        # Mobile keyboards/password managers sometimes add non-breaking spaces.
-        s = safe_str(s).replace("\u00A0", " ").strip()
-        return s.lower() if lower else s
-
-    with tab_login:
-        email = st.text_input("Email", key="login_email")
-        password = st.text_input("Password", type="password", key="login_password")
-        remember_me = st.checkbox("Remember me on this device", value=True, key="remember_me")
-        if st.button("Log in"):
-            try:
-                email_clean = _clean_cred(email, lower=True)
-                password_clean = _clean_cred(password)
-                res = supabase.auth.sign_in_with_password({"email": email_clean, "password": password_clean})
-                st.session_state["user"] = res.user
-                st.session_state["access_token"] = res.session.access_token
-                st.session_state["refresh_token"] = res.session.refresh_token
-                if remember_me:
-                    cm = _cookie_manager()
-                    if cm:
-                        cm["tradylo_remember"] = "true"
-                        cm["tradylo_refresh_token"] = res.session.refresh_token
-                        cm.save()
-                st.rerun()
-            except Exception as e:
-                msg = safe_str(e)
-                if "Invalid API key" in msg or "invalid api key" in msg:
-                    st.error("Login failed: Invalid Supabase API key.")
-                    st.caption("Fix: In Streamlit Community Cloud → App → Settings → Secrets, set `SUPABASE_URL` (Project URL) and `SUPABASE_KEY` (Anon public key) from Supabase → Settings → API.")
-                else:
-                    st.error(f"Login failed: {e}")
-
-    with tab_signup:
-        email = st.text_input("Email", key="signup_email")
-        password = st.text_input("Password (min 6 chars)", type="password", key="signup_password")
-        if st.button("Sign up"):
-            try:
-                email_clean = _clean_cred(email, lower=True)
-                password_clean = _clean_cred(password)
-                res = supabase.auth.sign_up({"email": email_clean, "password": password_clean})
-                st.success("Account created! You can log in now.")
-            except Exception as e:
-                st.error(f"Sign up failed: {e}")
-        st.caption("No confirmation email? Check spam/junk. If it still doesn't arrive, your email provider may be blocking it—reach out and we can resend or adjust SMTP settings.")
-
-    # Close the card + wrap divs, and add ToS footer
-    _login_c1b, _login_c2b, _login_c3b = st.columns([2, 3, 2])
-    with _login_c2b:
-        st.markdown("""
-<div style="margin-top:18px;text-align:center;font-size:12px;color:#64748b;line-height:1.6">
+<div style="text-align:center;font-size:12px;color:#475569;
+  padding:14px 0 4px;line-height:1.7;">
   By logging in you agree to our
-  <a href="?page=terms" style="color:#a78bfa;font-weight:600;text-decoration:none">Terms of Service</a>
+  <a href="?page=terms" style="color:#a78bfa;font-weight:600;text-decoration:none">Terms</a>
   &amp;
   <a href="?page=privacy" style="color:#a78bfa;font-weight:600;text-decoration:none">Privacy Policy</a>.
-</div>
-</div><!-- /tdy-login-card -->
-</div><!-- /tdy-login-wrap -->
-""", unsafe_allow_html=True)
+</div>""", unsafe_allow_html=True)
+
 
 
 def get_user():
