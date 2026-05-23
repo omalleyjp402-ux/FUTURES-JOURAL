@@ -2523,51 +2523,171 @@ def render_public_sidebar(active: str) -> str:
 
 
 def render_landing_page() -> None:
-    # Sidebar handles the brand in the public shell; keep the main landing clean.
     ref = safe_str(st.session_state.get("ref_code")).strip()
-    auth_url = "?view=auth" + (f"&ref={quote_plus(ref)}" if ref else "")
-    def _go_auth():
-        try:
-            st.query_params["view"] = "auth"
-            if ref:
-                st.query_params["ref"] = ref
-        except Exception:
-            pass
-        st.rerun()
+    auth_href = "?view=auth" + (f"&ref={quote_plus(ref)}" if ref else "")
 
-    top = st.container()
-    with top:
-        c1, c2, c3 = st.columns([3, 1, 1])
-        with c1:
-            st.title("Tradylo Journal")
-            st.write("A trading journal and performance analytics app for traders.")
-        with c2:
-            st.markdown(" ")
-            st.markdown(" ")
-            if st.button("Log in / Sign up", use_container_width=True, key="landing_login_btn"):
-                _go_auth()
-        with c3:
-            st.markdown(" ")
-            st.markdown(" ")
-            try:
-                st.link_button("View demo", "?page=demo", use_container_width=True)
-            except Exception:
-                st.markdown("[View demo](?page=demo)")
+    st.markdown("""
+<style>
+[data-testid="stAppViewContainer"]{background:#0e1117 !important;}
+[data-testid="stAppViewContainer"]::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse 900px 600px at 50% 25%,rgba(124,58,237,.14),transparent 60%) !important;
+}
+.tdy-home{
+  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  color:#e2e8f0;position:relative;padding:48px 4px 24px;
+}
+.tdy-home::before{
+  content:"";position:absolute;inset:-40px -40px auto -40px;height:600px;
+  background:radial-gradient(900px 600px at 12% 0%,rgba(124,58,237,.14),transparent 60%);
+  pointer-events:none;z-index:0;
+}
+.tdy-home > *{position:relative;z-index:1}
+.tdy-home-badge{
+  display:inline-flex;align-items:center;gap:8px;padding:5px 14px;
+  background:rgba(124,58,237,.18);border:1px solid #7c3aed;border-radius:999px;
+  font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+  color:#a78bfa;margin-bottom:22px;
+}
+.tdy-home-badge .dot{width:6px;height:6px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px #22c55e}
+.tdy-home-h1{
+  font-size:clamp(36px,5vw,54px);font-weight:800;letter-spacing:-.025em;
+  line-height:1.08;color:#fff;margin:0 0 18px;max-width:780px;
+}
+.tdy-home-h1 .grad{
+  background:linear-gradient(135deg,#a78bfa 0%,#7c3aed 60%,#c4b5fd 100%);
+  -webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;color:transparent;
+}
+.tdy-home-sub{font-size:18px;line-height:1.6;color:#94a3b8;max-width:620px;margin:0 0 30px;}
+.tdy-home-cta{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.tdy-home-cta a.btn-primary{
+  display:inline-flex;align-items:center;gap:9px;padding:14px 28px;
+  background:#7c3aed;color:#fff !important;border:none;border-radius:10px;
+  font-size:15px;font-weight:600;text-decoration:none;
+  box-shadow:0 10px 28px rgba(124,58,237,.4);transition:background .15s,box-shadow .15s;
+}
+.tdy-home-cta a.btn-primary:hover{background:#6d28d9;box-shadow:0 14px 36px rgba(124,58,237,.55)}
+.tdy-home-cta a.btn-secondary{
+  display:inline-flex;align-items:center;gap:9px;padding:14px 26px;
+  background:transparent;color:#e2e8f0 !important;border:1px solid #2d2d4e;
+  border-radius:10px;font-size:15px;font-weight:600;text-decoration:none;
+  transition:border-color .15s,background .15s;
+}
+.tdy-home-cta a.btn-secondary:hover{border-color:#7c3aed;background:rgba(124,58,237,.08)}
+.tdy-home-meta{
+  display:flex;align-items:center;gap:8px;font-size:13px;
+  color:#94a3b8;margin-bottom:48px;
+}
+.tdy-home-meta svg{width:14px;height:14px;color:#22c55e}
+.tdy-home-meta .sep{color:#475569;margin:0 4px}
+.tdy-home-label{
+  font-size:11px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;
+  color:#a78bfa;margin:0 0 18px;
+}
+.tdy-home-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:44px;}
+.tdy-home-feat{
+  background:#1a1a2e;border:1px solid #2d2d4e;border-left:3px solid #7c3aed;
+  border-radius:12px;padding:22px 22px 20px;
+  transition:border-color .2s,transform .2s,box-shadow .2s;
+}
+.tdy-home-feat:hover{
+  border-color:rgba(124,58,237,.55);border-left-color:#a78bfa;
+  transform:translateY(-2px);box-shadow:0 16px 40px rgba(124,58,237,.12);
+}
+.tdy-home-feat-icon{
+  width:34px;height:34px;border-radius:8px;background:rgba(124,58,237,.14);
+  border:1px solid rgba(124,58,237,.3);display:grid;place-items:center;margin-bottom:14px;
+}
+.tdy-home-feat-icon svg{width:18px;height:18px;color:#a78bfa}
+.tdy-home-feat h3{font-size:15px;font-weight:600;color:#fff;margin:0 0 8px;letter-spacing:-.005em;}
+.tdy-home-feat p{font-size:13px;line-height:1.6;color:#94a3b8;margin:0;}
+.tdy-home-trust{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.tdy-home-stat{
+  background:#1a1a2e;border:1px solid #2d2d4e;border-left:3px solid #7c3aed;
+  border-radius:12px;padding:18px 22px;display:flex;flex-direction:column;gap:6px;
+}
+.tdy-home-stat .lbl{font-size:10.5px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#a78bfa;}
+.tdy-home-stat .val{font-size:22px;font-weight:700;color:#fff;letter-spacing:-.015em;}
+.tdy-home-stat .val .accent{color:#a78bfa;font-weight:600}
+@media(max-width:880px){.tdy-home-grid,.tdy-home-trust{grid-template-columns:1fr}}
+</style>
+""", unsafe_allow_html=True)
 
-    st.markdown("**Features**")
-    st.markdown(
-        "- Trade logging\n"
-        "- Confluence tagging\n"
-        "- Session stats\n"
-        "- Screenshots\n"
-        "- Notes + journaling\n"
-        "- Performance metrics & analytics"
-    )
-
-    st.caption("Tip: best experienced on a laptop or iPad. Mobile support is improving.")
-
-    st.markdown("---")
-    st.caption("Already have an account? Use the button at the top to log in or sign up.")
+    st.markdown(f"""
+<div class="tdy-home">
+  <div class="tdy-home-badge"><span class="dot"></span>Now in Early Access</div>
+  <h1 class="tdy-home-h1">The trading journal built for <span class="grad">prop traders</span>.</h1>
+  <p class="tdy-home-sub">Track every trade, analyse your edge, and let the data coach you. Built for MNQ and MES futures traders serious about growth.</p>
+  <div class="tdy-home-cta">
+    <a class="btn-primary" href="{auth_href}">Log In / Sign Up →</a>
+    <a class="btn-secondary" href="?page=demo">View Demo</a>
+  </div>
+  <div class="tdy-home-meta">
+    <svg viewBox="0 0 24 24" fill="none"><path d="M5 12l5 5L20 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Free plan available <span class="sep">·</span> No credit card needed
+  </div>
+  <div class="tdy-home-label">What's inside</div>
+  <div class="tdy-home-grid">
+    <div class="tdy-home-feat">
+      <div class="tdy-home-feat-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-5"/></svg>
+      </div>
+      <h3>Smart Analytics</h3>
+      <p>Win rate by session, time, confluence and setup. Know exactly when and why you win.</p>
+    </div>
+    <div class="tdy-home-feat">
+      <div class="tdy-home-feat-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M8 14l2 2 4-4"/></svg>
+      </div>
+      <h3>Prop Firm Simulator</h3>
+      <p>Simulate FTMO, Apex and Tradeify challenges using your real trade data.</p>
+    </div>
+    <div class="tdy-home-feat">
+      <div class="tdy-home-feat-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-4.5-7-11a4 4 0 017-2.6A4 4 0 0119 10c0 6.5-7 11-7 11z"/></svg>
+      </div>
+      <h3>Psychology Tracking</h3>
+      <p>Emotion scores, revenge trade flags and plan adherence. Track your mental edge.</p>
+    </div>
+    <div class="tdy-home-feat">
+      <div class="tdy-home-feat-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1018 0 9 9 0 00-18 0z"/><path d="M12 7v5l3 2"/></svg>
+      </div>
+      <h3>News Event Awareness</h3>
+      <p>Auto-alerts for FOMC, NFP and CPI days. Build your own event price action history.</p>
+    </div>
+    <div class="tdy-home-feat">
+      <div class="tdy-home-feat-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"/><path d="M14 3v6h6"/><path d="M12 12v6m-3-3h6"/></svg>
+      </div>
+      <h3>CSV Import</h3>
+      <p>Import from Tradovate, NinjaTrader or Rithmic in one click.</p>
+    </div>
+    <div class="tdy-home-feat">
+      <div class="tdy-home-feat-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 6.9H22l-6 4.4 2.3 7L12 16l-6.3 4.3L8 13.3 2 8.9h7.6z"/></svg>
+      </div>
+      <h3>Dylo Score</h3>
+      <p>Your personalised performance score across 5 dimensions. Track your growth week by week.</p>
+    </div>
+  </div>
+  <div class="tdy-home-trust">
+    <div class="tdy-home-stat">
+      <div class="lbl">Trades Analysed</div>
+      <div class="val">900<span class="accent">+</span></div>
+    </div>
+    <div class="tdy-home-stat">
+      <div class="lbl">Account Types</div>
+      <div class="val">5</div>
+    </div>
+    <div class="tdy-home-stat">
+      <div class="lbl">Prop Firms Supported</div>
+      <div class="val" style="font-size:17px">FTMO <span class="accent">·</span> Apex <span class="accent">·</span> Tradeify</div>
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
     render_public_footer()
 
@@ -4331,16 +4451,97 @@ def render_journal_page(user_id: str) -> None:
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
 def show_auth():
-    _login_c1, _login_c2, _login_c3 = st.columns([2, 1, 2])
+    # ── Design-system CSS ────────────────────────────────────────────────────
+    st.markdown("""
+<style>
+[data-testid="stAppViewContainer"]{background:#0e1117 !important;}
+[data-testid="stAppViewContainer"]::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse 900px 600px at 50% 25%,rgba(124,58,237,.14),transparent 60%) !important;
+}
+.tdy-login-wrap .stImage,.tdy-login-wrap .stImage > div,.tdy-login-wrap [data-testid="stImage"]{
+  background:transparent !important;display:flex !important;justify-content:center !important;
+}
+.tdy-login-wrap .stImage img{
+  background:transparent !important;border-radius:16px !important;
+  box-shadow:0 10px 30px rgba(124,58,237,.45) !important;max-width:64px !important;
+}
+.tdy-login-brand{
+  display:flex;flex-direction:column;align-items:center;gap:6px;margin:4px 0 22px;
+  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+.tdy-login-brand .wm{font-size:22px;font-weight:700;color:#fff;letter-spacing:-.01em}
+.tdy-login-brand .tag{font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#a78bfa}
+.tdy-login-card{
+  max-width:460px;margin:0 auto;background:#1a1a2e;
+  border:1px solid #2d2d4e;border-left:3px solid #7c3aed;border-radius:16px;
+  padding:34px 36px 30px;
+  box-shadow:0 0 0 1px rgba(124,58,237,.08),0 30px 60px rgba(0,0,0,.45),0 0 60px rgba(124,58,237,.12);
+  position:relative;z-index:1;
+}
+.tdy-login-card [data-baseweb="tab-list"]{
+  border-bottom:1px solid #2d2d4e !important;background:transparent !important;gap:24px !important;
+}
+.tdy-login-card [data-baseweb="tab"]{
+  background:transparent !important;color:#94a3b8 !important;font-weight:600 !important;
+  padding:0 0 14px !important;font-size:14px !important;
+}
+.tdy-login-card [data-baseweb="tab"][aria-selected="true"]{color:#a78bfa !important;font-weight:700 !important;}
+.tdy-login-card [data-baseweb="tab-highlight"],.tdy-login-card [data-baseweb="tab-border"]{
+  background:#7c3aed !important;height:2px !important;
+}
+.tdy-login-card label,
+.tdy-login-card .stTextInput label,
+.tdy-login-card [data-testid="stWidgetLabel"] p{
+  color:#a78bfa !important;font-size:11px !important;font-weight:600 !important;
+  letter-spacing:.14em !important;text-transform:uppercase !important;margin-bottom:8px !important;
+}
+.tdy-login-card .stTextInput input,
+.tdy-login-card [data-baseweb="input"] input,
+.tdy-login-card input[type="email"],
+.tdy-login-card input[type="password"],
+.tdy-login-card input[type="text"]{
+  background:#0e1117 !important;border:1px solid #2d2d4e !important;border-radius:8px !important;
+  color:#e2e8f0 !important;padding:12px 14px !important;font-size:14px !important;
+  height:auto !important;box-shadow:none !important;
+  transition:border-color .15s,box-shadow .15s !important;
+}
+.tdy-login-card .stTextInput input:focus,
+.tdy-login-card [data-baseweb="input"] input:focus,
+.tdy-login-card input:focus{
+  border-color:#7c3aed !important;box-shadow:0 0 0 3px rgba(124,58,237,.18) !important;outline:none !important;
+}
+.tdy-login-card [data-baseweb="input"]{background:transparent !important;border:none !important;}
+.tdy-login-card .stButton > button,
+.tdy-login-card button[kind="primary"],
+.tdy-login-card button[type="submit"]{
+  width:100% !important;background:#7c3aed !important;color:#fff !important;
+  border:none !important;border-radius:10px !important;padding:14px 16px !important;
+  font-size:15px !important;font-weight:600 !important;
+  box-shadow:0 8px 24px rgba(124,58,237,.35) !important;
+  transition:background .15s,box-shadow .15s !important;
+}
+.tdy-login-card .stButton > button:hover,
+.tdy-login-card button[kind="primary"]:hover{
+  background:#6d28d9 !important;box-shadow:0 10px 30px rgba(124,58,237,.5) !important;
+}
+[data-testid="stHeader"]{background:transparent !important}
+</style>
+""", unsafe_allow_html=True)
+
+    # ── Layout: centred card ─────────────────────────────────────────────────
+    _login_c1, _login_c2, _login_c3 = st.columns([2, 3, 2])
     with _login_c2:
-        st.image("assets/tradylo-logo.png", width=110)
-        st.markdown(
-            "<h2 style='font-size:1.6rem; font-weight:800; letter-spacing:0.5px; "
-            "margin:8px 0 2px 0;'>Tradylo</h2>"
-            "<p style='color:#7c3aed; font-size:0.7rem; font-weight:600; "
-            "letter-spacing:2.5px; margin:0 0 24px 0;'>TRADING JOURNAL</p>",
-            unsafe_allow_html=True,
-        )
+        st.markdown('<div class="tdy-login-wrap">', unsafe_allow_html=True)
+        st.image("assets/tradylo-logo.png", width=64)
+        st.markdown("""
+<div class="tdy-login-brand">
+  <div class="wm">TRADYLO</div>
+  <div class="tag">Trading Journal</div>
+</div>
+<div class="tdy-login-card">
+""", unsafe_allow_html=True)
+
     tab_login, tab_signup = st.tabs(["Log in", "Sign up"])
 
     def _clean_cred(s: str, *, lower: bool = False) -> str:
@@ -4387,6 +4588,20 @@ def show_auth():
             except Exception as e:
                 st.error(f"Sign up failed: {e}")
         st.caption("No confirmation email? Check spam/junk. If it still doesn't arrive, your email provider may be blocking it—reach out and we can resend or adjust SMTP settings.")
+
+    # Close the card + wrap divs, and add ToS footer
+    _login_c1b, _login_c2b, _login_c3b = st.columns([2, 3, 2])
+    with _login_c2b:
+        st.markdown("""
+<div style="margin-top:18px;text-align:center;font-size:12px;color:#64748b;line-height:1.6">
+  By logging in you agree to our
+  <a href="?page=terms" style="color:#a78bfa;font-weight:600;text-decoration:none">Terms of Service</a>
+  &amp;
+  <a href="?page=privacy" style="color:#a78bfa;font-weight:600;text-decoration:none">Privacy Policy</a>.
+</div>
+</div><!-- /tdy-login-card -->
+</div><!-- /tdy-login-wrap -->
+""", unsafe_allow_html=True)
 
 
 def get_user():
