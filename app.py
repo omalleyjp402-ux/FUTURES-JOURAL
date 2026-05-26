@@ -546,6 +546,202 @@ div[data-testid="stExpander"] > div {
 .tdy-eq-svg-wrap{flex:1;position:relative}
 .tdy-eq-svg-wrap svg{display:block;width:100%;height:100%;overflow:visible}
 .tdy-eq-x{display:flex;justify-content:space-between;font-size:11px;color:#94a3b8;font-family:'JetBrains Mono',monospace;margin-top:4px;padding-left:68px}
+/* ── PAGE HEADERS: remove black logo box ─────────────────────── */
+[data-testid="stImage"] img {
+    border-radius: 12px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+/* ── TABS: brand styling everywhere ──────────────────────────── */
+.stTabs [data-baseweb="tab-list"] {
+    background: transparent !important;
+    border-bottom: 1px solid #2d2d4e !important;
+    gap: 4px !important;
+    padding-bottom: 0 !important;
+}
+.stTabs [data-baseweb="tab"] {
+    background: transparent !important;
+    color: #94a3b8 !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    padding: 10px 18px !important;
+    border: none !important;
+    border-bottom: 2px solid transparent !important;
+    letter-spacing: 0.02em !important;
+    border-radius: 0 !important;
+}
+.stTabs [aria-selected="true"] {
+    color: #a78bfa !important;
+    border-bottom: 2px solid #7c3aed !important;
+    font-weight: 600 !important;
+    background: transparent !important;
+}
+.stTabs [data-baseweb="tab"]:hover {
+    color: #e2e8f0 !important;
+    background: rgba(124,58,237,0.06) !important;
+}
+
+/* ── SELECTBOXES ──────────────────────────────────────────────── */
+.stSelectbox > div > div {
+    background: #1a1a2e !important;
+    border: 1px solid #2d2d4e !important;
+    border-radius: 8px !important;
+    color: #e2e8f0 !important;
+}
+.stSelectbox > div > div:focus-within {
+    border-color: #7c3aed !important;
+    box-shadow: 0 0 0 3px rgba(124,58,237,0.12) !important;
+}
+
+/* ── TEXT INPUTS + TEXTAREAS ──────────────────────────────────── */
+.stTextInput input, .stTextArea textarea {
+    background: #0e1117 !important;
+    border: 1px solid #2d2d4e !important;
+    border-radius: 8px !important;
+    color: #e2e8f0 !important;
+    font-family: system-ui, -apple-system, sans-serif !important;
+}
+.stTextInput input:focus, .stTextArea textarea:focus {
+    border-color: #7c3aed !important;
+    box-shadow: 0 0 0 3px rgba(124,58,237,0.12) !important;
+    outline: none !important;
+}
+.stTextInput label, .stTextArea label {
+    color: #a78bfa !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.08em !important;
+    text-transform: uppercase !important;
+}
+
+/* ── MAIN CONTENT BUTTONS (not sidebar) ──────────────────────── */
+.main .stButton > button {
+    background: #7c3aed !important;
+    color: #ffffff !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    font-size: 14px !important;
+    padding: 10px 22px !important;
+    box-shadow: none !important;
+    transition: background 0.15s ease !important;
+}
+.main .stButton > button:hover {
+    background: #6d28d9 !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+.main .stButton > button:focus {
+    box-shadow: 0 0 0 3px rgba(124,58,237,0.25) !important;
+    border: none !important;
+    outline: none !important;
+}
+
+/* ── STREAMLIT INFO/SUCCESS/WARNING/ERROR BOXES ───────────────── */
+div[data-testid="stAlert"] {
+    background: #1a1a2e !important;
+    border: 1px solid #2d2d4e !important;
+    border-left: 3px solid #7c3aed !important;
+    border-radius: 8px !important;
+    color: #e2e8f0 !important;
+}
+
+/* ── EXPANDERS ────────────────────────────────────────────────── */
+.streamlit-expanderHeader {
+    background: #1a1a2e !important;
+    border: 1px solid #2d2d4e !important;
+    border-radius: 8px !important;
+    color: #e2e8f0 !important;
+    font-weight: 500 !important;
+}
+.streamlit-expanderContent {
+    background: #1a1a2e !important;
+    border: 1px solid #2d2d4e !important;
+    border-top: none !important;
+    border-radius: 0 0 8px 8px !important;
+}
+
+/* ── DATAFRAMES / TABLES ──────────────────────────────────────── */
+[data-testid="stDataFrame"] {
+    border: 1px solid #2d2d4e !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
+}
+[data-testid="stDataFrame"] th {
+    background: #1a1a2e !important;
+    color: #a78bfa !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.08em !important;
+    text-transform: uppercase !important;
+    border-bottom: 1px solid #2d2d4e !important;
+}
+[data-testid="stDataFrame"] td {
+    background: #0e1117 !important;
+    color: #e2e8f0 !important;
+    border-bottom: 1px solid #1a1a2e !important;
+    font-size: 13px !important;
+}
+
+/* ── RADIO BUTTONS ────────────────────────────────────────────── */
+.stRadio label {
+    color: #e2e8f0 !important;
+    font-size: 14px !important;
+}
+.stRadio [data-testid="stMarkdownContainer"] p {
+    color: #94a3b8 !important;
+    font-size: 12px !important;
+}
+
+/* ── CHECKBOXES ───────────────────────────────────────────────── */
+.stCheckbox label {
+    color: #e2e8f0 !important;
+    font-size: 14px !important;
+}
+
+/* ── SLIDERS ──────────────────────────────────────────────────── */
+.stSlider [data-testid="stSlider"] > div > div > div {
+    background: #7c3aed !important;
+}
+
+/* ── NUMBER INPUTS ────────────────────────────────────────────── */
+.stNumberInput input {
+    background: #0e1117 !important;
+    border: 1px solid #2d2d4e !important;
+    border-radius: 8px !important;
+    color: #e2e8f0 !important;
+}
+
+/* ── METRICS (st.metric) ──────────────────────────────────────── */
+[data-testid="stMetric"] {
+    background: #1a1a2e !important;
+    border: 1px solid #2d2d4e !important;
+    border-left: 3px solid #7c3aed !important;
+    border-radius: 12px !important;
+    padding: 16px 18px !important;
+}
+[data-testid="stMetricLabel"] {
+    color: #a78bfa !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.08em !important;
+    text-transform: uppercase !important;
+}
+[data-testid="stMetricValue"] {
+    color: #e2e8f0 !important;
+    font-weight: 700 !important;
+}
+
+/* ── SCROLLBAR ────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #0e1117; }
+::-webkit-scrollbar-thumb { background: #2d2d4e; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #7c3aed; }
+
+/* ── BLOCK CONTAINER SPACING ─────────────────────────────────── */
+.block-container { padding-top: 1.5rem !important; }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -3082,13 +3278,18 @@ def upsert_strategy(user_id: str, name: str, description: str) -> bool:
 
 
 def render_strategy_creation_page(user_id: str) -> None:
-    st.subheader("Strategy/model creation")
-    st.caption("Create reusable strategy templates you can pick from when logging trades.")
+    page_header("Strategy / Models", "Create and track your trading setups")
 
+    st.markdown('''<div style="background:#1a1a2e;border:1px solid #2d2d4e;
+    border-left:3px solid #7c3aed;border-radius:12px;padding:24px;margin-bottom:24px;">
+    <div style="font-size:11px;font-weight:600;color:#a78bfa;letter-spacing:0.1em;
+    text-transform:uppercase;margin-bottom:16px;">CREATE NEW STRATEGY</div>
+    ''', unsafe_allow_html=True)
     with st.form("strategy_create_form", clear_on_submit=False):
         name = st.text_input("Strategy name", placeholder="e.g. London Sweep + Reversal")
         description = st.text_area("What is the strategy?", height=160, placeholder="Rules, checklist, entries/exits, invalidation…")
         submitted = st.form_submit_button("Save strategy")
+    st.markdown("</div>", unsafe_allow_html=True)
     if submitted:
         ok = upsert_strategy(user_id, name, description)
         if ok:
@@ -3102,7 +3303,12 @@ def render_strategy_creation_page(user_id: str) -> None:
     if rows:
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
     else:
-        st.info("No strategies saved yet.")
+        st.markdown('''<div style="background:#1a1a2e;border:1px solid #2d2d4e;
+        border-radius:12px;padding:40px 24px;text-align:center;margin-top:16px;">
+          <div style="font-size:28px;margin-bottom:12px;">📋</div>
+          <div style="font-size:15px;font-weight:600;color:#e2e8f0;margin-bottom:6px;">No strategies yet</div>
+          <div style="font-size:13px;color:#94a3b8;">Create your first strategy above to start tracking its performance.</div>
+        </div>''', unsafe_allow_html=True)
 
 
 # ── All Accounts Dashboard ────────────────────────────────────────────────────
@@ -4283,12 +4489,7 @@ def upsert_journal_entry(user_id: str, entry_date: str, content: str) -> bool:
 
 
 def render_journal_page(user_id: str) -> None:
-    _lc, _tc = st.columns([1, 8])
-    with _lc:
-        st.image("assets/tradylo-logo.png", width=140)
-    with _tc:
-        st.markdown("<h1 style='font-size:1.8rem;font-weight:700;margin:4px 0 0 0;'>Journal</h1>", unsafe_allow_html=True)
-    st.caption("Daily notes + weekly reviews.")
+    page_header("Journal", "Daily notes and weekly reviews")
 
     tab_daily, tab_weekly = st.tabs(["Daily", "Weekly"])
 
@@ -4326,12 +4527,21 @@ def render_journal_page(user_id: str) -> None:
             st.session_state[state_key] = existing
             st.session_state[last_key] = existing
 
+        st.markdown(f'''<div style="background:#1a1a2e;border:1px solid #2d2d4e;"
+            "border-left:3px solid #7c3aed;border-radius:12px;"
+            "padding:18px 22px 8px 22px;margin-bottom:4px;">"
+            "<div style=\"font-size:11px;font-weight:600;color:#a78bfa;"
+            "letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px;\">DAILY ENTRY</div>"
+            f"<div style=\"font-size:14px;color:#94a3b8;margin-bottom:12px;\">Entry for {date_str}</div>"
+        ''', unsafe_allow_html=True)
         content = st.text_area(
             f"Entry for {date_str}",
             key=state_key,
             height=280,
             placeholder="Plan, emotions, lessons, what worked, what didn’t…",
+            label_visibility="collapsed",
         )
+        st.markdown("</div>", unsafe_allow_html=True)
 
         auto = st.toggle("Auto-save", value=True, key="journal_autosave")
         save_clicked = st.button("Save now", key="journal_save")
@@ -6257,8 +6467,7 @@ def render_reports_page(df_view: pd.DataFrame, pnl_col: str, account_type: str) 
 
 
 def render_streaks_page(df_view: pd.DataFrame, pnl_col: str) -> None:
-    st.title("Streaks & Milestones")
-    st.caption("Built from your trading days and weekly net PnL.")
+    page_header("Streaks & Milestones", "Built from your trading days and net P&L")
 
     dfp = df_view.copy()
     dfp["date"] = pd.to_datetime(dfp["date"], errors="coerce").dt.normalize()
@@ -6276,8 +6485,24 @@ def render_streaks_page(df_view: pd.DataFrame, pnl_col: str) -> None:
     c2.metric("Weekly Win Streak", streaks["weekly"]["current"], f"Record: {streaks['weekly']['record']}")
 
     stats = summarize_performance(dfp, pnl_col)
-    c3.metric("Best Day", format_money(stats["best_day"]["pnl"]) if stats["best_day"] else "—", stats["best_day"]["day"] if stats["best_day"] else "")
-    c4.metric("Worst Day", format_money(stats["worst_day"]["pnl"]) if stats["worst_day"] else "—", stats["worst_day"]["day"] if stats["worst_day"] else "")
+    _bd_val = format_money(stats["best_day"]["pnl"]) if stats["best_day"] else "—"
+    _bd_lbl = stats["best_day"]["day"] if stats["best_day"] else ""
+    _wd_val = format_money(stats["worst_day"]["pnl"]) if stats["worst_day"] else "—"
+    _wd_lbl = stats["worst_day"]["day"] if stats["worst_day"] else ""
+    c3.markdown(f'''<div style="background:#1a1a2e;border:1px solid #2d2d4e;'
+        f'border-left:3px solid #22c55e;border-radius:12px;padding:16px 18px;">'
+        f'<div style="font-size:11px;font-weight:600;color:#22c55e;letter-spacing:0.08em;'
+        f'text-transform:uppercase;margin-bottom:4px;">BEST DAY</div>'
+        f'<div style="font-size:22px;font-weight:700;color:#e2e8f0;">{_bd_val}</div>'
+        f'<div style="font-size:12px;color:#94a3b8;margin-top:2px;">{_bd_lbl}</div>'
+        f'</div>''', unsafe_allow_html=True)
+    c4.markdown(f'''<div style="background:#1a1a2e;border:1px solid #2d2d4e;'
+        f'border-left:3px solid #ef4444;border-radius:12px;padding:16px 18px;">'
+        f'<div style="font-size:11px;font-weight:600;color:#ef4444;letter-spacing:0.08em;'
+        f'text-transform:uppercase;margin-bottom:4px;">WORST DAY</div>'
+        f'<div style="font-size:22px;font-weight:700;color:#e2e8f0;">{_wd_val}</div>'
+        f'<div style="font-size:12px;color:#94a3b8;margin-top:2px;">{_wd_lbl}</div>'
+        f'</div>''', unsafe_allow_html=True)
 
     st.markdown("---")
     st.subheader("Milestones")
@@ -6885,6 +7110,40 @@ def render_brand_header(center: bool = False, hero: bool = False) -> None:
 
 # ── Supabase data helpers ─────────────────────────────────────────────────────
 
+
+def page_header(title: str, subtitle: str = "", badge: str = "") -> None:
+    """Renders a consistent branded page header without the logo image block."""
+    import html as _html_mod
+    badge_html = ""
+    if badge:
+        badge_html = (
+            f'<div style="background:rgba(124,58,237,0.1);border:1px solid #2d2d4e;'
+            f'border-radius:10px;padding:6px 14px;font-size:12px;color:#a78bfa;'
+            f'font-weight:600;letter-spacing:0.05em;white-space:nowrap;">'
+            f'{_html_mod.escape(badge)}</div>'
+        )
+    subtitle_html = ""
+    if subtitle:
+        subtitle_html = (
+            f'<p style="font-size:13px;color:#94a3b8;'
+            f'margin:5px 0 0 0;line-height:1.4;">{_html_mod.escape(subtitle)}</p>'
+        )
+    st.markdown(f"""
+<div style="margin-bottom:24px;padding-bottom:18px;border-bottom:1px solid #2d2d4e;">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;">
+    <div>
+      <div style="font-size:11px;font-weight:600;color:#a78bfa;letter-spacing:0.1em;
+        text-transform:uppercase;margin-bottom:6px;">TRADYLO TRADING JOURNAL</div>
+      <h1 style="font-size:26px;font-weight:700;color:#e2e8f0;margin:0;line-height:1.2;">
+        {_html_mod.escape(title)}</h1>
+      {subtitle_html}
+    </div>
+    {badge_html}
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+
 def load_trades(user_id: str, account_type: str) -> pd.DataFrame:
     sb = authed_supabase()
     res = sb.table("trades").select("*").eq("user_id", user_id).eq("account_type", account_type).execute()
@@ -7009,61 +7268,492 @@ def explode_tags(df: pd.DataFrame, column: str) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def build_problem_insights(df: pd.DataFrame, pnl_col: str) -> list[str]:
-    """
-    Best-effort 'coach' insights. Keep it simple and robust (never crash).
-    Returns 0-4 short bullets.
-    """
-    out: list[str] = []
-    if df is None or df.empty or pnl_col not in df.columns:
-        return out
+def md_to_html_bold(text: str) -> str:
+    """Convert **text** to <strong>text</strong> for HTML rendering."""
+    import re as _re
+    return _re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', str(text))
 
+
+def generate_coach_insights(df, pnl_col: str = "pnl_net") -> list:
+    """
+    Advanced Coach Insights engine. Produces specific, non-obvious,
+    actionable insights based on statistical patterns in the trade data.
+    Returns a list of HTML-safe insight strings.
+    """
+    import numpy as np
+
+    if df is None or len(df) < 10:
+        return ["Log at least 10 trades to unlock Coach Insights."]
+
+    insights = []
+    dfx = df.copy()
+    # support both pnl_net and the caller-supplied pnl_col
+    if pnl_col not in dfx.columns and "pnl_net" in dfx.columns:
+        pnl_col = "pnl_net"
+    elif pnl_col not in dfx.columns:
+        for c in dfx.columns:
+            if "pnl" in c.lower():
+                pnl_col = c
+                break
+    if pnl_col not in dfx.columns:
+        return ["Not enough P&L data to generate insights."]
+
+    dfx[pnl_col] = pd.to_numeric(dfx[pnl_col], errors="coerce").fillna(0)
+    dfx["win"] = dfx[pnl_col] > 0
+    dfx["date"] = pd.to_datetime(dfx["date"], errors="coerce")
+
+    baseline_wr = float(dfx["win"].mean())
+    if baseline_wr == 0:
+        return ["Not enough winning trades to generate insights yet."]
+
+    # ── 1. POST-LOSS BEHAVIOUR ─────────────────────────────────────────────
     try:
-        dfx = df.copy()
-        dfx[pnl_col] = pd.to_numeric(dfx[pnl_col], errors="coerce").fillna(0.0)
-
-        # Worst day of week by Total PnL
-        if "date" in dfx.columns:
-            dayname = pd.to_datetime(dfx["date"], errors="coerce").dt.day_name()
-            day_perf = dfx.assign(_day=dayname).groupby("_day")[pnl_col].sum()
-            day_perf = day_perf.dropna()
-            if not day_perf.empty:
-                worst_day = day_perf.idxmin()
-                worst_pnl = float(day_perf.loc[worst_day])
-                if worst_day and abs(worst_pnl) > 0:
-                    out.append(f"You lose the most money on **{worst_day}** ({format_money(worst_pnl)}).")
-
-        # Best / worst session
-        if "session" in dfx.columns:
-            ses = dfx.groupby("session")[pnl_col].sum().dropna()
-            if not ses.empty and ses.shape[0] >= 2:
-                best_s = ses.idxmax()
-                worst_s = ses.idxmin()
-                out.append(f"Your best session is **{best_s}** ({format_money(float(ses.loc[best_s]))}).")
-                out.append(f"Your worst session is **{worst_s}** ({format_money(float(ses.loc[worst_s]))}).")
-
-        # Win rate drop after 3 trades in a day
-        if "date" in dfx.columns:
-            # Need an ordering; entry_time is best, else fall back to created_at/id.
-            dfx["_date"] = pd.to_datetime(dfx["date"], errors="coerce").dt.date
-            if "entry_time" in dfx.columns:
-                dfx["_t"] = dfx["entry_time"].astype(str)
+        sort_cols = ["date"] + (["entry_time"] if "entry_time" in dfx.columns else [])
+        df_s = dfx.sort_values(sort_cols).reset_index(drop=True)
+        after_loss_wins = []
+        after_win_wins  = []
+        for i in range(1, len(df_s)):
+            prev_pnl = df_s.loc[i - 1, pnl_col]
+            curr_win = df_s.loc[i, "win"]
+            if prev_pnl < 0:
+                after_loss_wins.append(curr_win)
             else:
-                dfx["_t"] = ""
-            dfx = dfx.sort_values(["_date", "_t"])
-            dfx["_trade_num"] = dfx.groupby("_date").cumcount() + 1
-            overall_wr = float((dfx[pnl_col] > 0).mean() * 100.0) if len(dfx) else 0.0
-            after3 = dfx[dfx["_trade_num"] > 3]
-            if len(after3) >= 10:
-                after3_wr = float((after3[pnl_col] > 0).mean() * 100.0)
-                if overall_wr - after3_wr >= 8.0:
-                    out.append(f"Your win rate drops after **3 trades** in a day ({after3_wr:.1f}% vs {overall_wr:.1f}% overall).")
-
+                after_win_wins.append(curr_win)
+        if len(after_loss_wins) >= 10:
+            after_loss_wr = float(np.mean(after_loss_wins))
+            drop = baseline_wr - after_loss_wr
+            if drop > 0.05:
+                insights.append(md_to_html_bold(
+                    f"**Post-loss discipline:** Your win rate drops to "
+                    f"**{after_loss_wr:.0%}** on the trade immediately after a loss "
+                    f"(vs your baseline **{baseline_wr:.0%}**). "
+                    f"That's a {drop:.0%} drop — consider a mandatory pause after losses."
+                ))
     except Exception:
-        return out[:4]
+        pass
 
-    return out[:4]
+    # ── 2. CONSECUTIVE LOSS ESCALATION ────────────────────────────────────
+    try:
+        df_s = dfx.sort_values(sort_cols).reset_index(drop=True)
+        streak = 0
+        losses_after_2 = []
+        for i in range(len(df_s)):
+            if df_s.loc[i, pnl_col] < 0:
+                streak += 1
+            else:
+                streak = 0
+            if streak >= 2 and i + 1 < len(df_s):
+                losses_after_2.append(df_s.loc[i + 1, pnl_col])
+        if len(losses_after_2) >= 8:
+            avg_next = float(np.mean(losses_after_2))
+            pct_neg  = sum(1 for x in losses_after_2 if x < 0) / len(losses_after_2)
+            if pct_neg > 0.55:
+                insights.append(md_to_html_bold(
+                    f"**Losing streak trap:** After 2+ consecutive losses, "
+                    f"your next trade is negative **{pct_neg:.0%}** of the time "
+                    f"(avg P&L: **{format_money(avg_next)}**). "
+                    f"A 2-loss rule — stop for the session — could save you significantly."
+                ))
+    except Exception:
+        pass
 
+    # ── 3. TIME WINDOW EDGE ────────────────────────────────────────────────
+    try:
+        if "entry_time" in dfx.columns:
+            dfx["_hour"] = pd.to_datetime(
+                dfx["entry_time"].astype(str), format="%H:%M:%S", errors="coerce"
+            ).dt.hour
+            if dfx["_hour"].isna().all():
+                dfx["_hour"] = pd.to_datetime(
+                    dfx["entry_time"].astype(str), format="%H:%M", errors="coerce"
+                ).dt.hour
+            hr = dfx.dropna(subset=["_hour"]).groupby("_hour").agg(
+                win_rate=(   "win",    "mean"),
+                count=(      "win",    "count"),
+                avg_pnl=(pnl_col,     "mean"),
+            ).reset_index()
+            hr = hr[hr["count"] >= 5]
+            if len(hr) >= 3:
+                best_h  = hr.loc[hr["avg_pnl"].idxmax()]
+                worst_h = hr.loc[hr["avg_pnl"].idxmin()]
+                if float(best_h["avg_pnl"]) > 0 and float(worst_h["avg_pnl"]) < 0:
+                    insights.append(md_to_html_bold(
+                        f"**Time edge:** Your highest-value hour is "
+                        f"**{int(best_h['_hour']):02d}:00** "
+                        f"(avg **{format_money(float(best_h['avg_pnl']))}**, "
+                        f"{float(best_h['win_rate']):.0%} win rate). "
+                        f"Avoid **{int(worst_h['_hour']):02d}:00** — "
+                        f"avg **{format_money(float(worst_h['avg_pnl']))}** "
+                        f"across {int(worst_h['count'])} trades."
+                    ))
+    except Exception:
+        pass
+
+    # ── 4. CONFLUENCE COUNT THRESHOLD ─────────────────────────────────────
+    try:
+        if "confluences" in dfx.columns:
+            def _cnt(s):
+                if not s or str(s).strip() == "":
+                    return 0
+                return len([x for x in str(s).split(",") if x.strip()])
+            dfx["_cc"] = dfx["confluences"].apply(_cnt)
+            df_cf = dfx[dfx["_cc"] > 0]
+            if len(df_cf) >= 15:
+                for thr in [4, 3, 2, 1]:
+                    above = df_cf[df_cf["_cc"] >= thr]
+                    below = df_cf[df_cf["_cc"] <  thr]
+                    if len(above) >= 5 and len(below) >= 5:
+                        wr_a = float(above["win"].mean())
+                        wr_b = float(below["win"].mean())
+                        avg_a = float(above[pnl_col].mean())
+                        avg_b = float(below[pnl_col].mean())
+                        if wr_a - wr_b > 0.08:
+                            insights.append(md_to_html_bold(
+                                f"**Confluence threshold:** With **{thr}+** confluences "
+                                f"you win **{wr_a:.0%}** (avg **{format_money(avg_a)}**). "
+                                f"Below {thr}: **{wr_b:.0%}** win rate "
+                                f"(avg **{format_money(avg_b)}**). "
+                                f"Your edge requires at least {thr} confluences."
+                            ))
+                            break
+    except Exception:
+        pass
+
+    # ── 5. BEST SESSION-DAY COMBINATION ───────────────────────────────────
+    try:
+        if "session" in dfx.columns:
+            dfx["_day"] = dfx["date"].dt.day_name()
+            combo = dfx.groupby(["session", "_day"]).agg(
+                win_rate=(   "win",    "mean"),
+                count=(      "win",    "count"),
+                avg_pnl=(pnl_col,     "mean"),
+            ).reset_index()
+            combo = combo[combo["count"] >= 5]
+            if len(combo) >= 2:
+                best_c  = combo.loc[combo["avg_pnl"].idxmax()]
+                worst_c = combo.loc[combo["avg_pnl"].idxmin()]
+                if float(best_c["avg_pnl"]) > 0 and float(worst_c["avg_pnl"]) < 0:
+                    insights.append(md_to_html_bold(
+                        f"**Best setup:** **{best_c['session']} on {best_c['_day']}** "
+                        f"is your highest-value combination — "
+                        f"**{float(best_c['win_rate']):.0%}** win rate, "
+                        f"avg **{format_money(float(best_c['avg_pnl']))}** "
+                        f"over {int(best_c['count'])} trades. "
+                        f"Avoid **{worst_c['session']} on {worst_c['_day']}** "
+                        f"(avg **{format_money(float(worst_c['avg_pnl']))}**)."
+                    ))
+    except Exception:
+        pass
+
+    # ── 6. DIRECTION BIAS ──────────────────────────────────────────────────
+    try:
+        if "direction" in dfx.columns:
+            dirs = dfx.groupby("direction").agg(
+                win_rate=(   "win",    "mean"),
+                count=(      "win",    "count"),
+                avg_pnl=(pnl_col,     "mean"),
+            ).reset_index()
+            dirs = dirs[dirs["count"] >= 10]
+            if len(dirs) == 2:
+                bd = dirs.loc[dirs["avg_pnl"].idxmax()]
+                wd = dirs.loc[dirs["avg_pnl"].idxmin()]
+                diff = float(bd["avg_pnl"]) - float(wd["avg_pnl"])
+                if diff > 20:
+                    insights.append(md_to_html_bold(
+                        f"**Direction bias:** You are measurably better going "
+                        f"**{bd['direction']}** — "
+                        f"**{float(bd['win_rate']):.0%}** win rate vs "
+                        f"**{float(wd['win_rate']):.0%}** going {wd['direction']} "
+                        f"({format_money(diff)} avg difference per trade). "
+                        f"Be more selective on {wd['direction']} setups."
+                    ))
+    except Exception:
+        pass
+
+    # ── 7. GRADE vs ACTUAL OUTCOME MISMATCH ───────────────────────────────
+    try:
+        if "trade_grade" in dfx.columns:
+            gs = dfx.groupby("trade_grade").agg(
+                win_rate=(   "win",    "mean"),
+                count=(      "win",    "count"),
+            ).reset_index()
+            gs = gs[gs["count"] >= 5]
+            top_g = gs[gs["trade_grade"].isin(["A++", "A+", "A"])]
+            low_g = gs[gs["trade_grade"].isin(["B", "B+"])]
+            if len(top_g) > 0 and len(low_g) > 0:
+                top_wr = float(top_g["win_rate"].mean())
+                low_wr = float(low_g["win_rate"].mean())
+                if low_wr > top_wr + 0.05:
+                    insights.append(md_to_html_bold(
+                        f"**Grade miscalibration:** Your B/B+ graded trades "
+                        f"win **{low_wr:.0%}** — higher than your "
+                        f"A-tier trades at **{top_wr:.0%}**. "
+                        f"You may be grading conservatively after the fact. "
+                        f"Review your grading criteria."
+                    ))
+    except Exception:
+        pass
+
+    # ── 8. RECOVERY DAY RATE ───────────────────────────────────────────────
+    try:
+        daily_p = dfx.groupby("date")[pnl_col].sum().reset_index()
+        daily_p = daily_p.sort_values("date").reset_index(drop=True)
+        recovery = []
+        for i in range(1, len(daily_p)):
+            if daily_p.loc[i - 1, pnl_col] < 0:
+                recovery.append(daily_p.loc[i, pnl_col] > 0)
+        if len(recovery) >= 8:
+            rr = float(np.mean(recovery))
+            if rr > 0.6:
+                insights.append(md_to_html_bold(
+                    f"**Strong reset:** After a losing day, you bounce back "
+                    f"profitably **{rr:.0%}** of the time — "
+                    f"your psychological reset is excellent. Trust the process on bad days."
+                ))
+            elif rr < 0.4:
+                insights.append(md_to_html_bold(
+                    f"**Recovery pattern:** After a losing day, you only come back "
+                    f"profitably **{rr:.0%}** of the time. "
+                    f"Consider reducing size the day after a loss."
+                ))
+    except Exception:
+        pass
+
+    if not insights:
+        insights.append(
+            "Log more trades with full metadata (confluences, grades, "
+            "emotions, sessions) to unlock detailed pattern analysis."
+        )
+    return insights[:6]
+
+
+def generate_psychological_patterns(df, pnl_col: str = "pnl_net") -> list:
+    """
+    Advanced Psychological Patterns engine.
+    Surfaces non-obvious behavioural patterns.
+    Returns list of HTML-safe insight strings.
+    """
+    import numpy as np
+
+    if df is None or len(df) < 10:
+        return ["Log at least 10 trades with psychology data to unlock patterns."]
+
+    patterns = []
+    dfx = df.copy()
+    if pnl_col not in dfx.columns and "pnl_net" in dfx.columns:
+        pnl_col = "pnl_net"
+    elif pnl_col not in dfx.columns:
+        for c in dfx.columns:
+            if "pnl" in c.lower():
+                pnl_col = c
+                break
+    if pnl_col not in dfx.columns:
+        return ["Not enough P&L data for pattern analysis."]
+
+    dfx[pnl_col] = pd.to_numeric(dfx[pnl_col], errors="coerce").fillna(0)
+    dfx["win"] = dfx[pnl_col] > 0
+    dfx["date"] = pd.to_datetime(dfx["date"], errors="coerce")
+    baseline_wr = float(dfx["win"].mean())
+
+    sort_cols = ["date"] + (["entry_time"] if "entry_time" in dfx.columns else [])
+
+    # ── 1. PLAN DEVIATION RIPPLE EFFECT ───────────────────────────────────
+    try:
+        if "followed_plan" in dfx.columns:
+            df_s = dfx.sort_values(sort_cols).reset_index(drop=True)
+            contaminated, clean = [], []
+            for date, day_df in df_s.groupby("date"):
+                day_df = day_df.reset_index(drop=True)
+                deviated = False
+                for _, row in day_df.iterrows():
+                    plan = str(row.get("followed_plan", "")).strip().lower()
+                    is_dev = plan in ["no", "partial", "false", "0"]
+                    if deviated:
+                        contaminated.append(bool(row["win"]))
+                    elif is_dev:
+                        deviated = True
+                    else:
+                        clean.append(bool(row["win"]))
+            if len(contaminated) >= 10 and len(clean) >= 10:
+                cont_wr  = float(np.mean(contaminated))
+                clean_wr = float(np.mean(clean))
+                drop = clean_wr - cont_wr
+                if drop > 0.07:
+                    patterns.append(md_to_html_bold(
+                        f"**Plan deviation ripple:** After you break your plan "
+                        f"even once in a session, remaining trades that day win only "
+                        f"**{cont_wr:.0%}** vs **{clean_wr:.0%}** on disciplined days. "
+                        f"One slip ruins the session — use it as a signal to stop."
+                    ))
+    except Exception:
+        pass
+
+    # ── 2. EMOTION SCORE SWEET SPOT ───────────────────────────────────────
+    try:
+        if "emotion_score" in dfx.columns:
+            dfx["_emo"] = pd.to_numeric(dfx["emotion_score"], errors="coerce")
+            emo_df = dfx.dropna(subset=["_emo"])
+            es = emo_df.groupby("_emo").agg(
+                win_rate=(   "win",    "mean"),
+                avg_pnl=(pnl_col,     "mean"),
+                count=(      "win",    "count"),
+            ).reset_index()
+            es = es[es["count"] >= 5]
+            if len(es) >= 3:
+                best_s  = es.loc[es["avg_pnl"].idxmax()]
+                worst_s = es.loc[es["avg_pnl"].idxmin()]
+                max_score = float(es["_emo"].max())
+                top_emo = es[es["_emo"] == max_score]
+                best_score_val = float(best_s["_emo"])
+                if len(top_emo) > 0 and best_score_val < max_score:
+                    top_wr = float(top_emo["win_rate"].values[0])
+                    mid_wr = float(best_s["win_rate"])
+                    if mid_wr > top_wr + 0.05:
+                        patterns.append(md_to_html_bold(
+                            f"**Overconfidence detected:** Your sweet spot is "
+                            f"emotion **{int(best_score_val)}/10** — "
+                            f"**{mid_wr:.0%}** win rate, "
+                            f"avg **{format_money(float(best_s['avg_pnl']))}**. "
+                            f"At max confidence ({int(max_score)}/10) your win rate "
+                            f"drops to **{top_wr:.0%}**. "
+                            f"Peak confidence is hurting you — trade cautiously when you feel best."
+                        ))
+                    else:
+                        patterns.append(md_to_html_bold(
+                            f"**Emotion edge:** Score **{int(best_score_val)}/10** "
+                            f"is your peak — **{float(best_s['win_rate']):.0%}** win rate "
+                            f"(avg **{format_money(float(best_s['avg_pnl']))}**). "
+                            f"At score {int(float(worst_s['_emo']))}/10 you average "
+                            f"**{format_money(float(worst_s['avg_pnl']))}**. "
+                            f"Rate yourself before every trade."
+                        ))
+    except Exception:
+        pass
+
+    # ── 3. REVENGE TRADE CASCADE ───────────────────────────────────────────
+    try:
+        if "revenge_trade" in dfx.columns:
+            df_s = dfx.sort_values(sort_cols).reset_index(drop=True)
+            is_rev = df_s["revenge_trade"].astype(str).str.lower().isin(
+                ["true", "yes", "1"]
+            )
+            pr1, pr2, pr3 = [], [], []
+            for i in range(len(df_s) - 3):
+                if is_rev.iloc[i]:
+                    pr1.append(bool(df_s.loc[i + 1, "win"]))
+                    pr2.append(bool(df_s.loc[i + 2, "win"]))
+                    pr3.append(bool(df_s.loc[i + 3, "win"]))
+            if len(pr1) >= 8:
+                wr1 = float(np.mean(pr1))
+                wr2 = float(np.mean(pr2)) if pr2 else baseline_wr
+                wr3 = float(np.mean(pr3)) if pr3 else baseline_wr
+                n_rev = int(is_rev.sum())
+                if wr1 < baseline_wr - 0.05:
+                    patterns.append(md_to_html_bold(
+                        f"**Revenge trade cascade:** After a revenge trade, "
+                        f"your next 3 trades win **{wr1:.0%}** → **{wr2:.0%}** → **{wr3:.0%}** "
+                        f"(baseline: **{baseline_wr:.0%}**). "
+                        f"The damage extends beyond the revenge trade itself. "
+                        f"You've had **{n_rev}** revenge trades — each poisons multiple subsequent trades."
+                    ))
+    except Exception:
+        pass
+
+    # ── 4. LOSS MAGNITUDE ESCALATION ──────────────────────────────────────
+    try:
+        df_s = dfx.sort_values(sort_cols).reset_index(drop=True)
+        loss_after_loss, loss_after_win = [], []
+        for i in range(1, len(df_s)):
+            curr = float(df_s.loc[i, pnl_col])
+            prev = float(df_s.loc[i - 1, pnl_col])
+            if curr < 0:
+                if prev < 0:
+                    loss_after_loss.append(abs(curr))
+                else:
+                    loss_after_win.append(abs(curr))
+        if len(loss_after_loss) >= 8 and len(loss_after_win) >= 8:
+            avg_lal = float(np.mean(loss_after_loss))
+            avg_law = float(np.mean(loss_after_win))
+            if avg_law > 0:
+                esc = avg_lal / avg_law
+                if esc > 1.2:
+                    patterns.append(md_to_html_bold(
+                        f"**Loss escalation:** When you lose after already losing, "
+                        f"your average loss is **{format_money(avg_lal)}** — "
+                        f"**{esc:.1f}× larger** than losses after wins "
+                        f"({format_money(avg_law)}). "
+                        f"You are unconsciously increasing size or moving stops to recover. "
+                        f"Fixed-size rules after a loss are critical."
+                    ))
+    except Exception:
+        pass
+
+    # ── 5. PLAN DEVIATION DOLLAR COST ─────────────────────────────────────
+    try:
+        if "followed_plan" in dfx.columns:
+            dfx["_plan"] = dfx["followed_plan"].astype(str).str.lower().isin(
+                ["yes", "true", "1"]
+            )
+            py = dfx[dfx["_plan"]]
+            pn = dfx[~dfx["_plan"]]
+            if len(py) >= 10 and len(pn) >= 5:
+                avg_y = float(py[pnl_col].mean())
+                avg_n = float(pn[pnl_col].mean())
+                wr_y  = float(py["win"].mean())
+                wr_n  = float(pn["win"].mean())
+                gap   = avg_y - avg_n
+                if gap > 30:
+                    total_cost = float(pn[pnl_col].sum())
+                    patterns.append(md_to_html_bold(
+                        f"**Plan cost quantified:** Following your plan = avg "
+                        f"**{format_money(avg_y)}** ({wr_y:.0%} win). "
+                        f"Deviating = avg **{format_money(avg_n)}** ({wr_n:.0%} win). "
+                        f"That's **{format_money(gap)} per trade** left on the table. "
+                        f"Across {len(pn)} unplanned trades: "
+                        f"**{format_money(total_cost)}** total cost of poor discipline."
+                    ))
+    except Exception:
+        pass
+
+    # ── 6. DAY-OF-WEEK DISCIPLINE ─────────────────────────────────────────
+    try:
+        if "followed_plan" in dfx.columns:
+            dfx["_day"]  = dfx["date"].dt.day_name()
+            dfx["_plan"] = dfx["followed_plan"].astype(str).str.lower().isin(
+                ["yes", "true", "1"]
+            )
+            dd = dfx.groupby("_day").agg(
+                plan_rate=( "_plan",   "mean"),
+                avg_pnl=  (pnl_col,   "mean"),
+                count=(    pnl_col,   "count"),
+            ).reset_index()
+            dd = dd[dd["count"] >= 5]
+            if len(dd) >= 3:
+                wd2 = dd.loc[dd["plan_rate"].idxmin()]
+                bd2 = dd.loc[dd["plan_rate"].idxmax()]
+                if float(bd2["plan_rate"]) - float(wd2["plan_rate"]) > 0.15:
+                    patterns.append(md_to_html_bold(
+                        f"**Day-of-week discipline:** You follow your plan "
+                        f"**{float(wd2['plan_rate']):.0%}** of the time on "
+                        f"**{wd2['_day']}** (avg P&L: **{format_money(float(wd2['avg_pnl']))}**) "
+                        f"vs **{float(bd2['plan_rate']):.0%}** on {bd2['_day']} "
+                        f"(avg P&L: **{format_money(float(bd2['avg_pnl']))}**). "
+                        f"Your {wd2['_day']} mindset needs work."
+                    ))
+    except Exception:
+        pass
+
+    if not patterns:
+        patterns.append(
+            "Fill in emotion score, followed plan and revenge trade flags "
+            "to unlock psychological pattern analysis."
+        )
+    return patterns[:5]
+
+
+# Keep old name as alias so any other callers still work
+def build_problem_insights(df: pd.DataFrame, pnl_col: str) -> list[str]:
+    return generate_coach_insights(df, pnl_col)
 
 def build_confluence_combo_stats(df: pd.DataFrame, pnl_col: str, min_confluences: int = 1) -> pd.DataFrame:
     rows = []
@@ -9354,11 +10044,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         st.altair_chart(style_altair_chart(drawdown_chart), use_container_width=True)
 
     if section == "PnL Calendar":
-        _lc, _tc = st.columns([1, 8])
-        with _lc:
-            st.image("assets/tradylo-logo.png", width=140)
-        with _tc:
-            st.markdown("<h1 style='font-size:1.8rem;font-weight:700;margin:4px 0 0 0;'>PnL Calendar</h1>", unsafe_allow_html=True)
+        page_header("PnL Calendar", "Monthly and annual trade history")
         if not daily_df.empty:
             best_row = daily_df.loc[daily_df["pnl"].idxmax()]
             worst_row = daily_df.loc[daily_df["pnl"].idxmin()]
@@ -9484,88 +10170,41 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
             _render_months_calendar(chart_df, pnl_col, form_key)
 
     if section == "Analytics":
-        _lc, _tc = st.columns([1, 8])
-        with _lc:
-            st.image("assets/tradylo-logo.png", width=140)
-        with _tc:
-            st.markdown("<h1 style='font-size:1.8rem;font-weight:700;margin:4px 0 0 0;'>Analytics</h1>", unsafe_allow_html=True)
-        insights = build_problem_insights(df_view, pnl_col)
-        if insights:
-            _coach_rows = "".join(
-                f'<div class="row"><span class="dot warn"></span><div>{html_lib.escape(i)}</div></div>'
-                for i in insights
-            )
-            _coach_html = (
-                '<div class="tdy-coach">'
-                '<div class="hdr">'
-                '<svg width="14" height="14" viewBox="0 0 24 24" fill="#a78bfa"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>'
-                '<h3 class="ttl">Coach Insights</h3>'
-                '</div>'
-                f'<div class="list">{_coach_rows}</div>'
-                '</div>'
-            )
-            try:
-                st.html(_coach_html)
-            except AttributeError:
-                st.markdown(_coach_html, unsafe_allow_html=True)
+        page_header("Analytics", "Performance breakdown by day, session and confluence")
+        # ── Coach Insights (new engine) ──────────────────────────────────────
+        _ci = generate_coach_insights(df_view, pnl_col)
+        _ci_rows = "".join(
+            f'<div style="display:flex;gap:10px;margin-bottom:10px;align-items:flex-start;">'
+            f'<div style="width:6px;height:6px;border-radius:50%;background:#7c3aed;'
+            f'margin-top:7px;flex-shrink:0;"></div>'
+            f'<div style="font-size:14px;color:#e2e8f0;line-height:1.6;">{ins}</div></div>'
+            for ins in _ci
+        )
+        st.markdown(f'''<div style="background:#1a1a2e;border:1px solid #2d2d4e;
+            border-left:3px solid #7c3aed;border-radius:12px;padding:20px 24px;margin-bottom:16px;">
+          <div style="font-size:11px;font-weight:600;color:#a78bfa;letter-spacing:0.1em;
+            text-transform:uppercase;margin-bottom:14px;">COACH INSIGHTS</div>
+          {_ci_rows}
+        </div>''', unsafe_allow_html=True)
+        # dummy so old rendering block below is skipped
+        insights = []
+        # (coach insights rendered above by new engine)
 
-        # ── Psychological Patterns ────────────────────────────────────────────
-        _psych_lines = []
-        if "followed_plan" in df_view.columns and total_trades >= 3:
-            _plan_yes = df_view[df_view["followed_plan"] == "Yes"]
-            _plan_no  = df_view[df_view["followed_plan"] == "No"]
-            if not _plan_yes.empty and not _plan_no.empty:
-                _avg_yes = float(_plan_yes[pnl_col].mean())
-                _avg_no  = float(_plan_no[pnl_col].mean())
-                _diff    = _avg_yes - _avg_no
-                _col     = "#22c55e" if _diff >= 0 else "#ef4444"
-                _psych_lines.append(
-                    f"When you follow your plan, avg trade is "
-                    f"<span style='color:{_col};font-weight:700;'>${_avg_yes:+.2f}</span> vs "
-                    f"<span style='color:#ef4444;font-weight:700;'>${_avg_no:+.2f}</span> when you don't "
-                    f"(<span style='color:{_col};font-weight:700;'>${abs(_diff):.2f} difference</span> per trade)."
-                )
-        if "emotion_score" in df_view.columns and total_trades >= 3:
-            _emo = pd.to_numeric(df_view["emotion_score"], errors="coerce")
-            _high_emo = df_view[_emo >= 7]
-            _low_emo  = df_view[_emo <= 4]
-            if not _high_emo.empty and not _low_emo.empty:
-                _avg_high = float(_high_emo[pnl_col].mean())
-                _avg_low  = float(_low_emo[pnl_col].mean())
-                _better   = "calm (score 1–4)" if _avg_low > _avg_high else "confident (score 7–10)"
-                _psych_lines.append(
-                    f"You trade better when <span style='color:#a78bfa;font-weight:700;'>{_better}</span>. "
-                    f"High emotion avg: <span style='color:#f59e0b;'>${_avg_high:+.2f}</span>, "
-                    f"Low emotion avg: <span style='color:#7c3aed;'>${_avg_low:+.2f}</span>."
-                )
-        if "revenge_trade" in df_view.columns:
-            _revenge = df_view[df_view["revenge_trade"] == "Yes"]
-            if not _revenge.empty:
-                _avg_rev   = float(_revenge[pnl_col].mean())
-                _count_rev = len(_revenge)
-                _col       = "#22c55e" if _avg_rev >= 0 else "#ef4444"
-                _psych_lines.append(
-                    f"You've flagged <span style='color:#ef4444;font-weight:700;'>{_count_rev} revenge trade(s)</span>. "
-                    f"Avg P&L on revenge trades: <span style='color:{_col};font-weight:700;'>${_avg_rev:+.2f}</span>."
-                )
-        if _psych_lines:
-            _psych_rows = "".join(
-                f'<div class="row"><span class="dot warn"></span><div>{line}</div></div>'
-                for line in _psych_lines
-            )
-            _psych_html = (
-                '<div class="tdy-coach">'
-                '<div class="hdr">'
-                '<svg width="14" height="14" viewBox="0 0 24 24" fill="#a78bfa"><path d="M12 2a5 5 0 1 0 0 10A5 5 0 0 0 12 2zm0 12c-5.33 0-8 2.67-8 4v2h16v-2c0-1.33-2.67-4-8-4z"/></svg>'
-                '<h3 class="ttl">Psychological Patterns</h3>'
-                '</div>'
-                f'<div class="list">{_psych_rows}</div>'
-                '</div>'
-            )
-            try:
-                st.html(_psych_html)
-            except AttributeError:
-                st.markdown(_psych_html, unsafe_allow_html=True)
+        # ── Psychological Patterns (new engine) ───────────────────────────
+        _pp = generate_psychological_patterns(df_view, pnl_col)
+        _pp_rows = "".join(
+            f'<div style="display:flex;gap:10px;margin-bottom:10px;align-items:flex-start;">'
+            f'<div style="width:6px;height:6px;border-radius:50%;background:#f59e0b;'
+            f'margin-top:7px;flex-shrink:0;"></div>'
+            f'<div style="font-size:14px;color:#e2e8f0;line-height:1.6;">{pat}</div></div>'
+            for pat in _pp
+        )
+        st.markdown(f'''<div style="background:#1a1a2e;border:1px solid #2d2d4e;
+            border-left:3px solid #f59e0b;border-radius:12px;padding:20px 24px;margin-bottom:16px;">
+          <div style="font-size:11px;font-weight:600;color:#f59e0b;letter-spacing:0.1em;
+            text-transform:uppercase;margin-bottom:14px;">PSYCHOLOGICAL PATTERNS</div>
+          {_pp_rows}
+        </div>''', unsafe_allow_html=True)
 
         a_day, a_conf, a_overall, a_news = st.tabs(
             ["Day & Time Analysis", "Confluence Analytics", "Overall Performance", "News Data"]
