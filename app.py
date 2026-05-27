@@ -4382,6 +4382,8 @@ def get_latest_weekly_focus(user_id: str) -> Optional[Dict[str, Any]]:
 
 LESSONS_BLOCK_START = "[[TRADYLO_LESSONS]]"
 LESSONS_BLOCK_END = "[[/TRADYLO_LESSONS]]"
+CUT_SHORT_BLOCK_START = "[[TRADYLO_CUT_SHORT]]"
+CUT_SHORT_BLOCK_END   = "[[/TRADYLO_CUT_SHORT]]"
 
 
 def _strip_lessons_block(notes: str) -> str:
@@ -4425,6 +4427,46 @@ def _embed_lessons(notes: str, lessons: list[str]) -> str:
     if not cleaned:
         return base
     block = LESSONS_BLOCK_START + json.dumps({"lessons": cleaned}, ensure_ascii=True) + LESSONS_BLOCK_END
+    if not base:
+        return block
+    return base + "\n\n" + block
+
+
+def _strip_cut_short_block(notes: str) -> str:
+    s = safe_str(notes)
+    if CUT_SHORT_BLOCK_START in s:
+        s = re.sub(
+            re.escape(CUT_SHORT_BLOCK_START) + r".*?" + re.escape(CUT_SHORT_BLOCK_END),
+            "", s, flags=re.S,
+        ).strip()
+    return s
+
+
+def _extract_cut_short(notes: str) -> dict:
+    """Return {cut_short: bool, would_have: str} or empty dict if not present."""
+    s = safe_str(notes)
+    if CUT_SHORT_BLOCK_START not in s or CUT_SHORT_BLOCK_END not in s:
+        return {}
+    try:
+        m = re.search(
+            re.escape(CUT_SHORT_BLOCK_START) + r"(.*?)" + re.escape(CUT_SHORT_BLOCK_END),
+            s, flags=re.S,
+        )
+        if m:
+            return json.loads(m.group(1).strip() or "{}")
+    except Exception:
+        pass
+    return {}
+
+
+def _embed_cut_short(notes: str, cut_short: bool, would_have: str) -> str:
+    """Embed cut-short metadata as a hidden block inside notes."""
+    # Strip any existing block first
+    base = _strip_cut_short_block(notes).strip()
+    if not cut_short:
+        return base  # nothing to embed if not cut short
+    payload = {"cut_short": True, "would_have": would_have}
+    block = CUT_SHORT_BLOCK_START + json.dumps(payload, ensure_ascii=True) + CUT_SHORT_BLOCK_END
     if not base:
         return block
     return base + "\n\n" + block
@@ -7370,7 +7412,9 @@ def prepare_df(df: pd.DataFrame) -> pd.DataFrame:
         if col in cleaned.columns:
             cleaned[col] = pd.to_numeric(cleaned[col], errors="coerce")
     if "notes" in cleaned.columns:
-        cleaned["notes"] = cleaned["notes"].fillna("").astype(str).apply(_strip_lessons_block)
+        cleaned["notes"] = cleaned["notes"].fillna("").astype(str).apply(
+            lambda n: _strip_cut_short_block(_strip_lessons_block(n))
+        )
     cleaned["entry_hour"] = cleaned["entry_time"].apply(parse_time_hour) if "entry_time" in cleaned.columns else None
     return cleaned
 
@@ -7647,6 +7691,47 @@ def generate_coach_insights(df, pnl_col: str = "pnl_net") -> list:
                     f"profitably **{rr:.0%}** of the time. "
                     f"Consider reducing size the day after a loss."
                 ))
+    except Exception:
+        pass
+
+    # ── 9. CUT-SHORT ANALYSIS ─────────────────────────────────────────────
+    try:
+        if "notes" in dfx.columns:
+            def _parse_cut_short(notes_val):
+                try:
+                    return _extract_cut_short(safe_str(notes_val))
+                except Exception:
+                    return {}
+            dfx["_cs_data"]    = dfx["notes"].apply(_parse_cut_short)
+            dfx["_cut_short"]  = dfx["_cs_data"].apply(lambda d: bool(d.get("cut_short", False)))
+            dfx["_would_have"] = dfx["_cs_data"].apply(lambda d: safe_str(d.get("would_have", "")))
+            cut_df = dfx[dfx["_cut_short"]]
+            if len(cut_df) >= 4:
+                would_tp  = (cut_df["_would_have"] == "Hit full TP").sum()
+                would_sl  = (cut_df["_would_have"] == "Hit stop loss").sum()
+                total_cs  = len(cut_df)
+                pct_tp    = would_tp / total_cs if total_cs else 0
+                pct_sl    = would_sl / total_cs if total_cs else 0
+                if pct_tp >= 0.40:
+                    insights.insert(0, md_to_html_bold(
+                        f"**Early exits costing you:** You cut **{total_cs}** trades short — "
+                        f"**{pct_tp:.0%}** would have hit your full TP. "
+                        f"That's money left on the table every session. "
+                        f"Try a rule: once in profit, move SL to entry and let it run."
+                    ))
+                elif pct_tp >= 0.25:
+                    insights.append(md_to_html_bold(
+                        f"**Cut short pattern:** Of your {total_cs} early exits, "
+                        f"**{would_tp}** ({pct_tp:.0%}) would have hit TP and "
+                        f"only **{would_sl}** ({pct_sl:.0%}) would have stopped out. "
+                        f"Your entries are good — trust them more."
+                    ))
+                elif pct_sl >= 0.50:
+                    insights.append(md_to_html_bold(
+                        f"**Good instinct:** You cut **{total_cs}** trades short — "
+                        f"**{pct_sl:.0%}** would have hit your stop loss. "
+                        f"Your early exits are protecting capital well."
+                    ))
     except Exception:
         pass
 
@@ -9551,6 +9636,29 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                 with _p_cols[2]:
                     pass
     
+                # ── Cut short ────────────────────────────────────────────────────────
+                _cs_cols = st.columns([2, 3])
+                with _cs_cols[0]:
+                    cut_short = st.selectbox(
+                        "Cut trade short?",
+                        ["No", "Yes"],
+                        key=f"{form_key}_cut_short",
+                        help="Did you exit before your original TP/plan?",
+                    )
+                with _cs_cols[1]:
+                    would_have_opts = [
+                        "N/A",
+                        "Hit full TP",
+                        "Hit stop loss",
+                        "Still running / unclear",
+                    ]
+                    would_have = st.selectbox(
+                        "If you hadn’t cut short, price would have…",
+                        would_have_opts,
+                        key=f"{form_key}_would_have",
+                        help="Only fill this in if you cut the trade short above.",
+                    )
+
                 tl_section("05", "Notes & Journal", "Optional")
                 notes = st.text_area("Notes", key=f"{form_key}_notes")
 
@@ -9606,6 +9714,12 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                 # Embed 3 lessons in notes (hidden JSON block) so we can store without altering DB schema.
                 lessons = [lesson_1, lesson_2, lesson_3]
                 notes = _embed_lessons(notes, lessons)
+
+                # Embed cut-short metadata in notes
+                _cs_val  = safe_str(st.session_state.get(f"{form_key}_cut_short", "No"))
+                _wh_val  = safe_str(st.session_state.get(f"{form_key}_would_have", "N/A"))
+                _is_cut  = _cs_val == "Yes"
+                notes = _embed_cut_short(notes, _is_cut, _wh_val if _is_cut else "N/A")
 
                 # Tags: merge selected + newly added, persist new ones for dropdown.
                 tags_final: list[str] = []
@@ -10256,7 +10370,7 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                     if "r_multiple" in view.columns:
                         view["r_multiple"] = pd.to_numeric(view["r_multiple"], errors="coerce").round(2)
                     if "notes" in view.columns:
-                        view["notes"] = view["notes"].fillna("").astype(str).apply(_strip_lessons_block)
+                        view["notes"] = view["notes"].fillna("").astype(str).apply(lambda n: _strip_cut_short_block(_strip_lessons_block(n)))
                     view["PnL"] = view[pnl_col].apply(format_money)
                     rename = {
                         "entry_time": "Time",
