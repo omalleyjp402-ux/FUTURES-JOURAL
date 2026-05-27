@@ -546,174 +546,137 @@ div[data-testid="stExpander"] > div {
 .tdy-eq-svg-wrap{flex:1;position:relative}
 .tdy-eq-svg-wrap svg{display:block;width:100%;height:100%;overflow:visible}
 .tdy-eq-x{display:flex;justify-content:space-between;font-size:11px;color:#94a3b8;font-family:'JetBrains Mono',monospace;margin-top:4px;padding-left:68px}
-/* ── PAGE HEADERS: remove black logo box ─────────────────────── */
-[data-testid="stImage"] img {
-    border-radius: 12px !important;
+/* ── Kill dark square behind st.image ──────────────────────── */
+[data-testid="stImage"],
+[data-testid="stImage"] > div,
+.stImage, .stImage > div { background: transparent !important; }
+[data-testid="stImage"] img, .stImage img {
     background: transparent !important;
-    box-shadow: none !important;
+    border-radius: 12px !important;
 }
 
-/* ── TABS: brand styling everywhere ──────────────────────────── */
+/* ── Tabs ────────────────────────────────────────────────────── */
 .stTabs [data-baseweb="tab-list"] {
     background: transparent !important;
     border-bottom: 1px solid #2d2d4e !important;
-    gap: 4px !important;
-    padding-bottom: 0 !important;
+    gap: 0 !important;
 }
 .stTabs [data-baseweb="tab"] {
     background: transparent !important;
     color: #94a3b8 !important;
     font-size: 13px !important;
     font-weight: 500 !important;
-    padding: 10px 18px !important;
+    padding: 10px 20px !important;
     border: none !important;
-    border-bottom: 2px solid transparent !important;
     letter-spacing: 0.02em !important;
-    border-radius: 0 !important;
 }
 .stTabs [aria-selected="true"] {
     color: #a78bfa !important;
-    border-bottom: 2px solid #7c3aed !important;
     font-weight: 600 !important;
-    background: transparent !important;
 }
-.stTabs [data-baseweb="tab"]:hover {
-    color: #e2e8f0 !important;
-    background: rgba(124,58,237,0.06) !important;
+.stTabs [data-baseweb="tab-highlight"],
+.stTabs [data-baseweb="tab-border"] {
+    background: #7c3aed !important;
+    height: 2px !important;
 }
 
-/* ── SELECTBOXES ──────────────────────────────────────────────── */
-.stSelectbox > div > div {
+/* ── Selectboxes ─────────────────────────────────────────────── */
+.stSelectbox > div > div,
+.stMultiSelect > div > div,
+.stDateInput > div > div {
     background: #1a1a2e !important;
     border: 1px solid #2d2d4e !important;
     border-radius: 8px !important;
     color: #e2e8f0 !important;
+    font-size: 14px !important;
 }
-.stSelectbox > div > div:focus-within {
-    border-color: #7c3aed !important;
-    box-shadow: 0 0 0 3px rgba(124,58,237,0.12) !important;
+[data-testid="stWidgetLabel"] p,
+.stSelectbox label, .stMultiSelect label,
+.stTextInput label, .stTextArea label,
+.stNumberInput label, .stDateInput label {
+    color: #a78bfa !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.14em !important;
+    text-transform: uppercase !important;
 }
 
-/* ── TEXT INPUTS + TEXTAREAS ──────────────────────────────────── */
-.stTextInput input, .stTextArea textarea {
+/* ── Text + number + date inputs ─────────────────────────────── */
+.stTextInput input,
+.stTextArea textarea,
+.stNumberInput input,
+.stDateInput input {
     background: #0e1117 !important;
     border: 1px solid #2d2d4e !important;
     border-radius: 8px !important;
     color: #e2e8f0 !important;
-    font-family: system-ui, -apple-system, sans-serif !important;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif !important;
+    font-size: 14px !important;
+    padding: 11px 14px !important;
 }
-.stTextInput input:focus, .stTextArea textarea:focus {
+.stTextInput input:focus,
+.stTextArea textarea:focus,
+.stNumberInput input:focus,
+.stDateInput input:focus {
     border-color: #7c3aed !important;
-    box-shadow: 0 0 0 3px rgba(124,58,237,0.12) !important;
+    box-shadow: 0 0 0 3px rgba(124,58,237,0.15) !important;
     outline: none !important;
 }
-.stTextInput label, .stTextArea label {
-    color: #a78bfa !important;
-    font-size: 11px !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.08em !important;
-    text-transform: uppercase !important;
-}
+.stTextArea textarea { min-height: 120px !important; }
 
-/* ── MAIN CONTENT BUTTONS (not sidebar) ──────────────────────── */
-.main .stButton > button {
+/* ── Main-area buttons (sidebar left alone) ───────────────────── */
+.main .stButton > button,
+[data-testid="stForm"] .stButton > button,
+[data-testid="stFormSubmitButton"] button {
     background: #7c3aed !important;
-    color: #ffffff !important;
+    color: #fff !important;
     border: none !important;
     border-radius: 8px !important;
     font-weight: 600 !important;
-    font-size: 14px !important;
     padding: 10px 22px !important;
-    box-shadow: none !important;
-    transition: background 0.15s ease !important;
+    font-size: 14px !important;
+    box-shadow: 0 6px 18px rgba(124,58,237,0.35) !important;
+    transition: background .15s, box-shadow .15s !important;
 }
-.main .stButton > button:hover {
+.main .stButton > button:hover,
+[data-testid="stFormSubmitButton"] button:hover {
     background: #6d28d9 !important;
-    border: none !important;
+    box-shadow: 0 8px 22px rgba(124,58,237,0.45) !important;
+}
+.main .stButton > button[kind="secondary"] {
+    background: transparent !important;
+    color: #e2e8f0 !important;
+    border: 1px solid #2d2d4e !important;
     box-shadow: none !important;
 }
-.main .stButton > button:focus {
-    box-shadow: 0 0 0 3px rgba(124,58,237,0.25) !important;
-    border: none !important;
-    outline: none !important;
+.main .stButton > button[kind="secondary"]:hover {
+    border-color: #7c3aed !important;
+    background: rgba(124,58,237,0.08) !important;
 }
 
-/* ── STREAMLIT INFO/SUCCESS/WARNING/ERROR BOXES ───────────────── */
-div[data-testid="stAlert"] {
+/* ── Alerts ──────────────────────────────────────────────────── */
+.stAlert, [data-testid="stAlert"] {
     background: #1a1a2e !important;
     border: 1px solid #2d2d4e !important;
     border-left: 3px solid #7c3aed !important;
     border-radius: 8px !important;
     color: #e2e8f0 !important;
 }
+[data-testid="stAlertContentSuccess"] { border-left-color: #22c55e !important; }
+[data-testid="stAlertContentWarning"] { border-left-color: #f59e0b !important; }
+[data-testid="stAlertContentError"]   { border-left-color: #ef4444 !important; }
+[data-testid="stAlertContentInfo"]    { border-left-color: #7c3aed !important; }
 
-/* ── EXPANDERS ────────────────────────────────────────────────── */
-.streamlit-expanderHeader {
-    background: #1a1a2e !important;
-    border: 1px solid #2d2d4e !important;
-    border-radius: 8px !important;
-    color: #e2e8f0 !important;
-    font-weight: 500 !important;
-}
-.streamlit-expanderContent {
-    background: #1a1a2e !important;
-    border: 1px solid #2d2d4e !important;
-    border-top: none !important;
-    border-radius: 0 0 8px 8px !important;
+/* ── Toggle / checkbox ───────────────────────────────────────── */
+.stToggle label, .stCheckbox label { color: #94a3b8 !important; font-size: 13px !important; }
+
+/* ── Kill stray monospace bleed ──────────────────────────────── */
+.stMarkdown, .element-container,
+.stMarkdown p, .stMarkdown div {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif !important;
 }
 
-/* ── DATAFRAMES / TABLES ──────────────────────────────────────── */
-[data-testid="stDataFrame"] {
-    border: 1px solid #2d2d4e !important;
-    border-radius: 8px !important;
-    overflow: hidden !important;
-}
-[data-testid="stDataFrame"] th {
-    background: #1a1a2e !important;
-    color: #a78bfa !important;
-    font-size: 11px !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.08em !important;
-    text-transform: uppercase !important;
-    border-bottom: 1px solid #2d2d4e !important;
-}
-[data-testid="stDataFrame"] td {
-    background: #0e1117 !important;
-    color: #e2e8f0 !important;
-    border-bottom: 1px solid #1a1a2e !important;
-    font-size: 13px !important;
-}
-
-/* ── RADIO BUTTONS ────────────────────────────────────────────── */
-.stRadio label {
-    color: #e2e8f0 !important;
-    font-size: 14px !important;
-}
-.stRadio [data-testid="stMarkdownContainer"] p {
-    color: #94a3b8 !important;
-    font-size: 12px !important;
-}
-
-/* ── CHECKBOXES ───────────────────────────────────────────────── */
-.stCheckbox label {
-    color: #e2e8f0 !important;
-    font-size: 14px !important;
-}
-
-/* ── SLIDERS ──────────────────────────────────────────────────── */
-.stSlider [data-testid="stSlider"] > div > div > div {
-    background: #7c3aed !important;
-}
-
-/* ── NUMBER INPUTS ────────────────────────────────────────────── */
-.stNumberInput input {
-    background: #0e1117 !important;
-    border: 1px solid #2d2d4e !important;
-    border-radius: 8px !important;
-    color: #e2e8f0 !important;
-}
-
-/* ── METRICS (st.metric) ──────────────────────────────────────── */
+/* ── st.metric ───────────────────────────────────────────────── */
 [data-testid="stMetric"] {
     background: #1a1a2e !important;
     border: 1px solid #2d2d4e !important;
@@ -728,19 +691,17 @@ div[data-testid="stAlert"] {
     letter-spacing: 0.08em !important;
     text-transform: uppercase !important;
 }
-[data-testid="stMetricValue"] {
-    color: #e2e8f0 !important;
-    font-weight: 700 !important;
-}
+[data-testid="stMetricValue"] { color: #e2e8f0 !important; font-weight: 700 !important; }
 
-/* ── SCROLLBAR ────────────────────────────────────────────────── */
+/* ── Scrollbar ───────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: #0e1117; }
 ::-webkit-scrollbar-thumb { background: #2d2d4e; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #7c3aed; }
 
-/* ── BLOCK CONTAINER SPACING ─────────────────────────────────── */
-.block-container { padding-top: 1.5rem !important; }
+/* ── Block container + header ────────────────────────────────── */
+.block-container { padding-top: 1.2rem !important; }
+[data-testid="stHeader"] { background: transparent !important; }
 
 </style>
 """, unsafe_allow_html=True)
@@ -2732,6 +2693,7 @@ def render_landing_page() -> None:
 .tdy-home{
   font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   color:#e2e8f0;position:relative;padding:48px 4px 24px;
+  max-width:820px;margin:0 auto;
 }
 .tdy-home::before{
   content:"";position:absolute;inset:-40px -40px auto -40px;height:600px;
@@ -3286,9 +3248,17 @@ def render_strategy_creation_page(user_id: str) -> None:
     text-transform:uppercase;margin-bottom:16px;">CREATE NEW STRATEGY</div>
     ''', unsafe_allow_html=True)
     with st.form("strategy_create_form", clear_on_submit=False):
-        name = st.text_input("Strategy name", placeholder="e.g. London Sweep + Reversal")
-        description = st.text_area("What is the strategy?", height=160, placeholder="Rules, checklist, entries/exits, invalidation…")
-        submitted = st.form_submit_button("Save strategy")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            name = st.text_input("Strategy name", placeholder="e.g. London Sweep + Reversal")
+        with col_b:
+            _inst_opts = ["Any / Multiple"] + INSTRUMENT_ORDER
+            _primary_inst = st.selectbox("Primary instrument", _inst_opts, key="strategy_instrument")
+        description = st.text_area(
+            "What is the strategy?", height=160,
+            placeholder="Rules, checklist, entry/exit criteria, invalidation conditions…"
+        )
+        submitted = st.form_submit_button("Save strategy →", use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
     if submitted:
         ok = upsert_strategy(user_id, name, description)
@@ -3303,12 +3273,24 @@ def render_strategy_creation_page(user_id: str) -> None:
     if rows:
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
     else:
-        st.markdown('''<div style="background:#1a1a2e;border:1px solid #2d2d4e;
-        border-radius:12px;padding:40px 24px;text-align:center;margin-top:16px;">
-          <div style="font-size:28px;margin-bottom:12px;">📋</div>
-          <div style="font-size:15px;font-weight:600;color:#e2e8f0;margin-bottom:6px;">No strategies yet</div>
-          <div style="font-size:13px;color:#94a3b8;">Create your first strategy above to start tracking its performance.</div>
-        </div>''', unsafe_allow_html=True)
+        st.markdown(
+            '<div style="background:#1a1a2e;border:2px dashed #2d2d4e;border-radius:12px;'
+            'padding:48px 24px;text-align:center;margin-top:16px;">'
+            '<svg width="44" height="44" viewBox="0 0 24 24" fill="none" '
+            'style="margin-bottom:16px;opacity:.4;" xmlns="http://www.w3.org/2000/svg">'
+            '<rect x="3" y="3" width="18" height="18" rx="2" stroke="#a78bfa" stroke-width="1.5"/>'
+            '<line x1="8" y1="8" x2="16" y2="8" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round"/>'
+            '<line x1="8" y1="12" x2="14" y2="12" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round"/>'
+            '<line x1="8" y1="16" x2="12" y2="16" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round"/>'
+            '</svg>'
+            '<div style="font-size:15px;font-weight:600;color:#e2e8f0;margin-bottom:6px;">'
+            'No strategies yet</div>'
+            '<div style="font-size:13px;color:#64748b;max-width:260px;margin:0 auto;line-height:1.6;">'
+            'Document your edge. Create your first strategy above to start tracking its performance.'
+            '</div>'
+            '</div>',
+            unsafe_allow_html=True
+        )
 
 
 # ── All Accounts Dashboard ────────────────────────────────────────────────────
@@ -4527,13 +4509,24 @@ def render_journal_page(user_id: str) -> None:
             st.session_state[state_key] = existing
             st.session_state[last_key] = existing
 
-        st.markdown(f'''<div style="background:#1a1a2e;border:1px solid #2d2d4e;"
-            "border-left:3px solid #7c3aed;border-radius:12px;"
-            "padding:18px 22px 8px 22px;margin-bottom:4px;">"
-            "<div style=\"font-size:11px;font-weight:600;color:#a78bfa;"
-            "letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px;\">DAILY ENTRY</div>"
-            f"<div style=\"font-size:14px;color:#94a3b8;margin-bottom:12px;\">Entry for {date_str}</div>"
-        ''', unsafe_allow_html=True)
+        _is_saved = st.session_state.get(state_key, "") == st.session_state.get(last_key, "")
+        _badge_color = "#22c55e" if _is_saved else "#f59e0b"
+        _badge_bg    = "rgba(34,197,94,.12)" if _is_saved else "rgba(245,158,11,.12)"
+        _badge_bdr   = "rgba(34,197,94,.3)"  if _is_saved else "rgba(245,158,11,.3)"
+        _badge_txt   = "Saved" if _is_saved else "Unsaved"
+        st.markdown(
+            f'<div style="background:#1a1a2e;border:1px solid #2d2d4e;border-left:3px solid #7c3aed;'
+            f'border-radius:12px;padding:14px 18px 10px;margin-bottom:8px;">'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'
+            f'<div style="font-size:11px;font-weight:700;color:#a78bfa;letter-spacing:.12em;'
+            f'text-transform:uppercase;">DAILY ENTRY</div>'
+            f'<span style="font-size:10.5px;font-weight:600;color:{_badge_color};background:{_badge_bg};'
+            f'border:1px solid {_badge_bdr};border-radius:999px;padding:2px 10px;">{_badge_txt}</span>'
+            f'</div>'
+            f'<div style="font-size:13px;color:#94a3b8;">Entry for {date_str}</div>'
+            f'</div>',
+            unsafe_allow_html=True
+        )
         content = st.text_area(
             f"Entry for {date_str}",
             key=state_key,
@@ -4771,7 +4764,8 @@ div[data-testid="stForm"] [data-testid="stFormSubmitButton"] button:hover{
             _logo_src = "data:image/png;base64," + _b64.b64encode(_logo_bytes).decode()
             _logo_img = (f'<img src="{_logo_src}" style="width:62px;height:62px;'
                          f'object-fit:contain;border-radius:14px;'
-                         f'box-shadow:0 8px 28px rgba(124,58,237,.55);" />')
+                         f'box-shadow:0 0 0 10px rgba(124,58,237,.08),'
+                         f'0 10px 30px rgba(124,58,237,.45);" />')
         except Exception:
             _logo_img = '<div style="font-size:38px;line-height:1;color:#a78bfa;">▲</div>'
         st.markdown(f"""
@@ -6445,6 +6439,13 @@ def render_reports_page(df_view: pd.DataFrame, pnl_col: str, account_type: str) 
         wk["label"] = wk.apply(_wk_label, axis=1)
         labels = wk["label"].tolist()
         default_idx = len(labels) - 1
+        st.markdown(
+            '<div style="background:#1a1a2e;border:1px solid #2d2d4e;border-left:3px solid #7c3aed;'
+            'border-radius:10px;padding:10px 16px 4px;margin-bottom:4px;">'
+            '<div style="font-size:10px;font-weight:700;color:#a78bfa;letter-spacing:.14em;'
+            'text-transform:uppercase;margin-bottom:6px;">Select Period</div>'
+            '</div>', unsafe_allow_html=True
+        )
         choice = st.selectbox("Select week", labels, index=max(0, default_idx))
         row = wk[wk["label"] == choice].iloc[0]
         start = row["start"]
@@ -6458,12 +6459,69 @@ def render_reports_page(df_view: pd.DataFrame, pnl_col: str, account_type: str) 
         mo["label"] = mo["date"].dt.strftime("%B %Y")
         labels = mo["label"].tolist()
         default_idx = len(labels) - 1
+        st.markdown(
+            '<div style="background:#1a1a2e;border:1px solid #2d2d4e;border-left:3px solid #7c3aed;'
+            'border-radius:10px;padding:10px 16px 4px;margin-bottom:4px;">'
+            '<div style="font-size:10px;font-weight:700;color:#a78bfa;letter-spacing:.14em;'
+            'text-transform:uppercase;margin-bottom:6px;">Select Period</div>'
+            '</div>', unsafe_allow_html=True
+        )
         choice = st.selectbox("Select month", labels, index=max(0, default_idx))
         row = mo[mo["label"] == choice].iloc[0]
         end = row["date"]
         start = (end - pd.offsets.MonthBegin(1)).normalize()
         period_trades = dfp[(dfp["date"] >= start) & (dfp["date"] <= end)].copy()
         render_period("Monthly Report", period_trades, subtitle=choice)
+
+
+
+def stat_card(label: str, value: str, sub: str,
+              value_color: str = "#e2e8f0",
+              accent: str = "#7c3aed") -> str:
+    """Returns HTML for a branded stat card (use with st.markdown unsafe_allow_html)."""
+    return (
+        f'<div style="background:#1a1a2e;border:1px solid #2d2d4e;'
+        f'border-left:3px solid {accent};border-radius:12px;padding:18px 20px;">'
+        f'<div style="font-size:11px;font-weight:600;color:#a78bfa;letter-spacing:0.1em;'
+        f'text-transform:uppercase;margin-bottom:8px;">{label}</div>'
+        f'<div style="font-size:26px;font-weight:700;color:{value_color};'
+        f'margin-bottom:4px;letter-spacing:-0.015em;">{value}</div>'
+        f'<div style="font-size:12.5px;color:#94a3b8;">{sub}</div>'
+        f'</div>'
+    )
+
+
+def streak_card(label: str, value: str, badge_text: str,
+                value_color: str = "#e2e8f0",
+                accent: str = "#7c3aed",
+                badge_color: str = "#22c55e",
+                badge_bg: str = "rgba(34,197,94,0.15)",
+                badge_border: str = "rgba(34,197,94,0.3)") -> str:
+    """Returns HTML for a streak/milestone card."""
+    return (
+        f'<div style="background:#1a1a2e;border:1px solid #2d2d4e;'
+        f'border-left:3px solid {accent};border-radius:12px;padding:18px 20px;">'
+        f'<div style="font-size:11px;font-weight:600;color:#a78bfa;letter-spacing:0.1em;'
+        f'text-transform:uppercase;margin-bottom:10px;">{label}</div>'
+        f'<div style="font-size:34px;font-weight:700;color:{value_color};'
+        f'margin-bottom:10px;letter-spacing:-0.02em;line-height:1;">{value}</div>'
+        f'<span style="background:{badge_bg};color:{badge_color};'
+        f'border:1px solid {badge_border};border-radius:20px;'
+        f'padding:3px 10px;font-size:11.5px;font-weight:600;">{badge_text}</span>'
+        f'</div>'
+    )
+
+
+def section_heading(text: str) -> None:
+    """Renders a branded section divider heading."""
+    st.markdown(
+        f'<div style="display:flex;align-items:center;gap:12px;margin:28px 0 14px 0;">'
+        f'<div style="width:3px;height:18px;background:#7c3aed;border-radius:2px;"></div>'
+        f'<span style="font-size:15px;font-weight:600;color:#e2e8f0;">{text}</span>'
+        f'<div style="flex:1;height:1px;background:#2d2d4e;margin-left:6px;"></div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def render_streaks_page(df_view: pd.DataFrame, pnl_col: str) -> None:
@@ -6479,51 +6537,73 @@ def render_streaks_page(df_view: pd.DataFrame, pnl_col: str) -> None:
 
     daily = dfp.groupby("date", as_index=False)[pnl_col].sum().rename(columns={pnl_col: "pnl"}).sort_values("date")
     streaks = compute_streaks(daily.rename(columns={"date": "date", "pnl": "pnl"}))
+    stats = summarize_performance(dfp, pnl_col)
+
+    # ── Streak row ───────────────────────────────────────────────────────
+    _dc = streaks["daily"]["current"]
+    _dr = streaks["daily"]["record"]
+    _wc = streaks["weekly"]["current"]
+    _wr_rec = streaks["weekly"]["record"]
+    _bd_val = format_money(stats["best_day"]["pnl"]) if stats["best_day"] else "—"
+    _bd_lbl = stats["best_day"]["day"] if stats["best_day"] else "—"
+    _wd_val = format_money(stats["worst_day"]["pnl"]) if stats["worst_day"] else "—"
+    _wd_lbl = stats["worst_day"]["day"] if stats["worst_day"] else "—"
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Daily Win Streak", streaks["daily"]["current"], f"Record: {streaks['daily']['record']}")
-    c2.metric("Weekly Win Streak", streaks["weekly"]["current"], f"Record: {streaks['weekly']['record']}")
+    with c1:
+        st.markdown(streak_card("Daily win streak", str(_dc),
+            f"↑ Record: {_dr}"), unsafe_allow_html=True)
+    with c2:
+        st.markdown(streak_card("Weekly win streak", str(_wc),
+            f"↑ Record: {_wr_rec}"), unsafe_allow_html=True)
+    with c3:
+        st.markdown(streak_card("Best day", _bd_val, _bd_lbl,
+            value_color="#22c55e",
+            badge_color="#a78bfa",
+            badge_bg="rgba(124,58,237,0.12)",
+            badge_border="rgba(124,58,237,0.3)"), unsafe_allow_html=True)
+    with c4:
+        st.markdown(streak_card("Worst day", _wd_val, _wd_lbl,
+            value_color="#ef4444", accent="#ef4444",
+            badge_color="#ef4444",
+            badge_bg="rgba(239,68,68,0.12)",
+            badge_border="rgba(239,68,68,0.3)"), unsafe_allow_html=True)
 
-    stats = summarize_performance(dfp, pnl_col)
-    _bd_val = format_money(stats["best_day"]["pnl"]) if stats["best_day"] else "—"
-    _bd_lbl = stats["best_day"]["day"] if stats["best_day"] else ""
-    _wd_val = format_money(stats["worst_day"]["pnl"]) if stats["worst_day"] else "—"
-    _wd_lbl = stats["worst_day"]["day"] if stats["worst_day"] else ""
-    c3.markdown(f'''<div style="background:#1a1a2e;border:1px solid #2d2d4e;'
-        f'border-left:3px solid #22c55e;border-radius:12px;padding:16px 18px;">'
-        f'<div style="font-size:11px;font-weight:600;color:#22c55e;letter-spacing:0.08em;'
-        f'text-transform:uppercase;margin-bottom:4px;">BEST DAY</div>'
-        f'<div style="font-size:22px;font-weight:700;color:#e2e8f0;">{_bd_val}</div>'
-        f'<div style="font-size:12px;color:#94a3b8;margin-top:2px;">{_bd_lbl}</div>'
-        f'</div>''', unsafe_allow_html=True)
-    c4.markdown(f'''<div style="background:#1a1a2e;border:1px solid #2d2d4e;'
-        f'border-left:3px solid #ef4444;border-radius:12px;padding:16px 18px;">'
-        f'<div style="font-size:11px;font-weight:600;color:#ef4444;letter-spacing:0.08em;'
-        f'text-transform:uppercase;margin-bottom:4px;">WORST DAY</div>'
-        f'<div style="font-size:22px;font-weight:700;color:#e2e8f0;">{_wd_val}</div>'
-        f'<div style="font-size:12px;color:#94a3b8;margin-top:2px;">{_wd_lbl}</div>'
-        f'</div>''', unsafe_allow_html=True)
+    section_heading("Milestones")
 
-    st.markdown("---")
-    st.subheader("Milestones")
     wk = daily.set_index("date")["pnl"].resample("W-SUN").sum().reset_index()
     mo = daily.set_index("date")["pnl"].resample("ME").sum().reset_index()
-
-    best_week = wk.sort_values("pnl", ascending=False).head(1)
+    best_week  = wk.sort_values("pnl", ascending=False).head(1)
     best_month = mo.sort_values("pnl", ascending=False).head(1)
-    cols = st.columns(3)
+
+    m1, m2, m3 = st.columns(3)
     if not best_week.empty:
-        end = best_week.iloc[0]["date"]
-        start = end - pd.to_timedelta(6, unit="D")
-        cols[0].metric("Best Week", format_money(float(best_week.iloc[0]["pnl"])), f"{start.strftime('%b %d')} – {end.strftime('%b %d')}")
+        _we = best_week.iloc[0]["date"]
+        _ws = _we - pd.to_timedelta(6, unit="D")
+        _wlbl = f"↑ {_ws.strftime('%b %d')} – {_we.strftime('%b %d')}"
+        with m1:
+            st.markdown(streak_card("Best week",
+                format_money(float(best_week.iloc[0]["pnl"])),
+                _wlbl, value_color="#22c55e"), unsafe_allow_html=True)
     else:
-        cols[0].metric("Best Week", "—")
+        with m1:
+            st.markdown(streak_card("Best week", "—", "No data"), unsafe_allow_html=True)
     if not best_month.empty:
-        end = best_month.iloc[0]["date"]
-        cols[1].metric("Best Month", format_money(float(best_month.iloc[0]["pnl"])), end.strftime("%B %Y"))
+        _me = best_month.iloc[0]["date"]
+        with m2:
+            st.markdown(streak_card("Best month",
+                format_money(float(best_month.iloc[0]["pnl"])),
+                f"↑ {_me.strftime('%B %Y')}", value_color="#22c55e"), unsafe_allow_html=True)
     else:
-        cols[1].metric("Best Month", "—")
-    cols[2].metric("Max Drawdown", format_money(-abs(stats["max_drawdown"])))
+        with m2:
+            st.markdown(streak_card("Best month", "—", "No data"), unsafe_allow_html=True)
+    with m3:
+        st.markdown(streak_card("Max drawdown",
+            format_money(-abs(stats["max_drawdown"])), "All time",
+            value_color="#ef4444", accent="#ef4444",
+            badge_color="#ef4444",
+            badge_bg="rgba(239,68,68,0.12)",
+            badge_border="rgba(239,68,68,0.3)"), unsafe_allow_html=True)
 
     st.markdown("---")
     st.subheader("Daily PnL (trading days)")
@@ -6682,6 +6762,55 @@ def _calc_points_series(df: pd.DataFrame) -> pd.Series:
     return pts
 
 
+
+def calendar_cell(day_number: int, pnl: float | None,
+                  trade_count: int = 0, points: float = 0.0,
+                  is_today: bool = False) -> str:
+    """Return branded HTML for one calendar day cell."""
+    import datetime as _dt_mod
+    # Out-of-month cell — blank
+    if pnl is None:
+        return (
+            '<div style="background:#111827;border:1px solid rgba(255,255,255,.03);'
+            'border-radius:8px;padding:10px 12px;min-height:88px;"></div>'
+        )
+    # No-trade day
+    if trade_count == 0:
+        today_ring = "box-shadow:0 0 0 2px #7c3aed,0 0 12px rgba(124,58,237,.28);" if is_today else ""
+        day_color = "#a78bfa" if is_today else "#475569"
+        return (
+            f'<div style="background:#1a1a2e;border:1px solid #1e2240;'
+            f'border-radius:8px;padding:10px 12px;min-height:88px;{today_ring}">'
+            f'<div style="font-size:11px;font-weight:700;color:{day_color};">'
+            f'{day_number}</div>'
+            f'</div>'
+        )
+    # Traded day
+    top_color  = "#22c55e" if pnl >= 0 else "#ef4444"
+    pnl_color  = "#22c55e" if pnl > 0 else ("#ef4444" if pnl < 0 else "#94a3b8")
+    pnl_str    = format_money(pnl)
+    pts_sign   = "+" if points >= 0 else ""
+    pts_str    = f"{pts_sign}{points:.1f}pts"
+    today_ring = "box-shadow:0 0 0 2px #7c3aed,0 0 16px rgba(124,58,237,.35);" if is_today else ""
+    day_color  = "#a78bfa" if is_today else "#64748b"
+    return (
+        f'<div style="background:#1a1a2e;border:1px solid #2d2d4e;'
+        f'border-top:3px solid {top_color};border-radius:8px;'
+        f'padding:10px 12px;min-height:88px;display:flex;flex-direction:column;'
+        f'justify-content:space-between;{today_ring}">'
+        f'<div style="font-size:11px;font-weight:700;color:{day_color};">{day_number}</div>'
+        f'<div style="font-size:14px;font-weight:700;color:{pnl_color};'
+        f'letter-spacing:-0.02em;text-align:center;line-height:1.2;margin:4px 0;">{pnl_str}</div>'
+        f'<div style="display:flex;justify-content:space-between;align-items:center;">'
+        f'<span style="font-size:9.5px;color:#64748b;">'
+        f'{trade_count}{"t" if trade_count != 1 else "t"}</span>'
+        f'<span style="font-size:9.5px;color:#94a3b8;font-family:ui-monospace,monospace;">'
+        f'{pts_str}</span>'
+        f'</div>'
+        f'</div>'
+    )
+
+
 def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
     if df.empty:
         st.info("No daily PnL yet.")
@@ -6718,14 +6847,32 @@ def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
     flat_days = (month_df["pnl"] == 0).sum() if not month_df.empty else 0
     _mpts_str = f"+{month_pts:.1f}pts" if month_pts >= 0 else f"{month_pts:.1f}pts"
 
-    stats_cols = st.columns([2, 3])
-    with stats_cols[0]:
-        st.markdown(f"**{month_choice}**")
-    with stats_cols[1]:
-        st.markdown(
-            f"**Monthly stats:** {format_money(month_total)} · {_mpts_str} · "
-            f"{green_days} green · {red_days} red · {flat_days} flat"
-        )
+    import calendar as _cal_mod
+    _total_days_in_month = _cal_mod.monthrange(year, month)[1]
+    _traded_days = len(month_daily)
+    _mt_sign  = "+" if month_total >= 0 else "-"
+    _mt_color = "#22c55e" if month_total >= 0 else "#ef4444"
+    _mt_rbg   = "34,197,94" if month_total >= 0 else "239,68,68"
+    _cal_bar  = (
+        '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;'
+        'margin-bottom:16px;padding:14px 18px;background:#1a1a2e;'
+        'border:1px solid #2d2d4e;border-left:3px solid #7c3aed;border-radius:10px;">'
+        f'<span style="font-size:11px;color:#a78bfa;font-weight:700;'
+        f'letter-spacing:0.14em;text-transform:uppercase;margin-right:6px;">{month_choice}</span>'
+        f'<span style="background:rgba({_mt_rbg},0.15);color:{_mt_color};'
+        f'border:1px solid rgba({_mt_rbg},0.3);border-radius:20px;'
+        f'padding:4px 12px;font-size:12px;font-weight:600;">{_mt_sign}${abs(month_total):,.2f}</span>'
+        f'<span style="background:rgba(124,58,237,0.12);color:#a78bfa;'
+        f'border:1px solid rgba(124,58,237,0.3);border-radius:20px;'
+        f'padding:4px 12px;font-size:12px;font-weight:600;">{green_days} green · {red_days} red</span>'
+        f'<span style="border:1px solid #2d2d4e;color:#94a3b8;border-radius:20px;'
+        f'padding:4px 12px;font-size:12px;">{_mpts_str}</span>'
+        f'<span style="margin-left:auto;font-size:11px;color:#475569;'
+        f'font-family:ui-monospace,monospace;letter-spacing:0.1em;">{_traded_days} / {_total_days_in_month} days</span>'
+        '</div>'
+    )
+    st.markdown(_cal_bar, unsafe_allow_html=True)
+
 
     def pnl_color(value):
         if value == 0:
@@ -6740,6 +6887,8 @@ def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
     weeks = cal.monthdatescalendar(year, month)
     day_names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     header_html = "".join([f"<div class='hd'>{d}</div>" for d in day_names])
+    import datetime as _dt_cal
+    _today = _dt_cal.date.today()
     cell_html = []
     week_html = []
     week_date_map = {}
@@ -6758,33 +6907,13 @@ def render_pnl_calendar(df: pd.DataFrame, pnl_col: str) -> None:
                 week_pts += day_pts
                 week_dates.append(day)
             if not in_month:
-                cell_cls = "cell out"
-                pnl_text = ""
-                pts_text = ""
-                trades_text = ""
-            elif value > 0:
-                cell_cls = "cell win"
-                pnl_text = format_money(value)
-                pts_text = f"+{day_pts:.1f}pts" if day_pts >= 0 else f"{day_pts:.1f}pts"
-                trades_text = f"{trades} trade{'s' if trades != 1 else ''}"
-            elif value < 0:
-                cell_cls = "cell loss"
-                pnl_text = format_money(value)
-                pts_text = f"+{day_pts:.1f}pts" if day_pts >= 0 else f"{day_pts:.1f}pts"
-                trades_text = f"{trades} trade{'s' if trades != 1 else ''}"
+                cell_html.append(calendar_cell(day.day, None))
             else:
-                cell_cls = "cell flat"
-                pnl_text = ""
-                pts_text = ""
-                trades_text = ""
-            cell_html.append(
-                f"<div class='{cell_cls}'>"
-                f"<div class='dn'>{day.day if in_month else ''}</div>"
-                f"<div class='pnl'>{pnl_text}</div>"
-                f"<div style='font-size:11px;color:#94a3b8;font-family:ui-monospace,monospace;font-weight:600;text-align:center;line-height:1.2'>{pts_text}</div>"
-                f"<div class='tc'>{trades_text}</div>"
-                f"</div>"
-            )
+                _is_today = (day == _today)
+                _pnl_val = value if trades > 0 else (0.0 if False else None if trades == 0 and value == 0 else value)
+                # Pass pnl=None for no-trade days, else actual value
+                _cell_pnl = value if trades > 0 else None
+                cell_html.append(calendar_cell(day.day, _cell_pnl, trades, day_pts, _is_today))
         week_label = f"Week {week_idx}"
         week_total_text = format_money(week_total) if week_total != 0 else "$0"
         _wpts_str = (f"+{week_pts:.1f}pts" if week_pts >= 0 else f"{week_pts:.1f}pts") if week_pts != 0 else ""
@@ -7111,34 +7240,36 @@ def render_brand_header(center: bool = False, hero: bool = False) -> None:
 # ── Supabase data helpers ─────────────────────────────────────────────────────
 
 
-def page_header(title: str, subtitle: str = "", badge: str = "") -> None:
-    """Renders a consistent branded page header without the logo image block."""
+def page_header(title: str, subtitle: str = "", badge: str = "", account_badge: str = "") -> None:
+    """Renders a consistent branded page header. account_badge overrides badge if set."""
     import html as _html_mod
-    badge_html = ""
-    if badge:
-        badge_html = (
+    _badge = account_badge or badge
+    _badge_html = ""
+    if _badge:
+        _badge_html = (
             f'<div style="background:rgba(124,58,237,0.1);border:1px solid #2d2d4e;'
-            f'border-radius:10px;padding:6px 14px;font-size:12px;color:#a78bfa;'
+            f'border-radius:10px;padding:8px 16px;font-size:12px;color:#a78bfa;'
             f'font-weight:600;letter-spacing:0.05em;white-space:nowrap;">'
-            f'{_html_mod.escape(badge)}</div>'
+            f'{_html_mod.escape(_badge)}</div>'
         )
-    subtitle_html = ""
+    _sub_html = ""
     if subtitle:
-        subtitle_html = (
-            f'<p style="font-size:13px;color:#94a3b8;'
-            f'margin:5px 0 0 0;line-height:1.4;">{_html_mod.escape(subtitle)}</p>'
+        _sub_html = (
+            f'<p style="font-size:13px;color:#94a3b8;margin:6px 0 0 0;">'
+            f'{_html_mod.escape(subtitle)}</p>'
         )
     st.markdown(f"""
-<div style="margin-bottom:24px;padding-bottom:18px;border-bottom:1px solid #2d2d4e;">
-  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;">
+<div style="margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid #2d2d4e;">
+  <div style="display:flex;align-items:center;justify-content:space-between;
+    gap:24px;flex-wrap:wrap;">
     <div>
       <div style="font-size:11px;font-weight:600;color:#a78bfa;letter-spacing:0.1em;
-        text-transform:uppercase;margin-bottom:6px;">TRADYLO TRADING JOURNAL</div>
-      <h1 style="font-size:26px;font-weight:700;color:#e2e8f0;margin:0;line-height:1.2;">
-        {_html_mod.escape(title)}</h1>
-      {subtitle_html}
+        text-transform:uppercase;margin-bottom:6px;">Tradylo Trading Journal</div>
+      <h1 style="font-size:28px;font-weight:700;color:#e2e8f0;margin:0;
+        line-height:1.2;letter-spacing:-0.015em;">{_html_mod.escape(title)}</h1>
+      {_sub_html}
     </div>
-    {badge_html}
+    {_badge_html}
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -10174,10 +10305,10 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         # ── Coach Insights (new engine) ──────────────────────────────────────
         _ci = generate_coach_insights(df_view, pnl_col)
         _ci_rows = "".join(
-            f'<div style="display:flex;gap:10px;margin-bottom:10px;align-items:flex-start;">'
-            f'<div style="width:6px;height:6px;border-radius:50%;background:#7c3aed;'
-            f'margin-top:7px;flex-shrink:0;"></div>'
-            f'<div style="font-size:14px;color:#e2e8f0;line-height:1.6;">{ins}</div></div>'
+            f'<div style="display:flex;gap:10px;font-size:13.5px;'
+            f'line-height:1.55;color:#e2e8f0;margin-bottom:10px;">'
+            f'<span style="color:#7c3aed;margin-top:2px;flex-shrink:0;">&#9658;</span>'
+            f'<div>{ins}</div></div>'
             for ins in _ci
         )
         st.markdown(f'''<div style="background:#1a1a2e;border:1px solid #2d2d4e;
@@ -10193,10 +10324,10 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
         # ── Psychological Patterns (new engine) ───────────────────────────
         _pp = generate_psychological_patterns(df_view, pnl_col)
         _pp_rows = "".join(
-            f'<div style="display:flex;gap:10px;margin-bottom:10px;align-items:flex-start;">'
-            f'<div style="width:6px;height:6px;border-radius:50%;background:#f59e0b;'
-            f'margin-top:7px;flex-shrink:0;"></div>'
-            f'<div style="font-size:14px;color:#e2e8f0;line-height:1.6;">{pat}</div></div>'
+            f'<div style="display:flex;gap:10px;font-size:13.5px;'
+            f'line-height:1.55;color:#e2e8f0;margin-bottom:10px;">'
+            f'<span style="color:#f59e0b;margin-top:2px;flex-shrink:0;">&#9658;</span>'
+            f'<div>{pat}</div></div>'
             for pat in _pp
         )
         st.markdown(f'''<div style="background:#1a1a2e;border:1px solid #2d2d4e;
@@ -10245,7 +10376,12 @@ def render_section(user_id: str, account_type: str, section: str) -> None:
                 ])
 
             if time_cards:
-                render_metric_cards(time_cards)
+                _tc_accents = ["#7c3aed","#ef4444","#7c3aed","#ef4444"]
+                _tc_cols = st.columns(len(time_cards))
+                for _i, (_col, _tc) in enumerate(zip(_tc_cols, time_cards)):
+                    with _col:
+                        st.markdown(stat_card(_tc[0], _tc[1], _tc[2],
+                            accent=_tc_accents[_i]), unsafe_allow_html=True)
             else:
                 st.info("No time/day data yet.")
 
