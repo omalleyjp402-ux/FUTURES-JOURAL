@@ -4916,9 +4916,13 @@ def _try_refresh_supabase_session() -> bool:
         st.session_state["user"] = getattr(res, "user", None) or st.session_state.get("user")
         sess = getattr(res, "session", None)
         if sess:
-            st.session_state["access_token"] = getattr(sess, "access_token", None) or st.session_state.get("access_token")
+            new_token = getattr(sess, "access_token", None)
+            st.session_state["access_token"] = new_token or st.session_state.get("access_token")
             st.session_state["refresh_token"] = getattr(sess, "refresh_token", None) or refresh_token
-
+            # Apply new token to the supabase client immediately so queries
+            # in the same rerun don't still use the expired token
+            if new_token:
+                supabase.postgrest.auth(new_token)
             cm = _cookie_manager()
             if cm and safe_str(cm.get("tradylo_remember")).strip().lower() == "true":
                 cm["tradylo_refresh_token"] = st.session_state.get("refresh_token")
@@ -4933,7 +4937,7 @@ def authed_supabase():
     if token:
         # Proactively refresh if token is near-expiry to avoid intermittent "JWT expired" errors.
         secs = _jwt_seconds_to_expiry(token)
-        if secs is not None and secs <= 30:
+        if secs is not None and secs <= 300:
             if _try_refresh_supabase_session():
                 token = get_token()
         if token:
@@ -6369,6 +6373,32 @@ def render_reports_page(df_view: pd.DataFrame, pnl_col: str, account_type: str) 
             f'<div style="background:#1e2240;border:1px solid #2d3360;border-radius:8px;padding:6px 14px;color:#a78bfa;font-size:12px;font-weight:600">'
             f'📅 {html_lib.escape(subtitle)}</div>'
             '</div>'
+            # ── Compact stats strip ──
+            '<div style="display:flex;flex-wrap:wrap;gap:6px;padding:10px 28px;'
+            'border-bottom:1px solid #1e2240;background:#0a0c14;">'
+            + "".join(
+                f'<div style="display:flex;flex-direction:column;align-items:center;'
+                f'background:#111827;border:1px solid #1e2240;border-radius:7px;'
+                f'padding:5px 12px;min-width:72px;">'
+                f'<span style="color:#475569;font-size:8.5px;font-weight:700;'
+                f'letter-spacing:.12em;text-transform:uppercase;margin-bottom:2px;">{lbl}</span>'
+                f'<span style="color:{clr};font-size:12px;font-weight:700;'
+                f'font-variant-numeric:tabular-nums;white-space:nowrap;">{val}</span>'
+                f'</div>'
+                for lbl, val, clr in [
+                    ("Net P&L",    _pnl_str,                                                                   "#22c55e" if _total_pnl >= 0 else "#ef4444"),
+                    ("Points",     _pts_str,                                                                    "#22c55e" if _total_pts >= 0 else "#ef4444"),
+                    ("Wins",       str(_wins),                                                                  "#22c55e"),
+                    ("Losses",     str(_losses),                                                                "#ef4444"),
+                    ("Win %",      f"{_win_rate:.1f}%",                                                        "#a78bfa"),
+                    ("P. Factor",  pf_txt,                                                                      "#e2e8f0"),
+                    ("Avg Win",    (f"+${stats['avg_win']:,.2f}" if stats.get('avg_win') else "—"),            "#22c55e"),
+                    ("Avg Loss",   (f"-${abs(stats['avg_loss']):,.2f}" if stats.get('avg_loss') else "—"),     "#ef4444"),
+                    ("Best Trade", _bt_pnl_str,                                                                 "#22c55e"),
+                    ("Trades",     str(_total_trades),                                                          "#e2e8f0"),
+                ]
+            )
+            + '</div>'
             # ── Main grid ──
             '<div style="display:grid;grid-template-columns:1fr 1fr 1.15fr;gap:16px;padding:20px 28px">'
             # Left col
